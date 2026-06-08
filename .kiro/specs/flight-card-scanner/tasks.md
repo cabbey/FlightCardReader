@@ -22,7 +22,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 
 - [ ] 2. Implement database layer and ORM models
 
-  - [ ] 2.1 Create `database.py` with SQLAlchemy async engine, session factory, and `Base`
+  - [x] 2.1 Create `database.py` with SQLAlchemy async engine, session factory, and `Base`
     - Use `aiosqlite` driver; expose `get_db` async dependency and `create_all` helper
     - _Requirements: 6.1, 6.9_
 
