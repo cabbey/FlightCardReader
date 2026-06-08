@@ -26,7 +26,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Use `aiosqlite` driver; expose `get_db` async dependency and `create_all` helper
     - _Requirements: 6.1, 6.9_
 
-  - [ ] 2.2 Create `models.py` with the `FlightRecord` ORM class
+  - [x] 2.2 Create `models.py` with the `FlightRecord` ORM class
     - Include all dedicated columns (`id`, `created_at`, `image_path`, `extraction_status`, `flight_date`, `flier_name`, `total_impulse_value`, `total_impulse_unit`, `flag_heads_up`, `flag_first_flight`, `flag_complex`, `rack`, `pad`, `fso_rso_initials`, `evaluation_outcome`, `evaluation_comments`, `overflow`) matching the design schema
     - Add indexes on `extraction_status` and `created_at DESC`
     - _Requirements: 6.2, 6.3_
