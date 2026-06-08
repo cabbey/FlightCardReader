@@ -20,7 +20,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate arbitrary valid config dicts with all keys present and assert `load_config` returns matching `AppConfig` fields; also generate configs with optional keys absent and assert documented defaults are applied
     - **Validates: Requirements 9.2, 9.3**
 
-- [ ] 2. Implement database layer and ORM models
+- [x] 2. Implement database layer and ORM models
 
   - [x] 2.1 Create `database.py` with SQLAlchemy async engine, session factory, and `Base`
     - Use `aiosqlite` driver; expose `get_db` async dependency and `create_all` helper
@@ -31,7 +31,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Add indexes on `extraction_status` and `created_at DESC`
     - _Requirements: 6.2, 6.3_
 
-  - [ ] 2.3 Create `schemas.py` with all Pydantic models
+  - [x] 2.3 Create `schemas.py` with all Pydantic models
     - `MembershipInfo`, `RocketMeasurements`, `MotorEntry`, `FlightCardExtraction` (with `format`-compatible JSON Schema), `ScanResponse`, `SetModeRequest`, `ModeResponse`, `TriggerResponse`, `RequeueResponse`, `FlightRecordSummary`, `FlightRecordDetail`
     - _Requirements: 5.3, 5.5_
 
