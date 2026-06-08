@@ -15,7 +15,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
   - Create `exceptions.py` defining the full exception hierarchy: `FlightCardScannerError`, `ConfigError`, `ImageStorageError`, `ExtractionParseError`, `OllamaUnavailableError`, `DateResolutionError`
   - _Requirements: 9.1, 9.2, 9.3, 9.7, 11.1, 11.2, 11.4_
 
-  - [ ]* 1.1 Write property test for config loading fidelity
+  - [x] 1.1 Write property test for config loading fidelity
     - **Property 19: Config loading fidelity**
     - Generate arbitrary valid config dicts with all keys present and assert `load_config` returns matching `AppConfig` fields; also generate configs with optional keys absent and assert documented defaults are applied
     - **Validates: Requirements 9.2, 9.3**
