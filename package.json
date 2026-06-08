@@ -1,0 +1,12 @@
+{
+  "name": "flight-card-scanner-client",
+  "version": "1.0.0",
+  "description": "Client-side assets for the Flight Card Scanner, including OpenCV.js",
+  "private": true,
+  "dependencies": {
+    "opencv.js": "^1.2.1"
+  },
+  "pnpm": {
+    "moduleDirectory": "flight_card_scanner/static/js/node_modules"
+  }
+}

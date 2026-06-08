@@ -1,0 +1,16 @@
+{
+  "host": "0.0.0.0",
+  "port": 8000,
+  "image_store_path": "./images",
+  "db_path": "./flight_cards.db",
+  "event_name": "SCORE Spring Launch 2025",
+  "event_date_range": {
+    "start": "2025-07-18",
+    "end": "2025-07-20"
+  },
+  "extraction_mode": "immediate",
+  "extraction_endpoints": [
+    { "url": "http://localhost:11434", "concurrency": 2 },
+    { "url": "http://192.168.1.50:11434", "concurrency": 3 }
+  ]
+}

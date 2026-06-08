@@ -6,7 +6,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 
 ## Tasks
 
-- [ ] 1. Set up project structure and configuration
+- [x] 1. Set up project structure and configuration
 
   - Create the `flight_card_scanner/` package directory layout matching the component map in the design (`routers/`, `services/`, `templates/`, `static/js/`)
   - Create `package.json` declaring `opencv.js` as a dependency, and add `pnpm-lock.yaml`; configure `static/js/` as the pnpm output directory
