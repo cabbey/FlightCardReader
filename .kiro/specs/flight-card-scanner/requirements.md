@@ -25,8 +25,14 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 - **Extraction Queue**: The set of Flight Records with Extraction Status `pending` that are awaiting submission to an Extraction Endpoint.
 - **Immediate Extraction Mode**: A server operating mode in which newly submitted Flight Records are dispatched to an Extraction Endpoint as soon as one has capacity.
 - **Deferred Extraction Mode**: A server operating mode in which newly submitted Flight Records are saved with `pending` status and are not dispatched until extraction is manually triggered.
-- **Launch Event**: The named rocket launch event for which the system is configured, defined by a Launch Event Name (string) and a Date Range (start and end date). The Launch Event Name is displayed in the title and heading of all server-rendered HTML pages.
-- **Event Configuration**: The set of configuration values that define the Launch Event, including the Launch Event Name and Date Range, stored in the JSON configuration file.
+- **Launch Event**: The named rocket launch event for which the system is configured, defined by a Launch Event Name (string) and an Event Date Range (start and end date). The Launch Event Name is displayed in the title and heading of all server-rendered HTML pages.
+- **Event Configuration**: The set of configuration values that define the Launch Event, including the Launch Event Name and Event Date Range, stored in the JSON configuration file.
+- **Event Date Range**: The configured start date and end date (inclusive, ISO 8601 format) of the Launch Event, used to validate and resolve Flight Date values extracted from Flight Cards.
+- **Flight Date**: The date of a rocket flight as recorded on the Flight Card. May be expressed as a day-of-week name (e.g., "Saturday") or a numeric date; must fall within the Event Date Range.
+- **Flier's Membership Info**: A composite field capturing a flier's rocketry club affiliation (TRA, NAR, or CAR), member number (numeric, possibly with a trailing letter for NAR), and certification level (0–3 for TRA/NAR; 0–4 for CAR).
+- **Motor Designation**: The structured identifier for a single rocket motor, consisting of an optional CTI prefix number, a letter designation (A–O), a thrust number, and an optional suffix (trailing letters or a dash/slash followed by a number).
+- **Post-Flight Evaluation**: A structured result recorded after the flight, consisting of an outcome value (one of "good", "motor", "airframe", or "recovery") and optional free-text comments.
+- **Overflow Column**: The JSON column in the Database that stores extracted fields not assigned a dedicated column, preserving all available data while keeping the schema practical.
 
 ---
 
@@ -38,11 +44,12 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. THE Client SHALL request camera access from the browser using the `getUserMedia` API when the scanning interface is opened.
+1. WHEN the scanning interface is opened, THE Client SHALL request camera access from the browser using the `getUserMedia` API.
 2. THE Client SHALL display a continuous live video feed from the active camera on the scanning interface.
-3. WHERE a device has multiple cameras, THE Client SHALL provide a control to switch between available cameras.
-4. IF the browser denies camera permission, THEN THE Client SHALL display an error message explaining that camera access is required and how to grant it.
-5. IF `getUserMedia` is not supported by the browser, THEN THE Client SHALL display a message stating that a modern browser with camera support is required.
+3. WHERE a device has multiple cameras, THE Client SHALL provide a control to switch between available cameras, and WHEN a camera is selected THE feed SHALL switch to that camera.
+4. WHERE a device has multiple cameras, THE Client SHALL default to the environment-facing (rear) camera on initial load to optimize card framing.
+5. IF the browser denies camera permission, THEN THE Client SHALL display an error message explaining that camera access is required and how to grant it.
+6. IF `getUserMedia` is not supported by the browser, THEN THE Client SHALL display a message stating that a modern browser with camera support is required.
 
 ---
 
@@ -52,12 +59,11 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. WHILE the live video feed is active, THE Detector SHALL continuously analyze video frames to locate the boundary of a rectangular card.
+1. WHILE the live video feed is active, THE Detector SHALL analyze video frames at a rate of at least 10 frames per second to locate the boundary of a rectangular card.
 2. WHEN the Detector identifies a card boundary, THE Client SHALL overlay a visual highlight on the detected boundary in the live preview.
-3. WHEN a card boundary is detected, the card is stable (not in motion), the card sufficiently fills the field of view, and the image is sufficiently in focus, THE Detector SHALL automatically extract the card region from the current video frame and apply a perspective transform to produce a rectified, upright Card Image without requiring any manual trigger from the user.
-4. THE Detector SHALL require all four of the following conditions to be simultaneously satisfied for a short stabilization period before triggering auto-capture: (a) a card boundary is detected, (b) the card has stopped moving, (c) the card occupies a sufficient portion of the frame, and (d) the frame is sufficiently in focus to produce a clear Card Image.
-5. THE Detector SHALL produce a Card Image with a minimum resolution of 1000 × 1300 pixels.
-6. WHEN the Detector auto-captures a Card Image, THE Client SHALL play an audible shutter sound to confirm the capture event to the user.
+3. WHEN all four of the following conditions have been simultaneously satisfied for at least 500 milliseconds — (a) a four-corner card boundary is detected, (b) the detected boundary corner positions have shifted less than 10 pixels between consecutive frames, (c) the detected card region occupies at least 50% of the frame area, and (d) the Laplacian variance of the card region is at least 100 — THE Detector SHALL extract the card region from the current video frame, apply a perspective transform to produce a rectified upright Card Image, and trigger auto-capture without requiring any manual action from the user.
+4. THE Detector SHALL produce a Card Image with a minimum resolution of 1000 × 1300 pixels.
+5. WHEN the Detector auto-captures a Card Image, THE Client SHALL play an audible shutter sound to confirm the capture event to the user.
 
 ---
 
@@ -68,14 +74,15 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 #### Acceptance Criteria
 
 1. WHEN the Detector produces a Card Image via auto-capture, THE Client SHALL immediately display the Confirmation Screen showing the captured Card Image before making any submission to the Server.
-2. THE Confirmation Screen SHALL provide an on-screen "Accept" button that the user can tap to approve the Card Image for submission.
-3. THE Confirmation Screen SHALL allow the user to swipe up on the displayed image as an alternative gesture to accept the Card Image for submission.
-4. THE Confirmation Screen SHALL provide an on-screen "Reject" / "Retake" button that the user can tap to discard the captured Card Image and return to the live camera preview.
+2. WHILE the Confirmation Screen is displayed, THE Client SHALL provide an on-screen "Accept" button that the user can tap to approve the Card Image for submission.
+3. WHILE the Confirmation Screen is displayed, THE Client SHALL allow the user to swipe up on the displayed image as an alternative gesture to accept the Card Image for submission.
+4. WHILE the Confirmation Screen is displayed, THE Client SHALL provide an on-screen "Reject" / "Retake" button that the user can tap to discard the captured Card Image and return to the live camera preview.
 5. WHEN the user accepts the Card Image, THE Client SHALL submit the Card Image to the Server via an HTTP POST request with `multipart/form-data` encoding.
-6. THE Client SHALL display a processing indicator while the submission is in progress.
-7. WHEN the Server returns a successful response, THE Client SHALL display a confirmation that the card was received, including the Flight Record identifier, and SHALL return to the live camera preview.
-8. IF the Server returns an error response, THEN THE Client SHALL display the error message returned by the Server and allow the user to resubmit or discard the image.
-9. IF the network request fails before receiving a response, THEN THE Client SHALL display a connectivity error message and allow the user to retry the submission.
+6. WHILE a submission is in progress, THE Client SHALL display a processing indicator and SHALL disable the Accept and Reject controls to prevent duplicate submissions.
+7. WHEN the Server returns a successful response, THE Client SHALL display a confirmation message including the Flight Record identifier for at least 2 seconds, then SHALL return to the live camera preview.
+8. IF the Server returns an error response, THEN THE Client SHALL display the error message returned by the Server, re-enable the Accept and Reject controls, and allow the user to resubmit or tap "Reject" to discard the image and return to the live camera preview.
+9. IF the network request fails before receiving a response, THEN THE Client SHALL display a connectivity error message, re-enable the Accept and Reject controls, and allow the user to retry the submission or tap "Reject" to return to the live camera preview.
+10. IF a submission has not received any response within 30 seconds, THEN THE Client SHALL treat it as a network failure per criterion 9.
 
 ---
 
@@ -85,12 +92,14 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. WHEN the Server receives a Card Image via HTTP POST, THE Server SHALL save the image file to the Image Store with a unique, collision-resistant filename before returning any response to the Client.
+1. WHEN the Server receives a Card Image via HTTP POST, THE Server SHALL save the image file to the Image Store using a UUID-based filename (e.g., `<uuid4>.<ext>`) before returning any response to the Client.
 2. WHEN the Server receives a Card Image via HTTP POST, THE Server SHALL create a Flight Record in the Database with Extraction Status set to `pending` before returning any response to the Client.
 3. THE Server SHALL store the filesystem path of the saved image in the corresponding Flight Record in the Database.
 4. THE Server SHALL serve files from the Image Store as static HTTP assets so that the Review UI can display the original Card Image.
-5. IF the Server fails to write the image to the Image Store, THEN THE Server SHALL return an HTTP 500 response with a descriptive error message and SHALL NOT create a partial Flight Record.
-6. WHEN the image has been saved and the Flight Record has been created, THE Server SHALL return an HTTP 201 response to the Client containing the new Flight Record's unique identifier, without waiting for LLM extraction to complete.
+5. IF the Server fails to write the image to the Image Store, THEN THE Server SHALL return an HTTP 500 response with a descriptive error message and SHALL NOT create a Flight Record.
+6. IF the image file is written successfully but the Database insert fails, THEN THE Server SHALL delete the written image file, return an HTTP 500 response with a descriptive error message, and leave no partial state in either the Database or the Image Store.
+7. WHEN the image has been saved and the Flight Record has been created, THE Server SHALL return an HTTP 201 response to the Client containing the new Flight Record's unique identifier, without waiting for LLM extraction to complete.
+8. IF the uploaded file is not a valid JPEG or PNG image, THEN THE Server SHALL return an HTTP 400 response with a descriptive error message and SHALL NOT write any file to the Image Store or create any Flight Record.
 
 ---
 
@@ -100,10 +109,10 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. AFTER the Server returns an HTTP 201 response to the Client, THE Extractor SHALL asynchronously submit the saved Card Image to the LLM with a prompt requesting structured extraction of all recognizable flight card fields.
+1. WHEN a Flight Record is created with Extraction Status `pending` and an Extraction Endpoint has available capacity, THE Extractor SHALL asynchronously submit the saved Card Image to the LLM with a prompt requesting structured extraction of all recognizable flight card fields.
 2. WHEN the Extractor begins processing a Flight Record, THE Server SHALL update the Flight Record's Extraction Status from `pending` to `processing`.
-3. THE Extractor SHALL request that the LLM attempt to extract the following fields from each Flight Card, where legible:
-   - **Flight Date**: the day of week or numeric date of the flight; must fall within the configured event Date Range.
+3. THE Extractor SHALL request that the LLM return a JSON object attempting to extract the following fields from each Flight Card, where legible. Some fields may be represented as pre-printed words or options on the card that the flier has circled rather than written from scratch; the LLM SHALL recognise circled pre-printed text as the selected value for that field, in the same way it recognises handwritten text:
+   - **Flight Date**: the day of week or numeric date of the flight; must fall within the configured Event Date Range. On some card versions the days of the week are pre-printed and the flier circles the applicable day; the LLM SHALL treat a circled day name as the flight date value.
    - **Flier's Name**: the name of the person flying the rocket.
    - **Flier's Membership Information**: club affiliation (one of TRA, NAR, or CAR), member number (may include a trailing letter in NAR style), and certification level (0–3 for TRA/NAR; 0–4 for CAR).
    - **Rocket Name**: the name given to the rocket.
@@ -112,20 +121,20 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
    - **Rocket Measurements**: diameter, length, and weight, each accompanied by a unit field indicating imperial or metric.
    - **Motor(s)**: a nested structure organized by stage (numbered from 1), where each stage contains a list of motors. Each motor entry may include: manufacturer (e.g., AT, Aerotech, CTI, Cesaroni, Estes), an optional leading number (CTI style, e.g., "54" in "54-2560"), a letter designation (e.g., "M"), a number following the letter, and an optional trailing letter(s) or a dash/slash followed by a number.
    - **Total Impulse**: a numeric value and a unit, where the unit is either Newton Seconds ("Ns") or Foot-Pounds ("LbsFt").
-   - **Recovery Plan and Additional Notes**: free-text notes including certification flight details, competition notes, tracking information, etc.
+   - **Recovery Plan and Additional Notes**: free-text notes including certification flight details, competition notes, tracking information, etc. On some card versions recovery method options (e.g., "parachute", "streamer", "tumble") are pre-printed and the flier circles the applicable option; the LLM SHALL treat circled pre-printed recovery options as part of the recovery plan value.
    - **Checkboxes**: three boolean fields — "Heads Up", "First Flight", and "Complex".
    - **Rack and Pad Numbers**: rack identifier (may be a number or a string such as "L", "Low", "LowPower") and pad number (expected to be a numeric value).
    - **FSO/RSO Initials**: the initials of the safety officer who approved the flight.
-   - **Post-Flight Evaluation**: an outcome value (one of "good", "motor", "airframe", or "recovery") and optional free-text comments.
-4. THE Extractor SHALL accept partial results — a Flight Record MAY be updated with extracted data even if some fields are absent or marked as unreadable by the LLM.
+   - **Post-Flight Evaluation**: an outcome value (one of "good", "motor", "airframe", or "recovery") and optional free-text comments. On some card versions these outcome options are pre-printed and the flier circles the applicable result; the LLM SHALL treat a circled pre-printed outcome word as the evaluation_outcome value.
+4. THE Extractor SHALL accept partial results — fields that the LLM marks as absent or unreadable SHALL be stored as `null` in the Flight Record; a Flight Record MAY be marked `extracted` even if some fields are `null`.
 5. WHEN the LLM returns a response, THE Extractor SHALL validate that the response is a well-formed JSON object before storing it.
-6. WHEN extraction succeeds, THE Server SHALL update the Flight Record's Extraction Status to `extracted` and persist all extracted field values.
+6. WHEN the LLM returns a valid JSON response, THE Server SHALL update the Flight Record's Extraction Status to `extracted` and persist all extracted field values.
 7. IF the LLM response is not valid JSON, THEN THE Extractor SHALL log the raw response and update the Flight Record's Extraction Status to `extraction_failed` with all extracted fields set to null.
 8. IF the LLM service is unavailable when extraction is attempted, THEN THE Extractor SHALL update the Flight Record's Extraction Status to `extraction_failed` and log the failure.
 9. THE Extractor SHALL handle multiple Flight Card layout versions by relying on the LLM's ability to interpret variable layouts without layout-specific configuration.
-10. WHEN the LLM extracts a Flight Date value expressed as a day-of-week name (e.g., "Saturday"), THE Extractor SHALL resolve it to the matching calendar date within the configured Event Date Range.
-11. WHEN the LLM extracts a Flight Date value, THE Extractor SHALL validate that the resolved date falls within the configured Event Date Range (start date inclusive, end date inclusive).
-12. IF the extracted Flight Date cannot be resolved to a date within the Event Date Range, THEN THE Extractor SHALL store the raw extracted value in the JSON overflow column, set the `flight_date` database column to null, and set the Flight Record's Extraction Status to `extraction_failed` to flag the record for manual review.
+10. WHEN the LLM extracts a Flight Date value that is expressed as a day-of-week name (e.g., "Saturday"), THE Extractor SHALL resolve it to the matching calendar date within the Event Date Range.
+11. WHEN a Flight Date value has been extracted or resolved, THE Extractor SHALL validate that it falls within the configured Event Date Range.
+12. IF the extracted Flight Date cannot be resolved to a date within the Event Date Range, THEN THE Extractor SHALL store the raw extracted value in the Overflow Column, set the `flight_date` database column to null, and set the Flight Record's Extraction Status to `extraction_failed` to flag the record for manual review.
 
 ---
 
@@ -136,10 +145,14 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 #### Acceptance Criteria
 
 1. THE Server SHALL store each Flight Record in the Database using SQLAlchemy with a SQLite backend.
-2. THE Database schema SHALL include the following dedicated columns: a unique integer primary key, image file path, flight date, flier name, total impulse value (numeric), total impulse unit (text), heads_up (boolean), first_flight (boolean), complex (boolean), rack (text), pad (integer), fso_rso_initials (text), post_flight_outcome (text, one of "good", "motor", "airframe", or "recovery"), post_flight_comments (text), extraction status, and a UTC timestamp of record creation.
-3. THE Database schema SHALL include a JSON overflow column to store all extracted fields not mapped to a dedicated column, including: flier's membership information (club, member number, certification level), rocket name, rocket manufacturer/kit, rocket color(s), rocket measurements (diameter, length, weight with units), motor(s) (nested stage/motor structure), and recovery plan/additional notes.
-4. THE Extraction Status column SHALL enforce the following lifecycle: a new Flight Record is created with status `pending`; status transitions to `processing` when extraction begins; status transitions to `extracted` on successful extraction or to `extraction_failed` on failure.
-5. THE Database SHALL be stored as a single file on the local filesystem so that it is portable and does not require a database server.
+2. THE Database schema SHALL include the following dedicated columns: a unique auto-incrementing integer primary key, image file path (TEXT, NOT NULL), `flight_date` (TEXT, nullable), `flier_name` (TEXT, nullable), `total_impulse_value` (REAL, nullable), `total_impulse_unit` (TEXT, nullable), `flag_heads_up` (BOOLEAN, nullable), `flag_first_flight` (BOOLEAN, nullable), `flag_complex` (BOOLEAN, nullable), `rack` (TEXT, nullable), `pad` (INTEGER, nullable), `safety_officer_initials` (TEXT, nullable), `evaluation_outcome` (TEXT, nullable, constrained to "good", "motor", "airframe", or "recovery"), `evaluation_comments` (TEXT, nullable), `extraction_status` (TEXT, NOT NULL), and `created_at` (TEXT, NOT NULL, server-assigned UTC timestamp in ISO 8601 format).
+3. THE Database schema SHALL include an Overflow Column (`extra_fields`, JSON TEXT, nullable) to store all extracted fields not mapped to a dedicated column, including: Flier's Membership Info (club, member number, certification level), Rocket Name, Rocket Manufacturer/Kit, Rocket Color(s), Rocket Measurements (diameter, length, weight with units), Motor(s) (nested stage/motor structure), and Recovery Plan/Additional Notes.
+4. WHEN a new Flight Record is created, THE Server SHALL set its `extraction_status` to `pending`.
+5. WHEN the Extractor begins processing a Flight Record, THE Server SHALL update its `extraction_status` from `pending` to `processing`.
+6. WHEN extraction completes successfully, THE Server SHALL update the Flight Record's `extraction_status` to `extracted`.
+7. IF extraction fails for any reason, THE Server SHALL update the Flight Record's `extraction_status` to `extraction_failed`.
+8. WHEN a Flight Record's status is reset to `pending` via the re-queue action, THE Server SHALL permit the transition from `extraction_failed` to `pending`.
+9. THE Database SHALL be stored as a single file on the local filesystem so that it is portable and does not require a database server.
 
 ---
 
@@ -150,13 +163,14 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 #### Acceptance Criteria
 
 1. THE Server SHALL serve a Review UI rendered via Jinja2 templates at the application root URL.
-2. THE Review UI SHALL display a paginated list of all Flight Records, showing at minimum the flyer name, rocket name, motor designation, launch date, and record creation timestamp per row.
+2. WHEN the list view is loaded, THE Review UI SHALL display a paginated list of Flight Records, with at most 25 records per page, each row showing at minimum: flier name, rocket name, the motor designation of the first motor in stage 1, flight date, extraction status indicator, and record creation timestamp.
 3. WHEN a user selects a Flight Record from the list, THE Review UI SHALL display a detail view showing all extracted fields alongside the original Card Image.
-4. THE Review UI SHALL provide a text search input that filters Flight Records by flyer name, rocket name, or motor designation.
-5. THE Review UI SHALL display the Extraction Status of each Flight Record so that records with `extraction_failed`, `processing`, or `pending` status are visually distinguishable from fully `extracted` records.
-6. THE Review UI SHALL be usable on both desktop and smartphone-sized screens without horizontal scrolling.
-7. THE Review UI SHALL provide a per-record "Re-queue" button on the detail view of each Flight Record whose Extraction Status is `extraction_failed`; WHEN activated, THE Server SHALL reset that record's Extraction Status to `pending` and dispatch it according to the current extraction mode (immediately if in Immediate Extraction Mode, or held in the Extraction Queue if in Deferred Extraction Mode).
-8. THE Review UI SHALL provide a single "Re-queue All Failed" button on the Flight Records list view; WHEN activated, THE Server SHALL reset ALL Flight Records currently in `extraction_failed` status to `pending` and dispatch them according to the current extraction mode in a single action.
+4. WHEN the user types at least one character into the search input, THE Review UI SHALL filter the Flight Record list server-side to records whose flier name, rocket name, or stage-1 motor designation contain the search term (case-insensitive).
+5. THE Review UI SHALL display the Extraction Status of each Flight Record using a distinct visual indicator (such as a colored badge or icon) for each of the four statuses: `pending`, `processing`, `extracted`, and `extraction_failed`, so that each status is unambiguously distinguishable.
+6. THE Review UI SHALL be usable on screens with a minimum viewport width of 320 pixels without horizontal scrolling.
+7. WHILE the detail view is displayed for a Flight Record whose `extraction_status` is `extraction_failed`, THE Review UI SHALL show a "Re-queue" button; WHEN the button is activated, THE Server SHALL reset that record's `extraction_status` to `pending`, add it to the Extraction Queue, and THE Review UI SHALL reflect the updated status.
+8. WHEN the "Re-queue All Failed" button on the list view is activated, THE Server SHALL reset all Flight Records with `extraction_status` of `extraction_failed` to `pending`, add them all to the Extraction Queue, and THE Review UI SHALL reflect the updated count of pending records.
+9. IF the original Card Image cannot be loaded in the detail view, THEN THE Review UI SHALL display a descriptive placeholder indicating the image is unavailable.
 
 ---
 
@@ -180,11 +194,12 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 #### Acceptance Criteria
 
 1. THE Server SHALL be startable with a single command (e.g., `uvicorn main:app`) from the project directory.
-2. THE Server SHALL read its configuration from a JSON configuration file whose path may be specified at startup; the configuration file SHALL include at minimum: the listening host, port, Image Store directory path, Database file path, Launch Event Name (a string), event Date Range (start date and end date), extraction mode (immediate or deferred), and the list of Extraction Endpoints with their URLs and concurrency limits.
-3. IF a required configuration value is absent, THEN THE Server SHALL use a documented default value and SHALL log the default being applied at startup.
-4. WHEN the Server starts, THE Server SHALL verify that the Image Store directory exists and is writable, and SHALL create it if absent.
-5. WHEN the Server starts, THE Server SHALL verify that the Database file is accessible and SHALL initialize the schema if the Database file does not yet exist.
-6. THE Server SHALL include the configured Launch Event Name in the HTML `<title>` element and in the visible page heading of every server-rendered HTML page, so that the event identity is always visible to the operator.
+2. THE Server SHALL read its configuration exclusively from a JSON configuration file; the path to the configuration file MAY be specified at startup, defaulting to `config.json` in the project directory. The configuration file SHALL include at minimum: `host` (string), `port` (integer), `image_store_path` (string), `database_path` (string), `event_name` (string), `event_start_date` (string, ISO 8601 YYYY-MM-DD), `event_end_date` (string, ISO 8601 YYYY-MM-DD), `extraction_mode` (string, "immediate" or "deferred"), and `extraction_endpoints` (array of objects, each with `url` (string) and `concurrency` (positive integer ≥ 1)).
+3. IF a configuration key with a defined default is absent from the JSON file, THEN THE Server SHALL apply the documented default value and SHALL log a message at startup identifying which key was defaulted and what value was used.
+4. WHEN the Server starts, THE Server SHALL verify that the Image Store directory exists and is writable; IF the directory does not exist, THE Server SHALL create it; IF the directory cannot be created or is not writable, THE Server SHALL log a descriptive error and exit.
+5. WHEN the Server starts, THE Server SHALL verify that the Database file is accessible; IF the file does not exist, THE Server SHALL initialize it with the required schema; IF the file exists but cannot be opened or the schema cannot be initialized, THE Server SHALL log a descriptive error and exit.
+6. THE Server SHALL include the configured `event_name` value in the HTML `<title>` element and in the visible page heading of every server-rendered HTML page.
+7. IF the configuration file is absent or cannot be parsed as valid JSON, THEN THE Server SHALL log a descriptive error identifying the file path and the parse failure, and SHALL exit.
 
 ---
 
@@ -219,12 +234,12 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. THE Server SHALL support two extraction operating modes: Immediate Extraction Mode and Deferred Extraction Mode.
+1. THE Server SHALL support two extraction operating modes: Immediate Extraction Mode and Deferred Extraction Mode, configured via the `extraction_mode` field in the JSON configuration file.
 2. WHEN the Server is in Immediate Extraction Mode and a new Flight Record is created, THE Extractor SHALL dispatch the Flight Record for LLM processing as soon as an Extraction Endpoint has available capacity.
 3. WHEN the Server is in Deferred Extraction Mode and a new Flight Record is created, THE Server SHALL retain the Flight Record with Extraction Status `pending` and SHALL NOT dispatch it to an Extraction Endpoint automatically.
-4. THE Server SHALL expose an operator control (via the Review UI or a dedicated API endpoint) to switch between Immediate Extraction Mode and Deferred Extraction Mode without restarting the Server.
-5. THE Review UI SHALL clearly display the current extraction operating mode so that the operator can see at a glance whether auto-dispatch is active.
-6. THE Server SHALL expose an operator action (via the Review UI or a dedicated API endpoint) to manually trigger extraction of all Flight Records currently in `pending` status.
+4. THE Server SHALL expose an operator control via the Review UI to switch between Immediate Extraction Mode and Deferred Extraction Mode at runtime without restarting the Server.
+5. THE Review UI SHALL display the current extraction operating mode clearly so that the operator can see at a glance whether auto-dispatch is active.
+6. THE Server SHALL expose an operator action via the Review UI to manually trigger extraction of all Flight Records currently in `pending` status.
 7. WHEN the manual trigger action is invoked, THE Extractor SHALL dispatch all `pending` Flight Records to available Extraction Endpoints, respecting each endpoint's configured concurrency limit.
 8. IF the Server is switched from Deferred Extraction Mode to Immediate Extraction Mode, THEN THE Extractor SHALL begin dispatching any existing `pending` Flight Records to available Extraction Endpoints without requiring the operator to invoke the manual trigger separately.
 
@@ -236,11 +251,11 @@ The Flight Card Scanner is a web-based application that digitizes rocket launch 
 
 #### Acceptance Criteria
 
-1. THE Server SHALL accept configuration of one or more Extraction Endpoints exclusively via the JSON configuration file, where each endpoint specifies a base URL (e.g., `http://host:11434`) and a maximum concurrency value (the number of simultaneous extractions allowed against that endpoint).
-2. WHEN multiple Extraction Endpoints are configured, THE Extractor SHALL distribute pending extraction work across all configured endpoints, dispatching each extraction task to the endpoint that currently has available capacity.
-3. THE Extractor SHALL respect each endpoint's configured concurrency limit and SHALL NOT submit more simultaneous extraction requests to an endpoint than its configured maximum allows.
+1. THE Server SHALL accept configuration of one or more Extraction Endpoints exclusively via the JSON configuration file, where each endpoint specifies a `url` (e.g., `http://host:11434`) and a `concurrency` value (a positive integer ≥ 1 indicating the maximum number of simultaneous extractions allowed against that endpoint).
+2. WHEN multiple Extraction Endpoints are configured, THE Extractor SHALL distribute pending extraction work across all configured endpoints, dispatching each extraction task to an endpoint that currently has available capacity.
+3. THE Extractor SHALL respect each endpoint's configured concurrency limit and SHALL NOT submit more simultaneous extraction requests to an endpoint than its configured `concurrency` value allows.
 4. WHILE multiple Extraction Endpoints are configured and available, THE Extractor SHALL process extractions in parallel across endpoints so that the total number of simultaneous extractions can equal the sum of all endpoint concurrency limits.
 5. THE Server SHALL support configuring a local Ollama instance and one or more remote Ollama instances simultaneously, so that local and remote extraction operate concurrently.
-6. IF a configured Extraction Endpoint is unreachable when an extraction is attempted, THEN THE Extractor SHALL mark that extraction attempt as failed, update the Flight Record's Extraction Status to `extraction_failed`, log the failure including the endpoint URL, and leave the remaining configured endpoints unaffected.
-7. WHERE only a single Extraction Endpoint is configured, THE Server SHALL behave identically to the prior single-endpoint behavior, preserving backward compatibility.
+6. IF a configured Extraction Endpoint is unreachable when an extraction is attempted, THEN THE Extractor SHALL update the Flight Record's Extraction Status to `extraction_failed`, log the failure including the endpoint URL, and leave the remaining configured endpoints unaffected.
+7. WHERE only a single Extraction Endpoint is configured, THE Server SHALL behave identically to the multi-endpoint behavior, preserving consistency.
 8. THE Server SHALL log the list of configured Extraction Endpoints and their concurrency limits at startup so that the operator can confirm the configuration is correct.
