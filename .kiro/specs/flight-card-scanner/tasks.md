@@ -64,7 +64,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate arbitrary byte strings that fail `FlightCardExtraction.model_validate_json`, invoke the parse path, and assert the record is set to `extraction_failed` with no field values written
     - **Validates: Requirements 5.5, 5.7**
 
-  - [ ] 3.6 Implement `resolve_flight_date` in `services/extraction_service.py`
+  - [x] 3.6 Implement `resolve_flight_date` in `services/extraction_service.py`
     - Handle: `None`/empty → `None`; day-of-week names (full + abbreviated, case-insensitive) → resolve within `DateRange`; numeric / ISO strings → parse + validate in range
     - Raise `DateResolutionError` for unresolvable values
     - _Requirements: 5.10, 5.11, 5.12_
