@@ -156,3 +156,123 @@ class TestUnresolvableValues:
     def test_invalid_format_raises(self):
         with pytest.raises(DateResolutionError):
             resolve_flight_date("July 19", RANGE_3DAY)
+
+
+# ---------------------------------------------------------------------------
+# Property-based tests (Hypothesis)
+# ---------------------------------------------------------------------------
+
+from datetime import timedelta
+
+from hypothesis import given, settings, assume
+import hypothesis.strategies as st
+
+from flight_card_scanner.services.extraction_service import _DAY_NAMES
+
+
+# All canonical day names (full + abbreviated)
+_ALL_DAY_NAMES = [
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
+]
+
+
+def _apply_random_casing(name: str, draw) -> str:
+    """Apply a random casing transformation to a day name."""
+    case_style = draw(st.sampled_from(["lower", "upper", "title", "random"]))
+    if case_style == "lower":
+        return name.lower()
+    elif case_style == "upper":
+        return name.upper()
+    elif case_style == "title":
+        return name.title()
+    else:
+        # Random per-character casing
+        chars = draw(
+            st.tuples(*[st.booleans() for _ in name])
+        )
+        return "".join(
+            c.upper() if flag else c.lower()
+            for c, flag in zip(name, chars)
+        )
+
+
+@st.composite
+def day_name_with_casing(draw):
+    """Generate a day name with random casing."""
+    name = draw(st.sampled_from(_ALL_DAY_NAMES))
+    return _apply_random_casing(name, draw)
+
+
+@st.composite
+def day_name_and_range_containing_it(draw):
+    """Generate a (day_name_with_casing, DateRange) tuple where the range is
+    guaranteed to contain exactly one occurrence of the named weekday.
+
+    Strategy:
+    - Pick a day name (with random casing)
+    - Pick a start date
+    - Compute a range length between 1 and 6 days so there's exactly one
+      occurrence of the target weekday in [start, start+length].
+    """
+    canonical_name = draw(st.sampled_from(_ALL_DAY_NAMES))
+    cased_name = _apply_random_casing(canonical_name, draw)
+
+    target_weekday = _DAY_NAMES[canonical_name.lower()]
+
+    # Pick a start date in a reasonable range
+    range_start = draw(st.dates(
+        min_value=date(2000, 1, 1),
+        max_value=date(2100, 12, 25),
+    ))
+
+    # Compute the offset from range_start to the first occurrence of target_weekday
+    start_weekday = range_start.weekday()
+    days_until_target = (target_weekday - start_weekday) % 7
+
+    # The range must include exactly that one day. We need:
+    #   range_length >= days_until_target (so the target day is included)
+    #   range_length < days_until_target + 7 (so no second occurrence)
+    # range_length is the number of days from start to end (inclusive range = end - start)
+    min_length = days_until_target
+    max_length = days_until_target + 6  # at most 6 more days after the target
+
+    range_length = draw(st.integers(min_value=min_length, max_value=max_length))
+
+    range_end = range_start + timedelta(days=range_length)
+
+    # Guard against date overflow
+    assume(range_end.year <= 9999)
+
+    date_range = DateRange(start=range_start, end=range_end)
+
+    # The expected resolved date
+    expected_date = range_start + timedelta(days=days_until_target)
+
+    return cased_name, date_range, expected_date
+
+
+# Feature: flight-card-scanner, Property 8: Day-of-week date resolution
+class TestDayOfWeekResolutionProperty:
+    """Property-based test: day-of-week date resolution.
+
+    **Validates: Requirements 5.10, 5.11**
+    """
+
+    @given(data=day_name_and_range_containing_it())
+    @settings(max_examples=200)
+    def test_resolves_to_unique_matching_date(self, data):
+        """For every day name (full/abbreviated, any casing) and a date range
+        containing that weekday, resolve_flight_date returns the unique
+        matching calendar date."""
+        day_name, date_range, expected_date = data
+
+        result = resolve_flight_date(day_name, date_range)
+
+        # The result must be the expected date
+        assert result == expected_date
+        # And that date's weekday must match the day name
+        target_weekday = _DAY_NAMES[day_name.strip().lower()]
+        assert result.weekday() == target_weekday
+        # And the result must be within the range
+        assert date_range.start <= result <= date_range.end

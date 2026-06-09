@@ -35,7 +35,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - `MembershipInfo`, `RocketMeasurements`, `MotorEntry`, `FlightCardExtraction` (with `format`-compatible JSON Schema), `ScanResponse`, `SetModeRequest`, `ModeResponse`, `TriggerResponse`, `RequeueResponse`, `FlightRecordSummary`, `FlightRecordDetail`
     - _Requirements: 5.3, 5.5_
 
-- [ ] 3. Implement service layer
+- [x] 3. Implement service layer
 
   - [x] 3.1 Create `services/image_service.py`
     - Implement `save_image(file_bytes, ext, store_path) -> str` that writes the file to a UUID4-based filename in the Image Store and returns the relative path
@@ -69,7 +69,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Raise `DateResolutionError` for unresolvable values
     - _Requirements: 5.10, 5.11, 5.12_
 
-  - [ ]* 3.7 Write property test for day-of-week date resolution
+  - [x] 3.7 Write property test for day-of-week date resolution
     - **Property 8: Day-of-week date resolution**
     - For every day name in the full/abbreviated set and a generated date range containing that weekday, assert `resolve_flight_date` returns the unique matching calendar date
     - **Validates: Requirements 5.10, 5.11**
