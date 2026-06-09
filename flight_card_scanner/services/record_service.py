@@ -1,5 +1,156 @@
 """Flight Record CRUD service.
 
-This module will be fully implemented in task 3.3.
+Provides async functions for creating, querying, and updating FlightRecord
+instances, including the apply_extraction helper that maps LLM output to
+dedicated columns and overflow JSON.
 """
-# Stub — implementation deferred to task 3
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..models import FlightRecord
+from ..schemas import FlightCardExtraction
+
+
+async def create(db: AsyncSession, image_path: str) -> FlightRecord:
+    """Create a new FlightRecord with status 'pending'.
+
+    Args:
+        db: Active async database session.
+        image_path: Relative path to the saved card image in the Image Store.
+
+    Returns:
+        The newly created FlightRecord instance.
+    """
+    record = FlightRecord(image_path=image_path, extraction_status="pending")
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
+async def get(db: AsyncSession, record_id: int) -> Optional[FlightRecord]:
+    """Fetch a single FlightRecord by primary key.
+
+    Args:
+        db: Active async database session.
+        record_id: The integer primary key of the record.
+
+    Returns:
+        The FlightRecord if found, otherwise None.
+    """
+    result = await db.execute(
+        select(FlightRecord).where(FlightRecord.id == record_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_by_status(db: AsyncSession, status: str) -> list[FlightRecord]:
+    """Fetch all FlightRecords matching a given extraction status.
+
+    Args:
+        db: Active async database session.
+        status: The extraction_status value to filter on.
+
+    Returns:
+        A list of matching FlightRecord instances.
+    """
+    result = await db.execute(
+        select(FlightRecord).where(FlightRecord.extraction_status == status)
+    )
+    return list(result.scalars().all())
+
+
+async def set_status(db: AsyncSession, record_id: int, status: str) -> None:
+    """Update the extraction_status of a FlightRecord.
+
+    Args:
+        db: Active async database session.
+        record_id: The integer primary key of the record.
+        status: The new extraction_status value.
+    """
+    record = await get(db, record_id)
+    if record is not None:
+        record.extraction_status = status
+        await db.commit()
+
+
+async def apply_extraction(
+    db: AsyncSession,
+    record_id: int,
+    extracted: FlightCardExtraction,
+    resolved_date: date | None,
+) -> None:
+    """Map extracted fields to dedicated columns and overflow JSON.
+
+    Dedicated columns receive their mapped values directly. Remaining fields
+    are collected into the overflow JSON column, omitting any keys whose
+    values are None.
+
+    After applying, sets extraction_status to 'extracted'.
+
+    Args:
+        db: Active async database session.
+        record_id: The integer primary key of the record to update.
+        extracted: The validated FlightCardExtraction from the LLM.
+        resolved_date: The resolved calendar date (or None if unresolvable).
+    """
+    record = await get(db, record_id)
+    if record is None:
+        return
+
+    # --- Dedicated columns ---
+    record.flight_date = resolved_date
+    record.flier_name = extracted.flier_name
+    record.total_impulse_value = extracted.total_impulse_value
+    record.total_impulse_unit = extracted.total_impulse_unit
+    record.flag_heads_up = extracted.flag_heads_up
+    record.flag_first_flight = extracted.flag_first_flight
+    record.flag_complex = extracted.flag_complex
+    record.rack = extracted.rack
+    record.pad = extracted.pad
+    record.fso_rso_initials = extracted.fso_rso_initials
+    record.evaluation_outcome = extracted.evaluation_outcome
+    record.evaluation_comments = extracted.evaluation_comments
+
+    # --- Overflow JSON (only include non-None values) ---
+    overflow: dict = {}
+
+    if extracted.membership is not None:
+        overflow["membership"] = extracted.membership.model_dump()
+
+    if extracted.rocket_name is not None:
+        overflow["rocket_name"] = extracted.rocket_name
+
+    if extracted.rocket_manufacturer is not None:
+        overflow["rocket_manufacturer"] = extracted.rocket_manufacturer
+
+    if extracted.rocket_colors is not None:
+        overflow["rocket_colors"] = extracted.rocket_colors
+
+    if extracted.measurements is not None:
+        overflow["rocket_measurements"] = extracted.measurements.model_dump()
+
+    if extracted.motors is not None:
+        overflow["motors"] = [
+            [motor.model_dump() for motor in stage]
+            for stage in extracted.motors
+        ]
+
+    if extracted.notes is not None:
+        overflow["notes"] = extracted.notes
+
+    if extracted.flight_date_raw is not None:
+        overflow["raw_flight_date"] = extracted.flight_date_raw
+
+    record.overflow = overflow if overflow else None
+
+    # --- Mark as extracted ---
+    record.extraction_status = "extracted"
+
+    await db.commit()

@@ -48,7 +48,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate arbitrary byte sequences, save via `save_image`, read back via the static path, and assert byte-for-byte equality
     - **Validates: Requirements 10.1, 10.2**
 
-  - [ ] 3.3 Create `services/record_service.py`
+  - [x] 3.3 Create `services/record_service.py`
     - Implement `create(db, image_path) -> FlightRecord` (status = `pending`)
     - Implement `get(db, record_id)`, `get_by_status(db, status)`, `set_status(db, record_id, status)`
     - Implement `apply_extraction(db, record_id, extracted: FlightCardExtraction, resolved_date)` that maps all schema fields to dedicated columns and overflow JSON
