@@ -37,7 +37,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 
 - [ ] 3. Implement service layer
 
-  - [ ] 3.1 Create `services/image_service.py`
+  - [x] 3.1 Create `services/image_service.py`
     - Implement `save_image(file_bytes, ext, store_path) -> str` that writes the file to a UUID4-based filename in the Image Store and returns the relative path
     - Implement `delete_image(path)` for rollback on DB failure
     - Raise `ImageStorageError` if the directory is not writable
