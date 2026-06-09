@@ -142,6 +142,55 @@ class TestMonthDayFormat:
         assert result == date(2025, 7, 19)
 
 
+class TestContradictoryDayAndDate:
+    """When a day-of-week and numeric date contradict each other, the day wins.
+
+    Flight card volunteers often write "Friday" on a card and then add the
+    date from memory. If the actual Friday in the event range is the 18th but
+    they wrote "Friday 7/13", we trust the day name because it's more likely
+    they got the number wrong than the day.
+    """
+
+    def test_day_wins_over_wrong_date_slash(self):
+        # Fri Jul 18 is the real Friday; "Friday 7/13" has wrong number
+        result = resolve_flight_date("Friday 7/13", RANGE_3DAY)
+        assert result == date(2025, 7, 18)
+
+    def test_day_wins_over_wrong_date_iso(self):
+        # Sat Jul 19 is the real Saturday; "Saturday 2025-07-13" has wrong date
+        result = resolve_flight_date("Saturday 2025-07-13", RANGE_3DAY)
+        assert result == date(2025, 7, 19)
+
+    def test_abbreviated_day_wins(self):
+        # Sun Jul 20; "Sun 7/13" has wrong number
+        result = resolve_flight_date("Sun 7/13", RANGE_3DAY)
+        assert result == date(2025, 7, 20)
+
+    def test_case_insensitive_day_wins(self):
+        result = resolve_flight_date("FRIDAY 7/13", RANGE_3DAY)
+        assert result == date(2025, 7, 18)
+
+    def test_day_agrees_with_date_still_resolves_by_day(self):
+        # Even when both agree, the resolution still works
+        result = resolve_flight_date("Saturday 7/19", RANGE_3DAY)
+        assert result == date(2025, 7, 19)
+
+    def test_day_with_ordinal_suffix(self):
+        # "Friday the 13th" style — day name is first word
+        result = resolve_flight_date("Friday the 13th", RANGE_3DAY)
+        assert result == date(2025, 7, 18)
+
+    def test_day_not_in_range_with_contradictory_date_raises(self):
+        # Monday is not in Fri-Sun range, even with a numeric date
+        with pytest.raises(DateResolutionError):
+            resolve_flight_date("Monday 7/18", RANGE_3DAY)
+
+    def test_full_week_range_resolves_contradictory(self):
+        # Wed Jul 16 is the real Wednesday; "Wednesday 7/20" has wrong day number
+        result = resolve_flight_date("Wednesday 7/20", RANGE_7DAY)
+        assert result == date(2025, 7, 16)
+
+
 class TestUnresolvableValues:
     """Unrecognised strings raise DateResolutionError."""
 

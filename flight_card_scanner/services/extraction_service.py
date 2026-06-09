@@ -65,6 +65,30 @@ def resolve_flight_date(
             f"({date_range.start} to {date_range.end})"
         )
 
+    # --- Contradictory day+date combination ---
+    # Handle cases like "Friday 7/13" or "Fri 2025-07-13" where the day name
+    # and the numeric date disagree. The day-of-week is trusted over the number.
+    # Pattern: optional day name prefix followed by a numeric date portion.
+    contradiction_match = re.match(
+        r"^([a-zA-Z]+)\s+(.+)$", stripped
+    )
+    if contradiction_match:
+        day_part = contradiction_match.group(1).lower()
+        date_part = contradiction_match.group(2).strip()
+        if day_part in _DAY_NAMES:
+            # We have a day name + something else — resolve by day name
+            target_weekday = _DAY_NAMES[day_part]
+            current = date_range.start
+            while current <= date_range.end:
+                if current.weekday() == target_weekday:
+                    return current
+                current += timedelta(days=1)
+            raise DateResolutionError(
+                f"Day-of-week '{contradiction_match.group(1)}' (from '{raw_value}') "
+                f"does not occur within the event date range "
+                f"({date_range.start} to {date_range.end})"
+            )
+
     # --- Numeric / ISO date parsing ---
     for fmt in _DATE_FORMATS_WITH_YEAR:
         try:
