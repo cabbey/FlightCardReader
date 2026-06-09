@@ -74,7 +74,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - For every day name in the full/abbreviated set and a generated date range containing that weekday, assert `resolve_flight_date` returns the unique matching calendar date
     - **Validates: Requirements 5.10, 5.11**
 
-  - [ ]* 3.8 Write property test for out-of-range date consequence chain
+  - [x] 3.8 Write property test for out-of-range date consequence chain
     - **Property 9: Out-of-range date — full failure consequence chain**
     - Generate dates provably outside the event date range, run through `apply_extraction` + `resolve_flight_date`, and assert `flight_date = null`, `overflow['raw_flight_date'] = raw_string`, `extraction_status = "extraction_failed"` atomically
     - **Validates: Requirements 5.11, 5.12**
