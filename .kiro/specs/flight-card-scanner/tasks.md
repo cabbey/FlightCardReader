@@ -82,7 +82,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 - [x] 4. Checkpoint — ensure core services pass all tests
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement the extraction worker pool
+- [x] 5. Implement the extraction worker pool
 
   - [x] 5.1 Implement `ExtractionService` class in `services/extraction_service.py`
     - `__init__`: initialise `_mode`, `asyncio.Queue`, per-endpoint `asyncio.Semaphore` dict, worker list
@@ -115,7 +115,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Configure two mock endpoints; make one raise `OllamaUnavailableError`; assert the other endpoint continues processing and the failed records get `extraction_failed` without affecting the healthy endpoint's work
     - **Validates: Requirements 13.6**
 
-  - [ ] 5.6 Implement `_call_ollama` method in `ExtractionService`
+  - [x] 5.6 Implement `_call_ollama` method in `ExtractionService`
     - Read image bytes, base64-encode, build the Ollama `POST /api/chat` payload with `FlightCardExtraction.model_json_schema()` as the format, set `temperature=0`
     - Parse response via `FlightCardExtraction.model_validate_json`; raise `ExtractionParseError` on failure, `OllamaUnavailableError` on HTTP error
     - Include the full `EXTRACTION_PROMPT` constant as defined in the design

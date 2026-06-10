@@ -9,12 +9,15 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
 from datetime import date, datetime, timedelta
 from enum import Enum
+from pathlib import Path
 
 import httpx
+from pydantic import ValidationError
 
 from flight_card_scanner.config import AppConfig, DateRange, EndpointConfig
 from flight_card_scanner.exceptions import (
@@ -25,6 +28,44 @@ from flight_card_scanner.exceptions import (
 from flight_card_scanner.schemas import FlightCardExtraction
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Extraction Prompt
+# ---------------------------------------------------------------------------
+
+EXTRACTION_PROMPT = """\
+You are an expert data-entry assistant reading a handwritten rocketry flight card.
+Extract every readable field from the card image and return them as a JSON object.
+Use null for any field that is absent, illegible, or not present on this card.
+Do not invent or infer values — only transcribe what is physically written or marked on the card.
+
+IMPORTANT: Some fields use pre-printed options that the flier selects by circling one of the words.
+Treat a circled pre-printed word exactly as if the flier had written that word. Specifically:
+- Flight date: some cards pre-print the days of the week; a circled day name is the flight date.
+- Recovery plan: some cards pre-print recovery method options (e.g. "parachute", "streamer",
+  "tumble"); a circled option is the recovery method.
+- Post-flight evaluation: some cards pre-print outcome options ("good", "motor", "airframe",
+  "recovery"); a circled option is the evaluation_outcome value.
+
+Fields to extract:
+- flight_date_raw: the date or day-of-week written or circled on the card, exactly as it appears
+- flier_name: the name of the person flying the rocket
+- membership: club (TRA/NAR/CAR), member_number (may have trailing letter), cert_level (integer)
+- rocket_name, rocket_manufacturer, rocket_colors (list of strings)
+- measurements: diameter, diameter_unit, length, length_unit, weight, weight_unit
+- motors: nested by stage then motor; each motor has manufacturer, leading_number,
+          letter (e.g. M), number (e.g. 2560), suffix (e.g. WT or -P or /180)
+- total_impulse_value (number), total_impulse_unit (Ns or LbsFt)
+- notes: all free-text notes, recovery plan (including circled pre-printed option if present),
+         competition notes, tracking info
+- flag_heads_up, flag_first_flight, flag_complex: boolean checkboxes
+- rack (string or number), pad (integer)
+- fso_rso_initials: safety officer initials
+- evaluation_outcome: one of good / motor / airframe / recovery
+  (may be a circled pre-printed word rather than handwritten text)
+- evaluation_comments: any comments written in the evaluation section
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -258,11 +299,67 @@ class ExtractionService:
     ) -> FlightCardExtraction:
         """Submit card image to Ollama and return parsed extraction.
 
-        This is a stub that will be fully implemented in task 5.6.
+        Reads the image, base64-encodes it, sends to the Ollama /api/chat
+        endpoint with structured output format, and parses the response
+        into a FlightCardExtraction model.
+
+        Raises:
+            OllamaUnavailableError: If the Ollama endpoint returns an HTTP error.
+            ExtractionParseError: If the LLM response cannot be validated.
         """
-        raise NotImplementedError(
-            "_call_ollama will be implemented in task 5.6"
-        )
+        # Read and base64-encode the image
+        image_bytes = Path(image_path).read_bytes()
+        b64_image = base64.b64encode(image_bytes).decode("ascii")
+
+        # Build the Ollama /api/chat payload
+        payload = {
+            "model": "qwen2.5-vl",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64_image}"
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": EXTRACTION_PROMPT,
+                        },
+                    ],
+                }
+            ],
+            "format": FlightCardExtraction.model_json_schema(),
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+
+        # Send request to Ollama
+        try:
+            response = await client.post("/api/chat", json=payload)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise OllamaUnavailableError(
+                f"Ollama returned HTTP {exc.response.status_code}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise OllamaUnavailableError(
+                f"Ollama request failed: {exc}"
+            ) from exc
+
+        # Parse the response
+        data = response.json()
+        raw_content = data["message"]["content"]
+
+        try:
+            return FlightCardExtraction.model_validate_json(raw_content)
+        except ValidationError as exc:
+            raise ExtractionParseError(
+                message=f"Failed to parse LLM response: {exc}",
+                raw_response=raw_content,
+            ) from exc
 
 # Day-of-week name mapping (full and abbreviated, lowercase) to Python weekday int
 _DAY_NAMES: dict[str, int] = {
