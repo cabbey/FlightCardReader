@@ -1,14 +1,268 @@
 """Extraction queue management, worker pool, and Ollama dispatch.
 
-The ExtractionService class (worker pool, queue, Ollama dispatch) will be
-fully implemented in tasks 5.1 and 5.6.
+Provides:
+- ``ExtractionService`` — async worker pool managing Ollama dispatch
+- ``ExtractionMode`` — enum for IMMEDIATE vs DEFERRED operation
+- ``resolve_flight_date`` — resolves raw LLM date strings to calendar dates
 """
 
+from __future__ import annotations
+
+import asyncio
+import logging
 import re
 from datetime import date, datetime, timedelta
+from enum import Enum
 
-from flight_card_scanner.config import DateRange
-from flight_card_scanner.exceptions import DateResolutionError
+import httpx
+
+from flight_card_scanner.config import AppConfig, DateRange, EndpointConfig
+from flight_card_scanner.exceptions import (
+    DateResolutionError,
+    ExtractionParseError,
+    OllamaUnavailableError,
+)
+from flight_card_scanner.schemas import FlightCardExtraction
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Extraction Mode
+# ---------------------------------------------------------------------------
+
+
+class ExtractionMode(str, Enum):
+    """Server extraction operating mode."""
+
+    IMMEDIATE = "immediate"
+    DEFERRED = "deferred"
+
+
+# ---------------------------------------------------------------------------
+# Extraction Service (Worker Pool + Queue)
+# ---------------------------------------------------------------------------
+
+
+class ExtractionService:
+    """Manages the extraction worker pool and queue.
+
+    Spawns one asyncio.Task per concurrency slot across all configured
+    endpoints. Each worker pulls record IDs from a shared queue, acquires
+    the endpoint's semaphore to respect its concurrency limit, and calls
+    _process to handle the extraction lifecycle.
+    """
+
+    def __init__(self, config: AppConfig, session_factory) -> None:
+        """Initialise the extraction service.
+
+        Args:
+            config: The application configuration (endpoints, mode, date range).
+            session_factory: An async_sessionmaker for creating DB sessions.
+        """
+        self._config = config
+        self._mode = ExtractionMode(config.extraction_mode)
+        self._queue: asyncio.Queue[int] = asyncio.Queue()
+        self._session_factory = session_factory
+        self._endpoints = config.extraction_endpoints
+        self._workers: list[asyncio.Task] = []
+        # One semaphore per endpoint, keyed by URL
+        self._endpoint_semaphores: dict[str, asyncio.Semaphore] = {
+            ep.url: asyncio.Semaphore(ep.concurrency) for ep in self._endpoints
+        }
+
+    @property
+    def mode(self) -> ExtractionMode:
+        """Return the current extraction mode."""
+        return self._mode
+
+    async def start(self) -> None:
+        """Start extraction workers. Called during app lifespan startup.
+
+        Spawns one worker Task per concurrency slot per endpoint.
+        """
+        for ep in self._endpoints:
+            sem = self._endpoint_semaphores[ep.url]
+            for i in range(ep.concurrency):
+                task = asyncio.create_task(
+                    self._worker(ep, sem),
+                    name=f"extractor-{ep.url}-{i}",
+                )
+                self._workers.append(task)
+        logger.info(
+            "Extraction service started: %d workers across %d endpoints",
+            len(self._workers),
+            len(self._endpoints),
+        )
+
+    async def stop(self) -> None:
+        """Gracefully stop extraction workers. Called during app lifespan shutdown.
+
+        Waits up to 30 seconds for the queue to drain, then cancels all workers.
+        """
+        try:
+            await asyncio.wait_for(self._queue.join(), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Extraction queue did not drain within 30s; cancelling workers"
+            )
+
+        for worker in self._workers:
+            worker.cancel()
+
+        # Wait for all workers to finish cancellation
+        if self._workers:
+            await asyncio.gather(*self._workers, return_exceptions=True)
+        self._workers.clear()
+        logger.info("Extraction service stopped")
+
+    async def enqueue(self, record_id: int) -> None:
+        """Enqueue a record for extraction.
+
+        In IMMEDIATE mode the record ID is placed on the queue immediately.
+        In DEFERRED mode this is a no-op — the record stays pending until
+        trigger_pending() or a mode switch to IMMEDIATE.
+        """
+        if self._mode == ExtractionMode.IMMEDIATE:
+            await self._queue.put(record_id)
+
+    async def set_mode(self, mode: ExtractionMode) -> None:
+        """Switch the extraction operating mode.
+
+        If switching from DEFERRED to IMMEDIATE, automatically triggers
+        dispatch of all pending records.
+        """
+        old_mode = self._mode
+        self._mode = mode
+        logger.info("Extraction mode changed: %s → %s", old_mode.value, mode.value)
+        if old_mode == ExtractionMode.DEFERRED and mode == ExtractionMode.IMMEDIATE:
+            await self.trigger_pending()
+
+    async def trigger_pending(self) -> int:
+        """Enqueue all pending records for extraction regardless of mode.
+
+        Returns:
+            The number of records enqueued.
+        """
+        # Import here to avoid circular imports at module level
+        from flight_card_scanner.services import record_service
+
+        async with self._session_factory() as db:
+            records = await record_service.get_by_status(db, "pending")
+            for record in records:
+                await self._queue.put(record.id)
+            count = len(records)
+
+        if count > 0:
+            logger.info("Triggered %d pending records for extraction", count)
+        return count
+
+    async def _worker(
+        self, endpoint: EndpointConfig, sem: asyncio.Semaphore
+    ) -> None:
+        """Infinite worker loop for a single endpoint concurrency slot.
+
+        Pulls record IDs from the queue, acquires the endpoint semaphore,
+        processes the record, then releases and marks the task done.
+        """
+        async with httpx.AsyncClient(
+            base_url=endpoint.url, timeout=120.0
+        ) as client:
+            while True:
+                record_id = await self._queue.get()
+                try:
+                    async with sem:
+                        await self._process(record_id, client, endpoint.url)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.error(
+                        "Unexpected error processing record %d on %s: %s",
+                        record_id,
+                        endpoint.url,
+                        exc,
+                    )
+                finally:
+                    self._queue.task_done()
+
+    async def _process(
+        self, record_id: int, client: httpx.AsyncClient, endpoint_url: str
+    ) -> None:
+        """Process a single record: set processing, call Ollama, apply results.
+
+        On success, applies extraction and sets status to 'extracted'.
+        On failure (parse error, unavailable endpoint, date resolution error),
+        sets status to 'extraction_failed'.
+        """
+        from flight_card_scanner.services import record_service
+
+        # Fetch record and set status to processing
+        async with self._session_factory() as db:
+            record = await record_service.get(db, record_id)
+            if record is None:
+                logger.warning("Record %d not found; skipping", record_id)
+                return
+            await record_service.set_status(db, record_id, "processing")
+
+        try:
+            extracted = await self._call_ollama(client, record.image_path)
+        except OllamaUnavailableError as exc:
+            logger.error(
+                "Endpoint %s unreachable for record %d: %s",
+                endpoint_url,
+                record_id,
+                exc,
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "extraction_failed")
+            return
+        except ExtractionParseError as exc:
+            logger.error(
+                "Bad JSON from LLM for record %d: %s",
+                record_id,
+                exc.raw_response[:200],
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "extraction_failed")
+            return
+
+        # Resolve flight date
+        try:
+            resolved_date = resolve_flight_date(
+                extracted.flight_date_raw, self._config.event_date_range
+            )
+        except DateResolutionError as exc:
+            logger.warning(
+                "Date resolution failed for record %d: %s", record_id, exc
+            )
+            # Store the raw date in overflow and mark as failed
+            async with self._session_factory() as db:
+                record = await record_service.get(db, record_id)
+                if record is not None:
+                    overflow = record.overflow or {}
+                    overflow["raw_flight_date"] = extracted.flight_date_raw
+                    record.overflow = overflow
+                    record.flight_date = None
+                    record.extraction_status = "extraction_failed"
+                    await db.commit()
+            return
+
+        # Apply successful extraction
+        async with self._session_factory() as db:
+            await record_service.apply_extraction(
+                db, record_id, extracted, resolved_date
+            )
+
+    async def _call_ollama(
+        self, client: httpx.AsyncClient, image_path: str
+    ) -> FlightCardExtraction:
+        """Submit card image to Ollama and return parsed extraction.
+
+        This is a stub that will be fully implemented in task 5.6.
+        """
+        raise NotImplementedError(
+            "_call_ollama will be implemented in task 5.6"
+        )
 
 # Day-of-week name mapping (full and abbreviated, lowercase) to Python weekday int
 _DAY_NAMES: dict[str, int] = {

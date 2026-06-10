@@ -79,12 +79,12 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate dates provably outside the event date range, run through `apply_extraction` + `resolve_flight_date`, and assert `flight_date = null`, `overflow['raw_flight_date'] = raw_string`, `extraction_status = "extraction_failed"` atomically
     - **Validates: Requirements 5.11, 5.12**
 
-- [ ] 4. Checkpoint — ensure core services pass all tests
+- [x] 4. Checkpoint — ensure core services pass all tests
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement the extraction worker pool
 
-  - [ ] 5.1 Implement `ExtractionService` class in `services/extraction_service.py`
+  - [x] 5.1 Implement `ExtractionService` class in `services/extraction_service.py`
     - `__init__`: initialise `_mode`, `asyncio.Queue`, per-endpoint `asyncio.Semaphore` dict, worker list
     - `start()`: spawn one worker `asyncio.Task` per endpoint concurrency slot
     - `stop()`: `queue.join()` with 30 s timeout, then cancel workers
