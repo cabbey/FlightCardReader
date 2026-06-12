@@ -165,7 +165,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 
 - [ ] 7. Implement the Review UI (Jinja2 templates and review router)
 
-  - [ ] 7.1 Create `templates/base.html`
+  - [x] 7.1 Create `templates/base.html`
     - Include `<title>` and a visible `<h1>` heading, both populated with `event_name` from the template context
     - Link to minimal CSS; ensure layout works at ≥ 320 px viewport width
     - _Requirements: 7.6, 9.6_
