@@ -131,7 +131,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - For each extraction mode, perform a re-queue on a `extraction_failed` record; assert status becomes `pending`; in `IMMEDIATE` mode assert it is also in the queue; in `DEFERRED` mode assert it is not
     - **Validates: Requirements 7.7, 7.8, 12.2, 12.3**
 
-- [ ] 6. Implement FastAPI routers
+- [x] 6. Implement FastAPI routers
 
   - [x] 6.1 Implement `routers/scan.py` — `POST /scan`
     - Validate uploaded file is JPEG or PNG (return 400 otherwise)
@@ -156,7 +156,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Mock `ExtractionService.enqueue` to record call order; assert 201 is returned before any Ollama call is initiated for the submitted record
     - **Validates: Requirements 4.6, 5.1**
 
-  - [ ] 6.5 Implement `routers/admin.py`
+  - [x] 6.5 Implement `routers/admin.py`
     - `POST /admin/mode` — call `extraction_service.set_mode`; return `ModeResponse`
     - `POST /admin/trigger` — call `extraction_service.trigger_pending`; return `TriggerResponse`
     - `POST /admin/requeue` — call `record_service.get_by_status("extraction_failed")`, reset each to `pending`, enqueue if in immediate mode; return `RequeueResponse`
