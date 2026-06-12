@@ -133,7 +133,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
 
 - [ ] 6. Implement FastAPI routers
 
-  - [ ] 6.1 Implement `routers/scan.py` — `POST /scan`
+  - [x] 6.1 Implement `routers/scan.py` — `POST /scan`
     - Validate uploaded file is JPEG or PNG (return 400 otherwise)
     - Call `image_service.save_image`; on failure return 500 without creating a record
     - Call `record_service.create`; on failure call `image_service.delete_image` and return 500
