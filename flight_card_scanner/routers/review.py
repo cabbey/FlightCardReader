@@ -259,21 +259,20 @@ async def detail_record(
             status_code=404,
         )
 
-    # Determine prev/next record IDs (by created_at desc ordering, same as list)
-    # Previous = next newer record (higher created_at or higher id)
+    # Determine prev/next record IDs
+    # Prev = lower ID, Next = higher ID
     prev_result = await db.execute(
         select(FlightRecord.id)
-        .where(FlightRecord.id > record_id)
-        .order_by(FlightRecord.id.asc())
+        .where(FlightRecord.id < record_id)
+        .order_by(FlightRecord.id.desc())
         .limit(1)
     )
     prev_id = prev_result.scalar_one_or_none()
 
-    # Next = next older record (lower created_at or lower id)
     next_result = await db.execute(
         select(FlightRecord.id)
-        .where(FlightRecord.id < record_id)
-        .order_by(FlightRecord.id.desc())
+        .where(FlightRecord.id > record_id)
+        .order_by(FlightRecord.id.asc())
         .limit(1)
     )
     next_id = next_result.scalar_one_or_none()

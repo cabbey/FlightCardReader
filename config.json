@@ -1,8 +1,8 @@
 {
   "host": "0.0.0.0",
   "port": 8000,
-  "image_store_path": "./2026/march/images",
-  "db_path": "./2026/march/flight_cards.db",
+  "image_store_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/images",
+  "db_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/flight_cards.db",
   "event_name": "Missle Madness 2026",
   "event_date_range": {
     "start": "2025-03-24",
