@@ -266,8 +266,9 @@
   </div>
 </div>
 
-<!-- Actions row: trigger, requeue, search -->
+<!-- Actions row: scan link, trigger, requeue, search -->
 <div class="actions-row">
+  <a href="/scan" class="btn-scan" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#16a34a; color:#fff; text-decoration:none; font-weight:500;">📷 Scan Card</a>
   <button type="button" class="btn-trigger" id="btnTrigger">Trigger All Pending</button>
   {% if status_counts.extraction_failed > 0 %}
   <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
