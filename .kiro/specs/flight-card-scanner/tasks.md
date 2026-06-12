@@ -170,7 +170,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Link to minimal CSS; ensure layout works at ≥ 320 px viewport width
     - _Requirements: 7.6, 9.6_
 
-  - [ ] 7.2 Implement `motor_designation_str(overflow)` helper in `services/record_service.py`
+  - [x] 7.2 Implement `motor_designation_str(overflow)` helper in `services/record_service.py`
     - Single motor: `"AT M2560-WT"`; cluster (same stage, multiple motors): `"2×AT J450-DMS"`; multi-stage: separate stages with ` / `
     - Return `None` if `motors` is absent or empty
     - _Requirements: 7.2_

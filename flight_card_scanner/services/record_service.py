@@ -8,7 +8,7 @@ dedicated columns and overflow JSON.
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,3 +154,81 @@ async def apply_extraction(
     record.extraction_status = "extracted"
 
     await db.commit()
+
+
+def _format_motor(motor: dict[str, Any]) -> str:
+    """Format a single motor dict into a designation string.
+
+    Format: [manufacturer ][[leading_number]-]letter+number[-suffix]
+
+    Suffix rules:
+    - If suffix starts with '-' or '/', use as-is
+    - Otherwise prepend '-'
+    """
+    parts: list[str] = []
+
+    # Core designation: [leading_number-]letter+number[-suffix]
+    core = ""
+    if motor.get("leading_number"):
+        core += f"{motor['leading_number']}-"
+    core += f"{motor['letter']}{motor['number']}"
+    if motor.get("suffix"):
+        suffix = motor["suffix"]
+        if suffix.startswith("-") or suffix.startswith("/"):
+            core += suffix
+        else:
+            core += f"-{suffix}"
+
+    # Manufacturer prefix (space-separated from core)
+    if motor.get("manufacturer"):
+        parts.append(motor["manufacturer"])
+
+    parts.append(core)
+    return " ".join(parts)
+
+
+def _format_stage(stage: list[dict[str, Any]]) -> str:
+    """Format a stage (list of motors) into a designation string.
+
+    Single motor: just the motor designation.
+    Cluster (multiple motors): "{count}×{designation}" using the first motor.
+    """
+    if len(stage) == 1:
+        return _format_motor(stage[0])
+    # Cluster: use the first motor's designation with a count prefix
+    return f"{len(stage)}×{_format_motor(stage[0])}"
+
+
+def motor_designation_str(overflow: dict[str, Any] | None) -> str | None:
+    """Return a human-readable motor designation string from overflow data.
+
+    Examples:
+        - Single motor: "AT M2560-WT"
+        - Cluster: "2×AT J450-DMS"
+        - Multi-stage: "AT M2560-WT / AT K600-WT"
+        - Clustered multi-stage: "2×AT J450-DMS / AT K600-WT"
+
+    Args:
+        overflow: The overflow dict from a FlightRecord, or None.
+
+    Returns:
+        The formatted designation string, or None if motors data is
+        absent or empty.
+    """
+    if overflow is None:
+        return None
+
+    motors = overflow.get("motors")
+    if not motors:
+        return None
+
+    # motors is a list of stages; each stage is a list of motor dicts
+    stage_strs: list[str] = []
+    for stage in motors:
+        if stage:  # skip empty stages
+            stage_strs.append(_format_stage(stage))
+
+    if not stage_strs:
+        return None
+
+    return " / ".join(stage_strs)
