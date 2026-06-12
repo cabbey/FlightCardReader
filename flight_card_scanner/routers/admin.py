@@ -115,3 +115,22 @@ async def requeue_single(
     await record_service.set_status(db, record.id, "pending")
     await extraction_service.enqueue(record.id)
     return RequeueResponse(requeued=1)
+
+
+@router.post("/extract/{record_id}", response_model=TriggerResponse)
+async def extract_single(
+    record_id: int,
+    db: AsyncSession = Depends(get_db),
+    extraction_service: ExtractionService = Depends(get_extraction_service),
+) -> TriggerResponse:
+    """Force extraction of a single record regardless of its current status.
+
+    Sets the record to pending and enqueues it for extraction.
+    Returns 404 if the record does not exist.
+    """
+    record = await record_service.get(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+    await record_service.set_status(db, record.id, "pending")
+    await extraction_service.enqueue(record.id)
+    return TriggerResponse(dispatched=1)
