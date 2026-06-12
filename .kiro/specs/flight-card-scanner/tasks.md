@@ -180,7 +180,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate arbitrary non-empty motor structures; assert the returned string is non-empty and contains the `letter` + `number` of every `MotorEntry`, with `×` for clusters and `/` for stages
     - **Validates: Requirements 5.3 (motor sub-field), 7.2**
 
-  - [ ] 7.4 Create `templates/list.html`
+  - [x] 7.4 Create `templates/list.html`
     - Paginated table (max 25 per page per requirements) with columns: `#`, flier name, rocket name, motor designation, flight date, status badge, created timestamp
     - Status bar showing current extraction mode (with dropdown/form to switch) and per-status counts
     - "Trigger All Pending" button (calls `POST /admin/trigger`), "Re-queue All Failed" button (visible only when failed > 0, calls `POST /admin/requeue`)
