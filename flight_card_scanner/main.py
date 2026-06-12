@@ -26,6 +26,14 @@ from .services.extraction_service import ExtractionService
 
 logger = logging.getLogger(__name__)
 
+# Ensure application log messages are visible on the console.
+# Uvicorn configures its own loggers but not the application namespace.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s",
+    stream=sys.stderr,
+)
+
 # ---------------------------------------------------------------------------
 # Resolve key paths relative to the package directory
 # ---------------------------------------------------------------------------
@@ -101,6 +109,16 @@ def _log_endpoints(config: AppConfig) -> None:
         )
 
 
+def _log_config_summary(config: AppConfig) -> None:
+    """Log key configuration values at startup."""
+    logger.info("Event: %s (%s to %s)",
+                config.event_name,
+                config.event_date_range.start,
+                config.event_date_range.end)
+    logger.info("Database: %s", config.db_path.resolve())
+    logger.info("Image store: %s", config.image_store_path.resolve())
+
+
 # ---------------------------------------------------------------------------
 # Startup checks orchestrator
 # ---------------------------------------------------------------------------
@@ -108,6 +126,7 @@ def _log_endpoints(config: AppConfig) -> None:
 
 async def startup_checks(config: AppConfig) -> None:
     """Run all startup validation checks."""
+    _log_config_summary(config)
     _check_image_store(config)
     await _check_database(config)
     _check_static_assets()
