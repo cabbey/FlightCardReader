@@ -447,7 +447,8 @@
       ]);
       var pts = new cv.MatVector();
       pts.push_back(roiPoints);
-      cv.fillPoly(mask, pts, new cv.Scalar(255));
+      // Use drawContours with FILLED since fillPoly is not available in opencv.js
+      cv.drawContours(mask, pts, 0, new cv.Scalar(255), cv.FILLED);
 
       // Convert source to grayscale
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
