@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+  }
+
+  .detail-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .detail-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .badge-pending {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .badge-processing {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .badge-extracted {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .badge-extraction_failed {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  /* Two-column layout */
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* Card image */
+  .card-image-wrapper {
+    width: 100%;
+  }
+
+  .card-image {
+    display: block;
+    width: 100%;
+    max-width: 50vw;
+    height: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    object-fit: contain;
+  }
+
+  .image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 50vw;
+    min-height: 200px;
+    background: #f3f4f6;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+
+  /* Fields grid */
+  .fields-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    align-items: baseline;
+  }
+
+  .fields-grid dt {
+    font-weight: 600;
+    color: #4b5563;
+    white-space: nowrap;
+  }
+
+  .fields-grid dd {
+    margin: 0;
+    word-break: break-word;
+  }
+
+  .fields-section-title {
+    grid-column: 1 / -1;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-top: 0.75rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  /* Re-queue button */
+  .btn-requeue {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    background: #dc2626;
+    color: #fff;
+  }
+
+  .btn-requeue:hover {
+    background: #b91c1c;
+  }
+
+  /* Responsive: stack on narrow viewports */
+  @media (max-width: 600px) {
+    .detail-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .card-image,
+    .image-placeholder {
+      max-width: 100%;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Back to list</a>
+
+<div class="detail-header">
+  <h2>Record #{{ record.id }}</h2>
+  <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
+</div>
+
+<div class="detail-layout">
+  <!-- Card image column -->
+  <div class="card-image-wrapper">
+    <img
+      src="{{ record.image_url }}"
+      alt="Flight card image for record {{ record.id }}"
+      class="card-image"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+    >
+    <div class="image-placeholder" style="display:none;">Image not available</div>
+  </div>
+
+  <!-- Extracted fields column -->
+  <div class="fields-column">
+    <dl class="fields-grid">
+      <dt>Flight Date</dt>
+      <dd>{{ record.flight_date or "—" }}</dd>
+
+      <dt>Flier Name</dt>
+      <dd>{{ record.flier_name or "—" }}</dd>
+
+      <dt>Total Impulse</dt>
+      <dd>
+        {% if record.total_impulse_value is not none %}
+          {{ record.total_impulse_value }} {{ record.total_impulse_unit or "" }}
+        {% else %}
+          —
+        {% endif %}
+      </dd>
+
+      <dt>Heads Up</dt>
+      <dd>{{ "Yes" if record.flag_heads_up else ("No" if record.flag_heads_up is not none else "—") }}</dd>
+
+      <dt>First Flight</dt>
+      <dd>{{ "Yes" if record.flag_first_flight else ("No" if record.flag_first_flight is not none else "—") }}</dd>
+
+      <dt>Complex</dt>
+      <dd>{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</dd>
+
+      <dt>Rack</dt>
+      <dd>{{ record.rack or "—" }}</dd>
+
+      <dt>Pad</dt>
+      <dd>{{ record.pad if record.pad is not none else "—" }}</dd>
+
+      <dt>FSO/RSO Initials</dt>
+      <dd>{{ record.fso_rso_initials or "—" }}</dd>
+
+      <dt>Evaluation</dt>
+      <dd>{{ record.evaluation_outcome or "—" }}</dd>
+
+      <dt>Comments</dt>
+      <dd>{{ record.evaluation_comments or "—" }}</dd>
+
+      <dt>Created</dt>
+      <dd>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</dd>
+
+      <!-- Overflow fields -->
+      {% if record.overflow %}
+        {% if record.overflow.membership %}
+        <div class="fields-section-title">Membership</div>
+        <dt>Club</dt>
+        <dd>{{ record.overflow.membership.club or "—" }}</dd>
+        <dt>Member #</dt>
+        <dd>{{ record.overflow.membership.member_number or "—" }}</dd>
+        <dt>Cert Level</dt>
+        <dd>{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</dd>
+        {% endif %}
+
+        {% if record.overflow.rocket_name or record.overflow.rocket_manufacturer or record.overflow.rocket_colors %}
+        <div class="fields-section-title">Rocket</div>
+        <dt>Name</dt>
+        <dd>{{ record.overflow.rocket_name or "—" }}</dd>
+        <dt>Manufacturer</dt>
+        <dd>{{ record.overflow.rocket_manufacturer or "—" }}</dd>
+        <dt>Colors</dt>
+        <dd>{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</dd>
+        {% endif %}
+
+        {% if record.overflow.rocket_measurements %}
+        <div class="fields-section-title">Measurements</div>
+          {% set m = record.overflow.rocket_measurements %}
+          {% if m.diameter is not none %}
+          <dt>Diameter</dt>
+          <dd>{{ m.diameter }} {{ m.diameter_unit or "" }}</dd>
+          {% endif %}
+          {% if m.length is not none %}
+          <dt>Length</dt>
+          <dd>{{ m.length }} {{ m.length_unit or "" }}</dd>
+          {% endif %}
+          {% if m.weight is not none %}
+          <dt>Weight</dt>
+          <dd>{{ m.weight }} {{ m.weight_unit or "" }}</dd>
+          {% endif %}
+        {% endif %}
+
+        {% if record.overflow.motors %}
+        <div class="fields-section-title">Motors</div>
+        <dt>Designation</dt>
+        <dd>
+          {% for stage in record.overflow.motors %}
+            {% for motor in stage %}
+              {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
+            {% endfor %}{% if not loop.last %} / {% endif %}
+          {% endfor %}
+        </dd>
+        {% endif %}
+
+        {% if record.overflow.notes %}
+        <div class="fields-section-title">Notes</div>
+        <dt>Notes</dt>
+        <dd>{{ record.overflow.notes }}</dd>
+        {% endif %}
+
+        {% if record.overflow.raw_flight_date %}
+        <dt>Raw Flight Date</dt>
+        <dd>{{ record.overflow.raw_flight_date }}</dd>
+        {% endif %}
+      {% endif %}
+    </dl>
+
+    {% if record.extraction_status == "extraction_failed" %}
+    <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  var btn = document.getElementById('btnRequeue');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      fetch('/admin/requeue/{{ record.id }}', { method: 'POST' })
+        .then(function(res) {
+          if (res.ok) {
+            location.reload();
+          } else {
+            alert('Failed to re-queue record.');
+          }
+        })
+        .catch(function() {
+          alert('Network error re-queuing record.');
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}

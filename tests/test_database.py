@@ -43,7 +43,8 @@ async def tmp_engine(tmp_path):
 class TestInitEngine:
     """Tests for init_engine."""
 
-    def test_returns_engine(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_returns_engine(self, tmp_path):
         """init_engine returns an AsyncEngine."""
         from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -52,21 +53,20 @@ class TestInitEngine:
         try:
             assert isinstance(engine, AsyncEngine)
         finally:
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(engine.dispose())
+            await engine.dispose()
             import flight_card_scanner.database as db_mod
             db_mod._engine = None
             db_mod._async_session = None
 
-    def test_url_uses_aiosqlite(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_url_uses_aiosqlite(self, tmp_path):
         """The engine URL uses the sqlite+aiosqlite driver."""
         db_path = tmp_path / "test.db"
         engine = init_engine(db_path)
         try:
             assert "sqlite+aiosqlite" in str(engine.url)
         finally:
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(engine.dispose())
+            await engine.dispose()
             import flight_card_scanner.database as db_mod
             db_mod._engine = None
             db_mod._async_session = None

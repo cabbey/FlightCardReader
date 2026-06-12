@@ -163,7 +163,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - `POST /admin/requeue/{record_id}` — reset single record; return 404 if not found, 422 if not `extraction_failed`; return `RequeueResponse`
     - _Requirements: 7.7, 7.8, 12.4, 12.6, 12.7, 12.8_
 
-- [ ] 7. Implement the Review UI (Jinja2 templates and review router)
+- [x] 7. Implement the Review UI (Jinja2 templates and review router)
 
   - [x] 7.1 Create `templates/base.html`
     - Include `<title>` and a visible `<h1>` heading, both populated with `event_name` from the template context
@@ -187,7 +187,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Search input (calls server-side on submit); pagination controls (Prev / Next)
     - _Requirements: 7.1, 7.2, 7.5, 7.6, 7.8, 12.4, 12.5, 12.6_
 
-  - [ ] 7.5 Create `templates/detail.html`
+  - [x] 7.5 Create `templates/detail.html`
     - Two-column layout: card image (`<img src="/images/...">`, responsive, max 50 vw) and extracted fields grid showing all `FlightRecordDetail` fields
     - Status badge with the four visually distinct indicators
     - "Re-queue" button shown only when `extraction_status = "extraction_failed"` (calls `POST /admin/requeue/{id}`)
@@ -195,7 +195,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Back-to-list link
     - _Requirements: 7.3, 7.5, 7.7, 7.9_
 
-  - [ ] 7.6 Implement `routers/review.py`
+  - [x] 7.6 Implement `routers/review.py`
     - `GET /` — query + optional `q` search, paginate (page / page_size), compute per-status counts and current mode, render `list.html`
     - Search logic: SQL `LIKE` on `flier_name`; Python-side scan of `overflow` JSON for `rocket_name` and motor designation
     - `GET /record/{record_id}` — fetch record, build `image_url`, render `detail.html`; return 404 HTML page if not found
@@ -216,12 +216,12 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - For generated `event_name` strings, render both the list and detail templates and assert the string appears in both `<title>` and a visible heading element
     - **Validates: Requirements 9.6**
 
-- [ ] 8. Checkpoint — ensure all server-side tests pass
+- [x] 8. Checkpoint — ensure all server-side tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Wire up FastAPI app factory and startup checks
+- [x] 9. Wire up FastAPI app factory and startup checks
 
-  - [ ] 9.1 Create `main.py` with the FastAPI app factory and `lifespan` context manager
+  - [x] 9.1 Create `main.py` with the FastAPI app factory and `lifespan` context manager
     - Load config, run `startup_checks` (create image store dir, init DB schema, verify static assets, log endpoints), mount `/static` and `/images` `StaticFiles`, include all routers
     - Instantiate `ExtractionService`, call `start()` on entry and `stop()` on exit
     - _Requirements: 9.1, 9.4, 9.5, 11.5, 13.8_
@@ -231,21 +231,21 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Mock `_call_ollama` to record DB state at the moment it is first called; assert the record's `extraction_status` is `"processing"` at that point
     - **Validates: Requirements 5.2, 6.4**
 
-- [ ] 10. Implement the browser-side scanning client
+- [x] 10. Implement the browser-side scanning client
 
-  - [ ] 10.1 Create `templates/scan.html`
+  - [x] 10.1 Create `templates/scan.html`
     - `<video id="preview">` and `<canvas id="overlay">` for live preview state; `<img id="capturePreview">` for confirmation state; camera-switch `<button id="switchCamera">`; Accept/Reject buttons; spinner overlay; error/confirmation toast area
     - Load `scanner.js` and OpenCV.js from `/static/js/`
     - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 3.1, 3.2, 3.4_
 
-  - [ ] 10.2 Implement `static/js/scanner.js` — camera access and switching
+  - [x] 10.2 Implement `static/js/scanner.js` — camera access and switching
     - `enumerateCameras()`: call `enumerateDevices`, filter `videoinput`
     - `startCamera(deviceId)`: call `getUserMedia` with `{ video: { deviceId: { exact } } }` when deviceId provided; default to environment-facing camera on first call
     - `switchCamera()`: cycle through enumerated devices, call `startCamera`
     - Display static error overlays on permission denial and unsupported `getUserMedia`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
-  - [ ] 10.3 Implement the OpenCV.js detection pipeline in `scanner.js`
+  - [x] 10.3 Implement the OpenCV.js detection pipeline in `scanner.js`
     - `requestAnimationFrame` loop calling `captureFrame()`
     - `captureFrame()`: draw video to offscreen canvas → cvtColor GRAY → GaussianBlur(5×5) → Canny(75, 200) → `findContours(RETR_EXTERNAL)` → `approxPolyDP` per contour → select largest 4-vertex contour → area check (`≥ MIN_FILL × frame area`)
     - `stabilityCheck()`: compare corner positions with previous frame; require < `STABILITY_THRESHOLD` px for `STABILITY_FRAMES` consecutive frames
@@ -259,12 +259,12 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - Generate arbitrary sets of four valid quadrilateral corner points; call `perspectiveTransform` and assert the resulting image width ≥ 1000 and height ≥ 1300
     - **Validates: Requirements 2.3, 2.5** (Note: requires jsdom or headless browser environment for OpenCV.js WASM)
 
-  - [ ] 10.5 Implement `perspectiveTransform()` and auto-capture in `scanner.js`
+  - [x] 10.5 Implement `perspectiveTransform()` and auto-capture in `scanner.js`
     - Order corners (TL, TR, BR, BL), compute `OUTPUT_W = max(1000, computed_width)` / `OUTPUT_H = max(1300, computed_height)`, call `getPerspectiveTransform` + `warpPerspective`, encode to JPEG blob / data URL
     - On stable + focused detection: call `perspectiveTransform()`, play shutter sound, transition to confirmation screen
     - _Requirements: 2.3, 2.4, 2.5_
 
-  - [ ] 10.6 Implement the confirmation screen state and submission flow in `scanner.js`
+  - [x] 10.6 Implement the confirmation screen state and submission flow in `scanner.js`
     - On entering State 2: show `#capturePreview`, Accept/Reject buttons; add swipe-up `touchstart`/`touchend` listener (vertical delta > 80 px upward → accept)
     - `submitCard(jpegDataUrl)`: convert data URL → Blob, build `FormData` with field `card_image`, `POST /scan`, show spinner, disable controls
     - On 201: display record ID for ≥ 2 s, return to State 1 (live preview)
@@ -273,7 +273,7 @@ A local-network web application that digitises handwritten rocket-launch flight 
     - On Reject: discard image, return to State 1
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10_
 
-- [ ] 11. Final checkpoint — end-to-end integration and all tests pass
+- [x] 11. Final checkpoint — end-to-end integration and all tests pass
   - Ensure all unit tests, property-based tests, and integration tests pass, ask the user if questions arise.
 
 ## Notes

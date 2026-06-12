@@ -1,5 +1,186 @@
 """FastAPI application factory and lifespan context manager.
 
-This module will be fully implemented in task 9.1.
+Handles:
+- Loading configuration from JSON
+- Startup checks (image store, database, static assets)
+- Mounting static file directories
+- Including all routers
+- Managing the ExtractionService lifecycle
 """
-# Stub — implementation deferred to task 9
+
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from .config import AppConfig, load_config
+from .database import create_all, init_engine
+from .exceptions import ConfigError
+from .routers import admin, review, scan
+from .services.extraction_service import ExtractionService
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Resolve key paths relative to the package directory
+# ---------------------------------------------------------------------------
+
+_PACKAGE_DIR = Path(__file__).resolve().parent
+_STATIC_DIR = _PACKAGE_DIR / "static"
+_TEMPLATES_DIR = _PACKAGE_DIR / "templates"
+_OPENCV_JS_DIR = _STATIC_DIR / "js" / "node_modules" / "opencv.js"
+
+
+# ---------------------------------------------------------------------------
+# Startup checks
+# ---------------------------------------------------------------------------
+
+
+def _check_image_store(config: AppConfig) -> None:
+    """Verify Image Store directory exists and is writable; create if absent."""
+    image_path = config.image_store_path
+    if not image_path.exists():
+        try:
+            image_path.mkdir(parents=True, exist_ok=True)
+            logger.info("Created image store directory: %s", image_path)
+        except OSError as exc:
+            logger.error(
+                "Cannot create image store directory %s: %s", image_path, exc
+            )
+            sys.exit(1)
+
+    if not os.access(image_path, os.W_OK):
+        logger.error(
+            "Image store directory is not writable: %s", image_path
+        )
+        sys.exit(1)
+
+
+async def _check_database(config: AppConfig) -> None:
+    """Verify DB file is accessible; init schema if needed."""
+    db_path = config.db_path
+    # Ensure the parent directory exists
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        engine = init_engine(db_path)
+        await create_all(engine)
+        logger.info("Database initialised at %s", db_path)
+    except Exception as exc:
+        logger.error(
+            "Cannot initialise database at %s: %s", db_path, exc
+        )
+        sys.exit(1)
+
+
+def _check_static_assets() -> None:
+    """Verify required client-side assets (opencv.js) are present."""
+    if not _OPENCV_JS_DIR.exists():
+        logger.error(
+            "Required client-side asset missing: opencv.js not found at %s. "
+            "Run 'pnpm install' in the static/js directory to install dependencies.",
+            _OPENCV_JS_DIR,
+        )
+        sys.exit(1)
+    logger.info("Static asset check passed: opencv.js found at %s", _OPENCV_JS_DIR)
+
+
+def _log_endpoints(config: AppConfig) -> None:
+    """Log configured extraction endpoints and their concurrency limits."""
+    logger.info(
+        "Extraction mode: %s", config.extraction_mode
+    )
+    for ep in config.extraction_endpoints:
+        logger.info(
+            "  Endpoint: %s (concurrency: %d)", ep.url, ep.concurrency
+        )
+
+
+# ---------------------------------------------------------------------------
+# Startup checks orchestrator
+# ---------------------------------------------------------------------------
+
+
+async def startup_checks(config: AppConfig) -> None:
+    """Run all startup validation checks."""
+    _check_image_store(config)
+    await _check_database(config)
+    _check_static_assets()
+    _log_endpoints(config)
+
+
+# ---------------------------------------------------------------------------
+# Lifespan context manager
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup checks, service init, and graceful shutdown."""
+    # 1. Load config
+    config_path = Path(os.environ.get("CONFIG_PATH", "config.json"))
+    try:
+        config = load_config(config_path)
+    except ConfigError as exc:
+        logger.error("Configuration error: %s", exc)
+        sys.exit(1)
+
+    # 2-4. Run startup checks (image store, DB, static assets, log endpoints)
+    await startup_checks(config)
+
+    # 5. Instantiate and start the extraction service
+    from .database import _async_session as session_factory
+
+    extraction_service = ExtractionService(
+        config=config, session_factory=session_factory
+    )
+    await extraction_service.start()
+    logger.info("Extraction service started.")
+
+    # 6. Configure routers with their dependencies
+    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    scan.configure(config=config, extraction_service=extraction_service)
+    admin.configure(extraction_service=extraction_service)
+    review.configure(
+        templates=templates, config=config, extraction_service=extraction_service
+    )
+
+    # Mount /images now that we know the path and it exists
+    app.mount(
+        "/images",
+        StaticFiles(directory=str(config.image_store_path)),
+        name="images",
+    )
+
+    # Store config on app state for potential access elsewhere
+    app.state.config = config
+    app.state.extraction_service = extraction_service
+
+    yield
+
+    # 7. Graceful shutdown: stop extraction service
+    await extraction_service.stop()
+    logger.info("Extraction service stopped.")
+
+
+# ---------------------------------------------------------------------------
+# Application instance
+# ---------------------------------------------------------------------------
+
+app = FastAPI(lifespan=lifespan)
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+# Note: /images is mounted dynamically in the lifespan after config is loaded
+# and the image store directory has been verified/created.
+
+# Include routers
+app.include_router(scan.router)
+app.include_router(review.router)
+app.include_router(admin.router)

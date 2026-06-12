@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .scan-container {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  /* Live preview state */
+  .preview-wrapper {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  #preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Confirmation state */
+  .confirmation-wrapper {
+    display: none;
+    width: 100%;
+    text-align: center;
+  }
+
+  #capturePreview {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 0 auto;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+
+  .controls button {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    min-width: 120px;
+  }
+
+  #switchCamera {
+    background: #555;
+    color: #fff;
+  }
+
+  #switchCamera:hover {
+    background: #444;
+  }
+
+  #acceptBtn {
+    background: #2e7d32;
+    color: #fff;
+  }
+
+  #acceptBtn:hover {
+    background: #1b5e20;
+  }
+
+  #rejectBtn {
+    background: #c62828;
+    color: #fff;
+  }
+
+  #rejectBtn:hover {
+    background: #b71c1c;
+  }
+
+  /* Spinner overlay */
+  .spinner-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .spinner-overlay.active {
+    display: flex;
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Error overlay */
+  .error-overlay {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: 4px;
+    z-index: 10;
+  }
+
+  .error-overlay.active {
+    display: flex;
+  }
+
+  .error-overlay p {
+    margin: 0.5rem 0;
+    line-height: 1.6;
+  }
+
+  .error-overlay .error-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Toast area */
+  .toast-area {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    width: 90%;
+    max-width: 400px;
+  }
+
+  .toast {
+    display: none;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.9rem;
+    text-align: center;
+    margin-top: 0.5rem;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .toast.active {
+    display: block;
+  }
+
+  .toast.success {
+    background: #2e7d32;
+  }
+
+  .toast.error {
+    background: #c62828;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="scan-container">
+  <!-- State 1: Live Preview -->
+  <div id="livePreviewState">
+    <div class="preview-wrapper">
+      <video id="preview" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+
+      <!-- Error: Camera permission denied -->
+      <div id="errorPermission" class="error-overlay" role="alert">
+        <div>
+          <p class="error-title">Camera Access Required</p>
+          <p>Camera permission was denied. This app needs camera access to scan flight cards.</p>
+          <p>Please allow camera access in your browser settings and reload the page.</p>
+        </div>
+      </div>
+
+      <!-- Error: getUserMedia not supported -->
+      <div id="errorUnsupported" class="error-overlay" role="alert">
+        <div>
+          <p class="error-title">Browser Not Supported</p>
+          <p>Your browser does not support camera access.</p>
+          <p>Please use a modern browser such as Chrome, Firefox, Safari, or Edge.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="switchCamera" type="button" aria-label="Switch camera">&#x1F504; Switch Camera</button>
+    </div>
+  </div>
+
+  <!-- State 2: Confirmation Screen -->
+  <div id="confirmationState" class="confirmation-wrapper">
+    <img id="capturePreview" alt="Captured flight card" />
+    <div class="controls">
+      <button id="acceptBtn" type="button">&#x2714; Accept</button>
+      <button id="rejectBtn" type="button">&#x2718; Retake</button>
+    </div>
+  </div>
+</div>
+
+<!-- Spinner overlay -->
+<div id="spinnerOverlay" class="spinner-overlay" role="status" aria-label="Submitting">
+  <div class="spinner"></div>
+</div>
+
+<!-- Toast area for confirmation/error messages -->
+<div class="toast-area" aria-live="polite">
+  <div id="toastSuccess" class="toast success"></div>
+  <div id="toastError" class="toast error"></div>
+</div>
+
+<script src="/static/js/node_modules/opencv.js/opencv.js"></script>
+<script src="/static/js/scanner.js"></script>
+{% endblock %}
