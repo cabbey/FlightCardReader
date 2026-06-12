@@ -1,12 +1,12 @@
 # Flight Card Scanner
 
-A web application for digitizing handwritten rocketry flight cards. Users photograph flight cards using their phone or tablet camera, and the app automatically extracts structured data (flier name, motor designation, flight date, etc.) using an Ollama-hosted vision language model (Qwen2.5-VL).
+A web application for digitizing handwritten rocketry flight cards. Users photograph flight cards using their phone or tablet camera, and the app automatically extracts structured data (flier name, motor designation, flight date, etc.) using an Ollama-hosted vision language model (Qwen3-VL).
 
 ## How It Works
 
 1. A user opens the web interface on a mobile device and photographs a flight card using the built-in camera UI.
 2. The image is uploaded and stored on the server.
-3. The server dispatches the image to one or more Ollama endpoints running Qwen2.5-VL for structured data extraction.
+3. The server dispatches the image to one or more Ollama endpoints running Qwen3-VL for structured data extraction.
 4. Extracted data is stored in a SQLite database and viewable through a review interface with search and pagination.
 
 The extraction can run in two modes:
@@ -18,7 +18,7 @@ The extraction can run in two modes:
 - **Ubuntu Linux** (22.04 or later recommended)
 - **Python 3.13+**
 - **Node.js 18+** and **pnpm** (for client-side OpenCV.js dependency)
-- **Ollama** with the `qwen2.5-vl` model pulled and running
+- **Ollama** with the `qwen3-vl` model pulled and running
 
 ### Installing Ollama
 
@@ -31,7 +31,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 Then pull the vision model:
 
 ```bash
-ollama pull qwen2.5-vl
+ollama pull qwen3-vl
 ```
 
 Ollama listens on `http://localhost:11434` by default.
@@ -204,7 +204,7 @@ FlightCardReader/
 Run `pnpm install` from the project root. This installs OpenCV.js into the static assets directory.
 
 **"Ollama returned HTTP 4xx/5xx" or records stuck in `extraction_failed`**
-Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen2.5-vl` is listed. Re-pull the model if needed: `ollama pull qwen2.5-vl`.
+Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed. Re-pull the model if needed: `ollama pull qwen3-vl`.
 
 **Camera not working in the scan UI**
 The camera API requires HTTPS in production (or `localhost` for development). If accessing from another device on the network, you'll need to serve over HTTPS (e.g., behind a reverse proxy with TLS).

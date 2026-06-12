@@ -313,7 +313,7 @@ class ExtractionService:
 
         # Build the Ollama /api/chat payload
         payload = {
-            "model": "qwen2.5-vl",
+            "model": "qwen3-vl",
             "messages": [
                 {
                     "role": "user",

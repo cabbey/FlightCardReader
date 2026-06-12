@@ -44,7 +44,7 @@ class MotorEntry(BaseModel):
 
 
 class FlightCardExtraction(BaseModel):
-    """Structured output schema for Qwen2.5-VL extraction."""
+    """Structured output schema for Qwen3-VL extraction."""
 
     flight_date_raw: Optional[str] = Field(
         None,
