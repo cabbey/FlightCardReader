@@ -259,6 +259,25 @@ async def detail_record(
             status_code=404,
         )
 
+    # Determine prev/next record IDs (by created_at desc ordering, same as list)
+    # Previous = next newer record (higher created_at or higher id)
+    prev_result = await db.execute(
+        select(FlightRecord.id)
+        .where(FlightRecord.id > record_id)
+        .order_by(FlightRecord.id.asc())
+        .limit(1)
+    )
+    prev_id = prev_result.scalar_one_or_none()
+
+    # Next = next older record (lower created_at or lower id)
+    next_result = await db.execute(
+        select(FlightRecord.id)
+        .where(FlightRecord.id < record_id)
+        .order_by(FlightRecord.id.desc())
+        .limit(1)
+    )
+    next_id = next_result.scalar_one_or_none()
+
     # Build image_url from image_path
     # The image_path is relative (e.g. "uuid.jpg"), served under /images/
     image_url = f"/images/{record_obj.image_path}"
@@ -272,5 +291,7 @@ async def detail_record(
             "request": request,
             "event_name": config.event_name,
             "record": record_obj,
+            "prev_id": prev_id,
+            "next_id": next_id,
         },
     )

@@ -4,7 +4,6 @@
 <style>
   .back-link {
     display: inline-block;
-    margin-bottom: 1rem;
     color: #2563eb;
     text-decoration: none;
     font-size: 0.85rem;
@@ -12,6 +11,32 @@
 
   .back-link:hover {
     text-decoration: underline;
+  }
+
+  .record-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .prev-next {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .prev-next a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .prev-next a:hover {
+    text-decoration: underline;
+  }
+
+  .prev-next .disabled {
+    color: #9ca3af;
   }
 
   .detail-header {
@@ -155,7 +180,21 @@
 {% endblock %}
 
 {% block content %}
-<a href="/" class="back-link">&larr; Back to list</a>
+<nav class="record-nav">
+  <a href="/" class="back-link">&larr; Back to list</a>
+  <span class="prev-next">
+    {% if prev_id %}
+    <a href="/record/{{ prev_id }}">&larr; Prev</a>
+    {% else %}
+    <span class="disabled">&larr; Prev</span>
+    {% endif %}
+    {% if next_id %}
+    <a href="/record/{{ next_id }}">Next &rarr;</a>
+    {% else %}
+    <span class="disabled">Next &rarr;</span>
+    {% endif %}
+  </span>
+</nav>
 
 <div class="detail-header">
   <h2>Record #{{ record.id }}</h2>
