@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Extraction Prompt
 # ---------------------------------------------------------------------------
 
-EXTRACTION_PROMPT = """\
+EXTRACTION_PROMPT = """/no_think
 You are an expert data-entry assistant reading a handwritten rocketry flight card.
 Extract every readable field from the card image and return them as a JSON object.
 Use null for any field that is absent, illegible, or not present on this card.
@@ -167,6 +167,10 @@ class ExtractionService:
         if self._mode == ExtractionMode.IMMEDIATE:
             await self._queue.put(record_id)
 
+    async def force_enqueue(self, record_id: int) -> None:
+        """Enqueue a record for extraction regardless of mode."""
+        await self._queue.put(record_id)
+
     async def set_mode(self, mode: ExtractionMode) -> None:
         """Switch the extraction operating mode.
 
@@ -259,15 +263,16 @@ class ExtractionService:
             return
         except ExtractionParseError as exc:
             logger.error(
-                "Bad JSON from LLM for record %d: %s",
+                "Bad JSON from LLM for record %d: %s (raw: %s)",
                 record_id,
+                exc.message,
                 exc.raw_response[:200],
             )
             async with self._session_factory() as db:
                 await record_service.set_status(db, record_id, "extraction_failed")
             return
 
-        # Resolve flight date
+        # Resolve flight date — failure is non-fatal; just leave date as None
         try:
             resolved_date = resolve_flight_date(
                 extracted.flight_date_raw, self._config.event_date_range
@@ -276,17 +281,7 @@ class ExtractionService:
             logger.warning(
                 "Date resolution failed for record %d: %s", record_id, exc
             )
-            # Store the raw date in overflow and mark as failed
-            async with self._session_factory() as db:
-                record = await record_service.get(db, record_id)
-                if record is not None:
-                    overflow = record.overflow or {}
-                    overflow["raw_flight_date"] = extracted.flight_date_raw
-                    record.overflow = overflow
-                    record.flight_date = None
-                    record.extraction_status = "extraction_failed"
-                    await db.commit()
-            return
+            resolved_date = None
 
         # Apply successful extraction
         async with self._session_factory() as db:
@@ -308,7 +303,8 @@ class ExtractionService:
             ExtractionParseError: If the LLM response cannot be validated.
         """
         # Read and base64-encode the image
-        image_bytes = Path(image_path).read_bytes()
+        full_path = self._config.image_store_path / image_path
+        image_bytes = full_path.read_bytes()
         b64_image = base64.b64encode(image_bytes).decode("ascii")
 
         # Build the Ollama /api/chat payload
@@ -317,28 +313,28 @@ class ExtractionService:
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{b64_image}"
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": EXTRACTION_PROMPT,
-                        },
-                    ],
+                    "content": EXTRACTION_PROMPT,
+                    "images": [b64_image],
                 }
             ],
             "format": FlightCardExtraction.model_json_schema(),
             "stream": False,
-            "options": {"temperature": 0},
+            "options": {"temperature": 0, "num_ctx": 8192},
+            "think": False,
         }
 
         # Send request to Ollama
         try:
+            logger.info(
+                "sending %s to Ollama at %s",
+                image_path,
+                client.base_url,
+            )
             response = await client.post("/api/chat", json=payload)
+            logger.info(
+                "Ollama returned: \"%s\"",
+                response.json(),
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise OllamaUnavailableError(
@@ -352,6 +348,13 @@ class ExtractionService:
         # Parse the response
         data = response.json()
         raw_content = data["message"]["content"]
+
+        if not raw_content or not raw_content.strip():
+            done_reason = data.get("done_reason", "unknown")
+            raise ExtractionParseError(
+                message=f"LLM returned empty content (done_reason: {done_reason})",
+                raw_response=raw_content or "(empty)",
+            )
 
         try:
             return FlightCardExtraction.model_validate_json(raw_content)

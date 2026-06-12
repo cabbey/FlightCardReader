@@ -90,7 +90,7 @@ async def apply_extraction(
 
     Dedicated columns receive their mapped values directly. Remaining fields
     are collected into the overflow JSON column, omitting any keys whose
-    values are None.
+    values are None. The full LLM output is stored in llm_raw_json.
 
     After applying, sets extraction_status to 'extracted'.
 
@@ -103,6 +103,9 @@ async def apply_extraction(
     record = await get(db, record_id)
     if record is None:
         return
+
+    # --- Store raw LLM output ---
+    record.llm_raw_json = extracted.model_dump(mode="json")
 
     # --- Dedicated columns ---
     record.flight_date = resolved_date

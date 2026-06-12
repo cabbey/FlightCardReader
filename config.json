@@ -5,11 +5,11 @@
   "db_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/flight_cards.db",
   "event_name": "Missle Madness 2026",
   "event_date_range": {
-    "start": "2025-03-24",
-    "end": "2025-03-26"
+    "start": "2026-04-24",
+    "end": "2026-04-26"
   },
   "extraction_mode": "deferred",
   "extraction_endpoints": [
-    { "url": "http://localhost:11434", "concurrency": 2 }
+    { "url": "http://localhost:11434", "concurrency": 1 }
   ]
 }

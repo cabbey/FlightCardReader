@@ -132,5 +132,5 @@ async def extract_single(
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
     await record_service.set_status(db, record.id, "pending")
-    await extraction_service.enqueue(record.id)
+    await extraction_service.force_enqueue(record.id)
     return TriggerResponse(dispatched=1)

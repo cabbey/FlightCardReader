@@ -187,6 +187,31 @@
     cursor: not-allowed;
   }
 
+  /* Raw JSON collapsible */
+  .raw-json-section {
+    margin-top: 1.5rem;
+    grid-column: 1 / -1;
+  }
+
+  .raw-json-section summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  .raw-json-section pre {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   /* Responsive: stack on narrow viewports */
   @media (max-width: 600px) {
     .detail-layout {
@@ -348,6 +373,13 @@
     <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
     {% endif %}
     <button type="button" class="btn-extract" id="btnExtract">Extract</button>
+
+    {% if record.llm_raw_json %}
+    <details class="raw-json-section">
+      <summary>Raw LLM Output</summary>
+      <pre>{{ record.llm_raw_json | tojson(indent=2) }}</pre>
+    </details>
+    {% endif %}
   </div>
 </div>
 

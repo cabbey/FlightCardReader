@@ -58,6 +58,9 @@ class FlightRecord(Base):
     # --- JSON overflow for remaining fields ---
     overflow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # --- Raw LLM output for debugging/review ---
+    llm_raw_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     # --- Table-level indexes ---
     __table_args__ = (
         Index("ix_flight_records_created_at", created_at.desc()),
