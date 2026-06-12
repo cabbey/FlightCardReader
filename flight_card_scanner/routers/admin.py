@@ -44,7 +44,7 @@ def get_extraction_service() -> ExtractionService:
 # Router
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/admin")
+router = APIRouter(prefix="/api/admin")
 
 
 @router.post("/mode", response_model=ModeResponse)

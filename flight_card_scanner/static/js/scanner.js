@@ -969,7 +969,7 @@
     }, 30000);
 
     try {
-      var response = await fetch('/scan', {
+      var response = await fetch('/api/scan', {
         method: 'POST',
         body: formData,
         signal: controller.signal

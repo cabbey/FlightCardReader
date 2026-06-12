@@ -294,7 +294,7 @@
   var btn = document.getElementById('btnRequeue');
   if (btn) {
     btn.addEventListener('click', function() {
-      fetch('/admin/requeue/{{ record.id }}', { method: 'POST' })
+      fetch('/api/admin/requeue/{{ record.id }}', { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();

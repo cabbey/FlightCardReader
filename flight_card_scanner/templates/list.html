@@ -341,7 +341,7 @@
   var modeSelect = document.getElementById('modeSelect');
   if (modeSelect) {
     modeSelect.addEventListener('change', function() {
-      fetch('/admin/mode', {
+      fetch('/api/admin/mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: modeSelect.value })
@@ -356,7 +356,7 @@
   var btnTrigger = document.getElementById('btnTrigger');
   if (btnTrigger) {
     btnTrigger.addEventListener('click', function() {
-      fetch('/admin/trigger', { method: 'POST' })
+      fetch('/api/admin/trigger', { method: 'POST' })
         .then(function(res) { return res.json(); })
         .then(function(data) {
           alert('Dispatched ' + data.dispatched + ' record(s) for extraction.');
@@ -370,7 +370,7 @@
   var btnRequeue = document.getElementById('btnRequeue');
   if (btnRequeue) {
     btnRequeue.addEventListener('click', function() {
-      fetch('/admin/requeue', { method: 'POST' })
+      fetch('/api/admin/requeue', { method: 'POST' })
         .then(function(res) { return res.json(); })
         .then(function(data) {
           alert('Re-queued ' + data.requeued + ' record(s).');

@@ -63,14 +63,14 @@ async def client(app):
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/mode
+# POST /api/admin/mode
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_set_mode_immediate(client, mock_extraction_service):
     """POST /admin/mode with immediate sets mode and returns confirmation."""
-    response = await client.post("/admin/mode", json={"mode": "immediate"})
+    response = await client.post("/api/admin/mode", json={"mode": "immediate"})
     assert response.status_code == 200
     data = response.json()
     assert data["mode"] == "immediate"
@@ -81,7 +81,7 @@ async def test_set_mode_immediate(client, mock_extraction_service):
 @pytest.mark.anyio
 async def test_set_mode_deferred(client, mock_extraction_service):
     """POST /admin/mode with deferred sets mode and returns confirmation."""
-    response = await client.post("/admin/mode", json={"mode": "deferred"})
+    response = await client.post("/api/admin/mode", json={"mode": "deferred"})
     assert response.status_code == 200
     data = response.json()
     assert data["mode"] == "deferred"
@@ -91,20 +91,20 @@ async def test_set_mode_deferred(client, mock_extraction_service):
 @pytest.mark.anyio
 async def test_set_mode_invalid(client):
     """POST /admin/mode with invalid mode returns 422."""
-    response = await client.post("/admin/mode", json={"mode": "invalid_mode"})
+    response = await client.post("/api/admin/mode", json={"mode": "invalid_mode"})
     assert response.status_code == 422
     assert "invalid mode" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/trigger
+# POST /api/admin/trigger
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
 async def test_trigger_extraction(client, mock_extraction_service):
     """POST /admin/trigger dispatches pending records."""
-    response = await client.post("/admin/trigger")
+    response = await client.post("/api/admin/trigger")
     assert response.status_code == 200
     data = response.json()
     assert data["dispatched"] == 3
@@ -112,7 +112,7 @@ async def test_trigger_extraction(client, mock_extraction_service):
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/requeue
+# POST /api/admin/requeue
 # ---------------------------------------------------------------------------
 
 
@@ -133,7 +133,7 @@ async def test_requeue_all_failed(client, mock_extraction_service):
         "flight_card_scanner.routers.admin.record_service.set_status",
         new_callable=AsyncMock,
     ) as mock_set_status:
-        response = await client.post("/admin/requeue")
+        response = await client.post("/api/admin/requeue")
 
     assert response.status_code == 200
     data = response.json()
@@ -150,14 +150,14 @@ async def test_requeue_all_failed_empty(client, mock_extraction_service):
         new_callable=AsyncMock,
         return_value=[],
     ):
-        response = await client.post("/admin/requeue")
+        response = await client.post("/api/admin/requeue")
 
     assert response.status_code == 200
     assert response.json()["requeued"] == 0
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/requeue/{record_id}
+# POST /api/admin/requeue/{record_id}
 # ---------------------------------------------------------------------------
 
 
@@ -176,7 +176,7 @@ async def test_requeue_single_success(client, mock_extraction_service):
         "flight_card_scanner.routers.admin.record_service.set_status",
         new_callable=AsyncMock,
     ) as mock_set_status:
-        response = await client.post("/admin/requeue/1")
+        response = await client.post("/api/admin/requeue/1")
 
     assert response.status_code == 200
     assert response.json()["requeued"] == 1
@@ -192,7 +192,7 @@ async def test_requeue_single_not_found(client):
         new_callable=AsyncMock,
         return_value=None,
     ):
-        response = await client.post("/admin/requeue/999")
+        response = await client.post("/api/admin/requeue/999")
 
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
@@ -210,7 +210,7 @@ async def test_requeue_single_wrong_status(client):
         new_callable=AsyncMock,
         return_value=record,
     ):
-        response = await client.post("/admin/requeue/1")
+        response = await client.post("/api/admin/requeue/1")
 
     assert response.status_code == 422
     assert "extracted" in response.json()["detail"]

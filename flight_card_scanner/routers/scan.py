@@ -1,7 +1,9 @@
-"""POST /scan router.
+"""Scan routers: HTML page (GET /scan) and API endpoint (POST /api/scan).
 
-Handles card image uploads: validates the file type, saves the image,
-creates a FlightRecord, and enqueues the record for extraction.
+Handles:
+- Serving the scanner camera UI page
+- Card image uploads: validates the file type, saves the image,
+  creates a FlightRecord, and enqueues the record for extraction.
 """
 
 from __future__ import annotations
@@ -9,7 +11,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import AppConfig
@@ -27,13 +31,19 @@ logger = logging.getLogger(__name__)
 
 _config: AppConfig | None = None
 _extraction_service: ExtractionService | None = None
+_templates: Jinja2Templates | None = None
 
 
-def configure(config: AppConfig, extraction_service: ExtractionService) -> None:
+def configure(
+    config: AppConfig,
+    extraction_service: ExtractionService,
+    templates: Jinja2Templates | None = None,
+) -> None:
     """Set module-level dependencies. Called once during app startup."""
-    global _config, _extraction_service
+    global _config, _extraction_service, _templates
     _config = config
     _extraction_service = extraction_service
+    _templates = templates
 
 
 def get_config() -> AppConfig:
@@ -90,7 +100,24 @@ def _resolve_extension(upload: UploadFile) -> str | None:
 router = APIRouter()
 
 
-@router.post("/scan", status_code=201, response_model=ScanResponse)
+@router.get("/scan", response_class=HTMLResponse)
+async def scan_page(
+    request: Request,
+    config: AppConfig = Depends(get_config),
+) -> HTMLResponse:
+    """Serve the scanner camera UI page."""
+    if _templates is None:
+        raise RuntimeError("Scan router not configured with templates.")
+    return _templates.TemplateResponse(
+        "scan.html",
+        {
+            "request": request,
+            "event_name": config.event_name,
+        },
+    )
+
+
+@router.post("/api/scan", status_code=201, response_model=ScanResponse)
 async def submit_card(
     card_image: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),

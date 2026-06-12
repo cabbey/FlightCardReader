@@ -144,7 +144,7 @@ async def lifespan(app: FastAPI):
 
     # 6. Configure routers with their dependencies
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-    scan.configure(config=config, extraction_service=extraction_service)
+    scan.configure(config=config, extraction_service=extraction_service, templates=templates)
     admin.configure(extraction_service=extraction_service)
     review.configure(
         templates=templates, config=config, extraction_service=extraction_service
