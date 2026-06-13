@@ -680,6 +680,13 @@
               <span class="field-display">{{ record.overflow.recovery_plan or "—" }}</span>
             </div>
           </dd>
+          {% elif record.recovery_plan %}
+          <dt>Recovery</dt>
+          <dd>
+            <div class="editable-field" data-field="recovery_plan" data-type="text" data-value="{{ record.recovery_plan or '' }}">
+              <span class="field-display">{{ record.recovery_plan or "—" }}</span>
+            </div>
+          </dd>
           {% endif %}
         </dl>
       </div>
@@ -735,10 +742,10 @@
       </div>
     </div>
 
-    {% if record.llm_raw_json %}
+    {% if llm_raw_json %}
     <details class="raw-json-section">
       <summary>Raw LLM Output</summary>
-      <pre>{{ record.llm_raw_json | tojson(indent=2) }}</pre>
+      <pre>{{ llm_raw_json | tojson(indent=2) }}</pre>
     </details>
     {% endif %}
   </div>

@@ -6,8 +6,10 @@ templates.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -284,6 +286,16 @@ async def detail_record(
     # Attach image_url to the record object for template use
     record_obj.image_url = image_url  # type: ignore[attr-defined]
 
+    # Load raw LLM JSON from the sidecar .json file (if it exists)
+    llm_raw_json = None
+    json_filename = Path(record_obj.image_path).stem + ".json"
+    json_path = config.image_store_path / json_filename
+    if json_path.exists():
+        try:
+            llm_raw_json = json.loads(json_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            pass
+
     return templates.TemplateResponse(
         "detail.html",
         {
@@ -292,5 +304,6 @@ async def detail_record(
             "record": record_obj,
             "prev_id": prev_id,
             "next_id": next_id,
+            "llm_raw_json": llm_raw_json,
         },
     )

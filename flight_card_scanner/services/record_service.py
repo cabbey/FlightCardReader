@@ -167,8 +167,7 @@ async def update_fields(
 ) -> Optional[FlightRecord]:
     """Update specific fields on a FlightRecord.
 
-    Only fields present in the updates dict are modified. The llm_raw_json
-    field is never updated through this function.
+    Only fields present in the updates dict are modified.
 
     Args:
         db: Active async database session.

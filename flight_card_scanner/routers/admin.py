@@ -150,8 +150,7 @@ async def update_record(
 ) -> dict:
     """Update editable fields on a flight record (human review corrections).
 
-    Only fields provided in the request body are updated. The llm_raw_json
-    field is intentionally excluded from editing.
+    Only fields provided in the request body are updated.
     Returns 404 if the record does not exist.
     """
     record = await record_service.get(db, record_id)
