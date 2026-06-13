@@ -423,7 +423,6 @@
   .raw-json-section {
     margin-top: 1.5rem;
     margin-bottom: 3rem;
-    grid-column: 1 / -1;
   }
 
   .raw-json-section summary {
@@ -742,14 +741,29 @@
       </div>
     </div>
 
-    {% if llm_raw_json %}
-    <details class="raw-json-section">
-      <summary>Raw LLM Output</summary>
-      <pre>{{ llm_raw_json | tojson(indent=2) }}</pre>
-    </details>
-    {% endif %}
   </div>
 </div>
+
+{% if llm_content_json or llm_thinking %}
+<details class="raw-json-section">
+  <summary>Interpreted LLM Output</summary>
+  {% if llm_content_json %}
+  <h4 style="margin: 0.75rem 0 0.25rem; font-size: 0.8rem; color: #4b5563;">Extracted Data</h4>
+  <pre>{{ llm_content_json | tojson(indent=2) }}</pre>
+  {% endif %}
+  {% if llm_thinking %}
+  <h4 style="margin: 0.75rem 0 0.25rem; font-size: 0.8rem; color: #4b5563;">Thinking</h4>
+  <pre>{{ llm_thinking }}</pre>
+  {% endif %}
+</details>
+{% endif %}
+
+{% if llm_raw_json %}
+<details class="raw-json-section">
+  <summary>Raw LLM Output</summary>
+  <pre>{{ llm_raw_json | tojson(indent=2) }}</pre>
+</details>
+{% endif %}
 
 <div class="image-lightbox" id="imageLightbox">
   <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>

@@ -288,11 +288,32 @@ async def detail_record(
 
     # Load raw LLM JSON from the sidecar .json file (if it exists)
     llm_raw_json = None
+    llm_content_json = None
+    llm_thinking = None
     json_filename = Path(record_obj.image_path).stem + ".json"
     json_path = config.image_store_path / json_filename
     if json_path.exists():
         try:
             llm_raw_json = json.loads(json_path.read_text())
+            # Extract interpreted parts
+            msg = llm_raw_json.get("message", {})
+            # Content is the structured JSON output
+            content_str = msg.get("content", "")
+            if content_str and content_str.strip():
+                try:
+                    llm_content_json = json.loads(content_str)
+                except json.JSONDecodeError:
+                    llm_content_json = content_str  # fallback to raw string
+            # Thinking block
+            thinking_str = msg.get("thinking", "")
+            if thinking_str and thinking_str.strip():
+                # Strip <think> tags if present
+                thinking_str = thinking_str.strip()
+                if thinking_str.startswith("<think>"):
+                    thinking_str = thinking_str[7:]
+                if thinking_str.endswith("</think>"):
+                    thinking_str = thinking_str[:-8]
+                llm_thinking = thinking_str.strip()
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -305,5 +326,7 @@ async def detail_record(
             "prev_id": prev_id,
             "next_id": next_id,
             "llm_raw_json": llm_raw_json,
+            "llm_content_json": llm_content_json,
+            "llm_thinking": llm_thinking,
         },
     )
