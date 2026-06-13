@@ -43,13 +43,32 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
     margin-bottom: 1rem;
+  }
+
+  .header-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .detail-header h2 {
     margin: 0;
     font-size: 1.2rem;
+  }
+
+  .header-meta {
+    font-size: 0.8rem;
+    color: #6b7280;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   /* Status badges */
@@ -139,13 +158,39 @@
     word-break: break-word;
   }
 
-  .fields-section-title {
-    grid-column: 1 / -1;
-    font-size: 0.9rem;
+  /* Section wrapper with L-shaped label */
+  .fields-section {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.5rem 1fr;
+    margin-bottom: 1rem;
+  }
+
+  .fields-section-label {
+    position: relative;
+    background: #2563eb;
+    border-radius: 0 0 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+  }
+
+  .fields-section-label span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    color: #fff;
+    font-size: 0.75rem;
     font-weight: 700;
-    margin-top: 0.75rem;
-    padding-bottom: 0.2rem;
-    border-bottom: 1px solid #e5e7eb;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 0;
+    white-space: nowrap;
+  }
+
+  .fields-section-content {
+    border-top: 3px solid #2563eb;
+    padding: 0.5rem 0 0.5rem 0.75rem;
   }
 
   /* Editable field styles */
@@ -220,7 +265,6 @@
 
   /* Save/cancel buttons */
   .btn-save {
-    margin-top: 1rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.75rem;
     border: none;
@@ -236,13 +280,12 @@
   }
 
   .btn-save:disabled {
-    background: #86efac;
+    background: #d1e7dd;
+    color: #6b7280;
     cursor: not-allowed;
   }
 
   .btn-cancel {
-    margin-top: 1rem;
-    margin-left: 0.5rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.75rem;
     border: 1px solid #d1d5db;
@@ -259,7 +302,6 @@
 
   /* Re-queue button */
   .btn-requeue {
-    margin-top: 1rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.75rem;
     border: none;
@@ -276,7 +318,6 @@
 
   /* Extract button */
   .btn-extract {
-    margin-top: 1rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.75rem;
     border: none;
@@ -377,9 +418,21 @@
 </nav>
 
 <div class="detail-header">
-  <h2>Record #{{ record.id }}</h2>
-  <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
-  <span class="edit-hint">(click any value to edit)</span>
+  <div class="header-left">
+    <h2>Record #{{ record.id }}</h2>
+    <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
+    <span class="header-meta">{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "" }}</span>
+    <span class="edit-hint">(click any value to edit)</span>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
+    <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
+    <span class="save-feedback" id="saveFeedback"></span>
+    {% if record.extraction_status == "extraction_failed" %}
+    <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
+    {% endif %}
+    <button type="button" class="btn-extract" id="btnExtract">Extract</button>
+  </div>
 </div>
 
 <div class="detail-layout">
@@ -396,225 +449,222 @@
 
   <!-- Extracted fields column -->
   <div class="fields-column">
-    <dl class="fields-grid">
-      <!-- ═══ FLIER ═══ -->
-      <div class="fields-section-title">Flier</div>
+    <!-- ═══ FLIER ═══ -->
+    <div class="fields-section">
+      <div class="fields-section-label"><span>Flier</span></div>
+      <div class="fields-section-content">
+        <dl class="fields-grid">
+          <dt>Name</dt>
+          <dd>
+            <div class="editable-field" data-field="flier_name" data-type="text" data-value="{{ record.flier_name or '' }}">
+              <span class="field-display">{{ record.flier_name or "—" }}</span>
+            </div>
+          </dd>
 
-      <dt>Name</dt>
-      <dd>
-        <div class="editable-field" data-field="flier_name" data-type="text" data-value="{{ record.flier_name or '' }}">
-          <span class="field-display">{{ record.flier_name or "—" }}</span>
-        </div>
-      </dd>
-
-      {% if record.overflow and record.overflow.membership %}
-      <dt>Club</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
-          <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
-        </div>
-      </dd>
-      <dt>Member #</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
-          <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
-        </div>
-      </dd>
-      <dt>Cert Level</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
-          <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
-        </div>
-      </dd>
-      {% endif %}
-
-      <!-- ═══ ROCKET ═══ -->
-      <div class="fields-section-title">Rocket</div>
-
-      {% if record.overflow and record.overflow.rocket_name %}
-      <dt>Name</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
-          <span class="field-display">{{ record.overflow.rocket_name or "—" }}</span>
-        </div>
-      </dd>
-      {% endif %}
-
-      {% if record.overflow and record.overflow.rocket_manufacturer %}
-      <dt>Manufacturer</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
-          <span class="field-display">{{ record.overflow.rocket_manufacturer or "—" }}</span>
-        </div>
-      </dd>
-      {% endif %}
-
-      {% if record.overflow and record.overflow.rocket_colors %}
-      <dt>Colors</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
-          <span class="field-display">{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</span>
-        </div>
-      </dd>
-      {% endif %}
-
-      {% if record.overflow and record.overflow.rocket_measurements %}
-        {% set m = record.overflow.rocket_measurements %}
-        {% if m.diameter is not none %}
-        <dt>Diameter</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.diameter }}</span>
-          </div>
-          <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.diameter_unit or "" }}</span>
-          </div>
-        </dd>
-        {% endif %}
-        {% if m.length is not none %}
-        <dt>Length</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.length }}</span>
-          </div>
-          <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.length_unit or "" }}</span>
-          </div>
-        </dd>
-        {% endif %}
-        {% if m.weight is not none %}
-        <dt>Weight</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.weight }}</span>
-          </div>
-          <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
-            <span class="field-display">{{ m.weight_unit or "" }}</span>
-          </div>
-        </dd>
-        {% endif %}
-      {% endif %}
-
-      <!-- ═══ FLIGHT ═══ -->
-      <div class="fields-section-title">Flight</div>
-
-      {% if record.overflow and record.overflow.motors %}
-      <dt>Motors</dt>
-      <dd>
-        {% for stage in record.overflow.motors %}
-          {% for motor in stage %}
-            {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
-          {% endfor %}{% if not loop.last %} / {% endif %}
-        {% endfor %}
-      </dd>
-      {% endif %}
-
-      <dt>Total Impulse</dt>
-      <dd>
-        <div class="editable-field" data-field="total_impulse_value" data-type="number" data-value="{{ record.total_impulse_value if record.total_impulse_value is not none else '' }}" style="display: inline-flex;">
-          <span class="field-display">{{ record.total_impulse_value if record.total_impulse_value is not none else "—" }}</span>
-        </div>
-        <div class="editable-field" data-field="total_impulse_unit" data-type="select" data-value="{{ record.total_impulse_unit or '' }}" data-options="Ns,LbsFt" style="display: inline-flex;">
-          <span class="field-display">{{ record.total_impulse_unit or "" }}</span>
-        </div>
-      </dd>
-
-      <dt>Heads Up</dt>
-      <dd>
-        <div class="editable-field" data-field="flag_heads_up" data-type="bool" data-value="{{ record.flag_heads_up | string if record.flag_heads_up is not none else '' }}">
-          <span class="field-display">{{ "Yes" if record.flag_heads_up else ("No" if record.flag_heads_up is not none else "—") }}</span>
-        </div>
-      </dd>
-
-      <dt>First Flight</dt>
-      <dd>
-        <div class="editable-field" data-field="flag_first_flight" data-type="bool" data-value="{{ record.flag_first_flight | string if record.flag_first_flight is not none else '' }}">
-          <span class="field-display">{{ "Yes" if record.flag_first_flight else ("No" if record.flag_first_flight is not none else "—") }}</span>
-        </div>
-      </dd>
-
-      <dt>Complex</dt>
-      <dd>
-        <div class="editable-field" data-field="flag_complex" data-type="bool" data-value="{{ record.flag_complex | string if record.flag_complex is not none else '' }}">
-          <span class="field-display">{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</span>
-        </div>
-      </dd>
-
-      {% if record.overflow and record.overflow.notes %}
-      <dt>Notes</dt>
-      <dd>
-        <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
-          <span class="field-display">{{ record.overflow.notes | replace("\n", "<br>") | safe }}</span>
-        </div>
-      </dd>
-      {% endif %}
-
-      <!-- ═══ LAUNCH ═══ -->
-      <div class="fields-section-title">Launch</div>
-
-      <dt>Flight Date</dt>
-      <dd>
-        <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
-          <span class="field-display">{{ record.flight_date.strftime("%A %-m/%-d/%Y") if record.flight_date else "—" }}</span>
-        </div>
-      </dd>
-
-      {% if record.overflow and record.overflow.raw_flight_date %}
-      <dt>Raw Flight Date</dt>
-      <dd>{{ record.overflow.raw_flight_date }}</dd>
-      {% endif %}
-
-      <dt>Rack</dt>
-      <dd>
-        <div class="editable-field" data-field="rack" data-type="text" data-value="{{ record.rack or '' }}">
-          <span class="field-display">{{ record.rack or "—" }}</span>
-        </div>
-      </dd>
-
-      <dt>Pad</dt>
-      <dd>
-        <div class="editable-field" data-field="pad" data-type="integer" data-value="{{ record.pad if record.pad is not none else '' }}">
-          <span class="field-display">{{ record.pad if record.pad is not none else "—" }}</span>
-        </div>
-      </dd>
-
-      <dt>FSO/RSO Initials</dt>
-      <dd>
-        <div class="editable-field" data-field="fso_rso_initials" data-type="text" data-value="{{ record.fso_rso_initials or '' }}">
-          <span class="field-display">{{ record.fso_rso_initials or "—" }}</span>
-        </div>
-      </dd>
-
-      <dt>Evaluation</dt>
-      <dd>
-        <div class="editable-field" data-field="evaluation_outcome" data-type="select" data-value="{{ record.evaluation_outcome or '' }}" data-options="good,motor,airframe,recovery">
-          <span class="field-display">{{ record.evaluation_outcome or "—" }}</span>
-        </div>
-      </dd>
-
-      <dt>Comments</dt>
-      <dd>
-        <div class="editable-field" data-field="evaluation_comments" data-type="text" data-value="{{ record.evaluation_comments or '' }}">
-          <span class="field-display">{{ record.evaluation_comments or "—" }}</span>
-        </div>
-      </dd>
-
-      <!-- ═══ META ═══ -->
-      <div class="fields-section-title">Record</div>
-      <dt>Created</dt>
-      <dd>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</dd>
-    </dl>
-
-    <div class="button-row">
-      <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
-      <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
-      <span class="save-feedback" id="saveFeedback"></span>
+          {% if record.overflow and record.overflow.membership %}
+          <dt>Club</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
+              <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
+            </div>
+          </dd>
+          <dt>Member #</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
+              <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
+            </div>
+          </dd>
+          <dt>Cert Level</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
+              <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
+            </div>
+          </dd>
+          {% endif %}
+        </dl>
+      </div>
     </div>
 
-    {% if record.extraction_status == "extraction_failed" %}
-    <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
-    {% endif %}
-    <button type="button" class="btn-extract" id="btnExtract">Extract</button>
+    <!-- ═══ ROCKET ═══ -->
+    <div class="fields-section">
+      <div class="fields-section-label"><span>Rocket</span></div>
+      <div class="fields-section-content">
+        <dl class="fields-grid">
+          {% if record.overflow and record.overflow.rocket_name %}
+          <dt>Name</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
+              <span class="field-display">{{ record.overflow.rocket_name or "—" }}</span>
+            </div>
+          </dd>
+          {% endif %}
+
+          {% if record.overflow and record.overflow.rocket_manufacturer %}
+          <dt>Manufacturer</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
+              <span class="field-display">{{ record.overflow.rocket_manufacturer or "—" }}</span>
+            </div>
+          </dd>
+          {% endif %}
+
+          {% if record.overflow and record.overflow.rocket_colors %}
+          <dt>Colors</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
+              <span class="field-display">{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</span>
+            </div>
+          </dd>
+          {% endif %}
+
+          {% if record.overflow and record.overflow.rocket_measurements %}
+            {% set m = record.overflow.rocket_measurements %}
+            {% if m.diameter is not none %}
+            <dt>Diameter</dt>
+            <dd>
+              <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.diameter }}</span>
+              </div>
+              <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.diameter_unit or "" }}</span>
+              </div>
+            </dd>
+            {% endif %}
+            {% if m.length is not none %}
+            <dt>Length</dt>
+            <dd>
+              <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.length }}</span>
+              </div>
+              <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.length_unit or "" }}</span>
+              </div>
+            </dd>
+            {% endif %}
+            {% if m.weight is not none %}
+            <dt>Weight</dt>
+            <dd>
+              <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.weight }}</span>
+              </div>
+              <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.weight_unit or "" }}</span>
+              </div>
+            </dd>
+            {% endif %}
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- ═══ FLIGHT ═══ -->
+    <div class="fields-section">
+      <div class="fields-section-label"><span>Flight</span></div>
+      <div class="fields-section-content">
+        <dl class="fields-grid">
+          {% if record.overflow and record.overflow.motors %}
+          <dt>Motors</dt>
+          <dd>
+            {% for stage in record.overflow.motors %}
+              {% for motor in stage %}
+                {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
+              {% endfor %}{% if not loop.last %} / {% endif %}
+            {% endfor %}
+          </dd>
+          {% endif %}
+
+          <dt>Total Impulse</dt>
+          <dd>
+            <div class="editable-field" data-field="total_impulse_value" data-type="number" data-value="{{ record.total_impulse_value if record.total_impulse_value is not none else '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ record.total_impulse_value if record.total_impulse_value is not none else "—" }}</span>
+            </div>
+            <div class="editable-field" data-field="total_impulse_unit" data-type="select" data-value="{{ record.total_impulse_unit or '' }}" data-options="Ns,LbsFt" style="display: inline-flex;">
+              <span class="field-display">{{ record.total_impulse_unit or "" }}</span>
+            </div>
+          </dd>
+
+          <dt>Heads Up</dt>
+          <dd>
+            <div class="editable-field" data-field="flag_heads_up" data-type="bool" data-value="{{ record.flag_heads_up | string if record.flag_heads_up is not none else '' }}">
+              <span class="field-display">{{ "Yes" if record.flag_heads_up else ("No" if record.flag_heads_up is not none else "—") }}</span>
+            </div>
+          </dd>
+
+          <dt>First Flight</dt>
+          <dd>
+            <div class="editable-field" data-field="flag_first_flight" data-type="bool" data-value="{{ record.flag_first_flight | string if record.flag_first_flight is not none else '' }}">
+              <span class="field-display">{{ "Yes" if record.flag_first_flight else ("No" if record.flag_first_flight is not none else "—") }}</span>
+            </div>
+          </dd>
+
+          <dt>Complex</dt>
+          <dd>
+            <div class="editable-field" data-field="flag_complex" data-type="bool" data-value="{{ record.flag_complex | string if record.flag_complex is not none else '' }}">
+              <span class="field-display">{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</span>
+            </div>
+          </dd>
+
+          {% if record.overflow and record.overflow.notes %}
+          <dt>Notes</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
+              <span class="field-display">{{ record.overflow.notes | replace("\n", "<br>") | safe }}</span>
+            </div>
+          </dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- ═══ LAUNCH ═══ -->
+    <div class="fields-section">
+      <div class="fields-section-label"><span>Launch</span></div>
+      <div class="fields-section-content">
+        <dl class="fields-grid">
+          <dt>Flight Date</dt>
+          <dd>
+            <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
+              <span class="field-display">{{ record.flight_date.strftime("%A %-m/%-d/%Y") if record.flight_date else "—" }}</span>
+            </div>
+            {% if record.overflow and record.overflow.raw_flight_date %}
+            <span class="edit-hint">raw: {{ record.overflow.raw_flight_date }}</span>
+            {% endif %}
+          </dd>
+
+          <dt>Rack / Pad</dt>
+          <dd>
+            <div class="editable-field" data-field="rack" data-type="text" data-value="{{ record.rack or '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ record.rack or "—" }}</span>
+            </div>
+            <span style="color: #9ca3af;">/</span>
+            <div class="editable-field" data-field="pad" data-type="integer" data-value="{{ record.pad if record.pad is not none else '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ record.pad if record.pad is not none else "—" }}</span>
+            </div>
+          </dd>
+
+          <dt>FSO/RSO Initials</dt>
+          <dd>
+            <div class="editable-field" data-field="fso_rso_initials" data-type="text" data-value="{{ record.fso_rso_initials or '' }}">
+              <span class="field-display">{{ record.fso_rso_initials or "—" }}</span>
+            </div>
+          </dd>
+
+          <dt>Evaluation</dt>
+          <dd>
+            <div class="editable-field" data-field="evaluation_outcome" data-type="select" data-value="{{ record.evaluation_outcome or '' }}" data-options="good,motor,airframe,recovery">
+              <span class="field-display">{{ record.evaluation_outcome or "—" }}</span>
+            </div>
+          </dd>
+
+          <dt>Comments</dt>
+          <dd>
+            <div class="editable-field" data-field="evaluation_comments" data-type="text" data-value="{{ record.evaluation_comments or '' }}">
+              <span class="field-display">{{ record.evaluation_comments or "—" }}</span>
+            </div>
+          </dd>
+        </dl>
+      </div>
+    </div>
 
     {% if record.llm_raw_json %}
     <details class="raw-json-section">
@@ -763,6 +813,7 @@
     var hasChanges = Object.keys(pendingChanges).length > 0;
     document.getElementById('btnSave').disabled = !hasChanges;
     document.getElementById('btnCancel').style.display = hasChanges ? '' : 'none';
+    document.getElementById('btnExtract').disabled = hasChanges;
   }
 
   // --- Save button ---
