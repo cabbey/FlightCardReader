@@ -198,6 +198,78 @@
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* Mirror toggle */
+  .video-options {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .mirror-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    color: #4b5563;
+  }
+
+  .mirror-toggle input {
+    cursor: pointer;
+  }
+
+  #preview.mirrored {
+    transform: scaleX(-1);
+  }
+
+  /* QR code section */
+  .qr-section {
+    margin-top: 2rem;
+    text-align: center;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .qr-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 0.75rem 0;
+  }
+
+  .qr-code {
+    display: block;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
+  }
+
+  .qr-code.qr-hidden {
+    display: none;
+  }
+
+  .qr-select {
+    display: block;
+    margin: 0.75rem auto 0;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    max-width: 100%;
+    color: #374151;
+  }
+
+  .qr-url {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.75rem;
+    color: #6b7280;
+    word-break: break-all;
+  }
 </style>
 {% endblock %}
 
@@ -234,6 +306,12 @@
     <div class="controls">
       <button id="switchCamera" type="button" aria-label="Switch camera">&#x1F504; Switch Camera</button>
     </div>
+
+    <div class="video-options">
+      <label class="mirror-toggle">
+        <input type="checkbox" id="mirrorToggle"> Mirror video
+      </label>
+    </div>
   </div>
 
   <!-- State 2: Confirmation Screen -->
@@ -245,6 +323,20 @@
     </div>
   </div>
 </div>
+
+{% if qr_entries %}
+<div class="qr-section">
+  <p class="qr-label">Scan on your phone:</p>
+  {% for entry in qr_entries %}
+  <img src="{{ entry.qr }}" alt="QR code for {{ entry.url }}" class="qr-code{% if not loop.first %} qr-hidden{% endif %}" data-qr-index="{{ loop.index0 }}">
+  {% endfor %}
+  <select id="qrAddressSelect" class="qr-select">
+    {% for entry in qr_entries %}
+    <option value="{{ loop.index0 }}">{{ entry.url }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
 
 <!-- Spinner overlay -->
 <div id="spinnerOverlay" class="spinner-overlay" role="status" aria-label="Submitting">
@@ -258,5 +350,31 @@
 </div>
 
 <script src="/static/js/node_modules/opencv.js/opencv.js"></script>
+<script>
+// Mirror toggle
+document.getElementById('mirrorToggle').addEventListener('change', function() {
+  var video = document.getElementById('preview');
+  if (this.checked) {
+    video.classList.add('mirrored');
+  } else {
+    video.classList.remove('mirrored');
+  }
+});
+
+// QR code address switcher
+var qrSelect = document.getElementById('qrAddressSelect');
+if (qrSelect) {
+  qrSelect.addEventListener('change', function() {
+    var selected = this.value;
+    document.querySelectorAll('.qr-code').forEach(function(img) {
+      if (img.dataset.qrIndex === selected) {
+        img.classList.remove('qr-hidden');
+      } else {
+        img.classList.add('qr-hidden');
+      }
+    });
+  });
+}
+</script>
 <script src="/static/js/scanner.js"></script>
 {% endblock %}

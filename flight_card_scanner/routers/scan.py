@@ -8,9 +8,12 @@ Handles:
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 from pathlib import Path
 
+import segno
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -100,6 +103,63 @@ def _resolve_extension(upload: UploadFile) -> str | None:
 router = APIRouter()
 
 
+def _get_all_addresses() -> list[str]:
+    """Return all non-loopback IP addresses (IPv4 and IPv6) on this host."""
+    import subprocess
+
+    addresses: list[str] = []
+
+    # Get IPv6 global addresses
+    try:
+        result = subprocess.run(
+            ["ip", "-6", "addr", "show", "scope", "global"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("inet6 "):
+                    addr = line.split()[1].split("/")[0]
+                    addresses.append(addr)
+    except (subprocess.SubprocessError, OSError, FileNotFoundError):
+        pass
+
+    # Get IPv4 addresses (non-loopback)
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("inet "):
+                    addr = line.split()[1].split("/")[0]
+                    if not addr.startswith("127."):
+                        addresses.append(addr)
+    except (subprocess.SubprocessError, OSError, FileNotFoundError):
+        pass
+
+    return addresses
+
+
+def _generate_qr_data_uri(url: str) -> str:
+    """Generate a QR code SVG as a data URI for the given URL."""
+    qr = segno.make(url)
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=4, border=2)
+    svg_bytes = buf.getvalue()
+    b64 = base64.b64encode(svg_bytes).decode("ascii")
+    return f"data:image/svg+xml;base64,{b64}"
+
+
+def _make_url(addr: str, port: int) -> str:
+    """Build a URL from an IP address and port, bracketing IPv6."""
+    if ":" in addr:
+        return f"http://[{addr}]:{port}/scan"
+    return f"http://{addr}:{port}/scan"
+
+
 @router.get("/scan", response_class=HTMLResponse)
 async def scan_page(
     request: Request,
@@ -108,11 +168,21 @@ async def scan_page(
     """Serve the scanner camera UI page."""
     if _templates is None:
         raise RuntimeError("Scan router not configured with templates.")
+
+    # Generate QR codes for all available addresses
+    addresses = _get_all_addresses()
+    qr_entries: list[dict[str, str]] = []
+    for addr in addresses:
+        url = _make_url(addr, config.port)
+        data_uri = _generate_qr_data_uri(url)
+        qr_entries.append({"url": url, "qr": data_uri})
+
     return _templates.TemplateResponse(
         "scan.html",
         {
             "request": request,
             "event_name": config.event_name,
+            "qr_entries": qr_entries,
         },
     )
 
