@@ -122,6 +122,60 @@
     border: 1px solid #ddd;
     border-radius: 6px;
     object-fit: contain;
+    cursor: zoom-in;
+  }
+
+  /* Image lightbox */
+  .image-lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 50%;
+    height: 100%;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.85);
+    cursor: grab;
+    overflow: hidden;
+  }
+
+  .image-lightbox.active {
+    display: block;
+  }
+
+  .image-lightbox.dragging {
+    cursor: grabbing;
+  }
+
+  .image-lightbox img {
+    position: absolute;
+    image-rendering: pixelated;
+    max-width: none;
+    max-height: none;
+  }
+
+  .lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10000;
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .lightbox-close:hover {
+    background: #fff;
   }
 
   .image-placeholder {
@@ -442,6 +496,7 @@
       src="{{ record.image_url }}"
       alt="Flight card image for record {{ record.id }}"
       class="card-image"
+      id="cardImage"
       onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
     >
     <div class="image-placeholder" style="display:none;">Image not available</div>
@@ -673,6 +728,11 @@
     </details>
     {% endif %}
   </div>
+</div>
+
+<div class="image-lightbox" id="imageLightbox">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+  <img id="lightboxImg" src="" alt="Full size flight card">
 </div>
 
 <script>
@@ -965,6 +1025,77 @@
         });
     });
   }
+  // --- Image lightbox ---
+  var lightbox = document.getElementById('imageLightbox');
+  var lightboxImg = document.getElementById('lightboxImg');
+  var cardImage = document.getElementById('cardImage');
+  var isDragging = false;
+  var dragStartX, dragStartY, imgStartX, imgStartY;
+
+  if (cardImage) {
+    cardImage.addEventListener('click', function() {
+      lightboxImg.src = cardImage.src;
+      lightbox.classList.add('active');
+      // Center the image at 1:1 once loaded
+      lightboxImg.onload = function() {
+        var vw = window.innerWidth / 2; // lightbox is left half
+        var vh = window.innerHeight;
+        var iw = lightboxImg.naturalWidth;
+        var ih = lightboxImg.naturalHeight;
+        // Center it within the left half
+        lightboxImg.style.left = Math.min(0, (vw - iw) / 2) + 'px';
+        lightboxImg.style.top = Math.min(0, (vh - ih) / 2) + 'px';
+        lightboxImg.style.width = iw + 'px';
+        lightboxImg.style.height = ih + 'px';
+      };
+      // If already cached, trigger manually
+      if (lightboxImg.complete && lightboxImg.naturalWidth) {
+        lightboxImg.onload();
+      }
+    });
+  }
+
+  document.getElementById('lightboxClose').addEventListener('click', function(e) {
+    e.stopPropagation();
+    lightbox.classList.remove('active');
+  });
+
+  lightbox.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') lightbox.classList.remove('active');
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+      lightbox.classList.remove('active');
+    }
+  });
+
+  lightbox.addEventListener('mousedown', function(e) {
+    if (e.target === lightboxImg || e.target === lightbox) {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      imgStartX = parseInt(lightboxImg.style.left) || 0;
+      imgStartY = parseInt(lightboxImg.style.top) || 0;
+      lightbox.classList.add('dragging');
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var dx = e.clientX - dragStartX;
+    var dy = e.clientY - dragStartY;
+    lightboxImg.style.left = (imgStartX + dx) + 'px';
+    lightboxImg.style.top = (imgStartY + dy) + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      lightbox.classList.remove('dragging');
+    }
+  });
 })();
 </script>
 {% endblock %}
