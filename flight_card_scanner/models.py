@@ -55,11 +55,11 @@ class FlightRecord(Base):
     evaluation_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     evaluation_comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # --- Recovery plan ---
+    recovery_plan: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
     # --- JSON overflow for remaining fields ---
     overflow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    # --- Raw LLM output for debugging/review ---
-    llm_raw_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # --- Table-level indexes ---
     __table_args__ = (

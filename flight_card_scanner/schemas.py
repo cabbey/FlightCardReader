@@ -166,7 +166,6 @@ class FlightRecordUpdate(BaseModel):
     """Request body for updating editable fields on a flight record.
 
     All fields are optional — only provided fields are updated.
-    The llm_raw_json field is intentionally excluded (not editable).
     """
 
     flight_date: Optional[date] = None
@@ -181,4 +180,5 @@ class FlightRecordUpdate(BaseModel):
     fso_rso_initials: Optional[str] = None
     evaluation_outcome: Optional[str] = None
     evaluation_comments: Optional[str] = None
+    recovery_plan: Optional[str] = None
     overflow: Optional[dict] = None

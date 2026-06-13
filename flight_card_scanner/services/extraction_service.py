@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -428,10 +429,6 @@ class ExtractionService:
                 client.base_url,
             )
             response = await client.post("/api/chat", json=payload)
-            logger.info(
-                "Ollama returned: \"%s\"",
-                response.json(),
-            )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise OllamaUnavailableError(
@@ -442,8 +439,16 @@ class ExtractionService:
                 f"Ollama request failed: {exc}"
             ) from exc
 
-        # Parse the response
+        # Dump full Ollama response to a .json file alongside the image
         data = response.json()
+        json_filename = Path(image_path).stem + ".json"
+        json_path = self._config.image_store_path / json_filename
+        try:
+            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        except OSError as exc:
+            logger.warning("Failed to write debug JSON %s: %s", json_path, exc)
+
+        # Parse the response
         raw_content = data["message"]["content"]
 
         if not raw_content or not raw_content.strip():

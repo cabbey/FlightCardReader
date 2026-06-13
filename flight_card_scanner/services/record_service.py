@@ -90,7 +90,7 @@ async def apply_extraction(
 
     Dedicated columns receive their mapped values directly. Remaining fields
     are collected into the overflow JSON column, omitting any keys whose
-    values are None. The full LLM output is stored in llm_raw_json.
+    values are None.
 
     After applying, sets extraction_status to 'extracted'.
 
@@ -104,8 +104,8 @@ async def apply_extraction(
     if record is None:
         return
 
-    # --- Store raw LLM output ---
-    record.llm_raw_json = extracted.model_dump(mode="json")
+    # --- Store raw LLM output to JSON file alongside image ---
+    # (handled by _call_ollama, not here)
 
     # --- Dedicated columns ---
     record.flight_date = resolved_date
@@ -120,6 +120,7 @@ async def apply_extraction(
     record.fso_rso_initials = extracted.fso_rso_initials
     record.evaluation_outcome = extracted.evaluation_outcome
     record.evaluation_comments = extracted.evaluation_comments
+    record.recovery_plan = extracted.recovery_plan
 
     # --- Overflow JSON (only include non-None values) ---
     overflow: dict = {}
@@ -147,9 +148,6 @@ async def apply_extraction(
 
     if extracted.notes is not None:
         overflow["notes"] = extracted.notes
-
-    if extracted.recovery_plan is not None:
-        overflow["recovery_plan"] = extracted.recovery_plan
 
     if extracted.flight_date_raw is not None:
         overflow["raw_flight_date"] = extracted.flight_date_raw
@@ -198,6 +196,7 @@ async def update_fields(
         "fso_rso_initials",
         "evaluation_outcome",
         "evaluation_comments",
+        "recovery_plan",
         "overflow",
     }
 
