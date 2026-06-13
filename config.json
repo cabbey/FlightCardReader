@@ -3,6 +3,8 @@
   "port": 8000,
   "image_store_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/images",
   "db_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/flight_cards.db",
+  "ssl_certfile": "/home/cabbey/OROC/FlightCardDbs/cheshire.neon-tegus.ts.net.crt",
+  "ssl_keyfile": "/home/cabbey/OROC/FlightCardDbs/cheshire.neon-tegus.ts.net.key",
   "event_name": "Missle Madness 2026",
   "event_date_range": {
     "start": "2026-04-24",

@@ -46,6 +46,8 @@ class AppConfig:
     extraction_endpoints: list[EndpointConfig] = field(
         default_factory=lambda: [EndpointConfig(url="http://localhost:11434", concurrency=1)]
     )
+    ssl_certfile: Path | None = None
+    ssl_keyfile: Path | None = None
 
 
 def _parse_date(value: str, field_name: str) -> date:
@@ -195,6 +197,14 @@ def load_config(path: Path) -> AppConfig:
             _parse_endpoint(ep, i) for i, ep in enumerate(raw_endpoints)
         ]
 
+    # --- ssl_certfile / ssl_keyfile (optional) ---
+    ssl_certfile = None
+    ssl_keyfile = None
+    if "ssl_certfile" in data:
+        ssl_certfile = Path(data["ssl_certfile"])
+    if "ssl_keyfile" in data:
+        ssl_keyfile = Path(data["ssl_keyfile"])
+
     return AppConfig(
         host=host,
         port=port,
@@ -204,4 +214,6 @@ def load_config(path: Path) -> AppConfig:
         event_date_range=event_date_range,
         extraction_mode=extraction_mode,
         extraction_endpoints=extraction_endpoints,
+        ssl_certfile=ssl_certfile,
+        ssl_keyfile=ssl_keyfile,
     )

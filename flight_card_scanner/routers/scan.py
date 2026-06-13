@@ -103,11 +103,31 @@ def _resolve_extension(upload: UploadFile) -> str | None:
 router = APIRouter()
 
 
-def _get_all_addresses() -> list[str]:
-    """Return all non-loopback IP addresses (IPv4 and IPv6) on this host."""
+def _get_all_addresses() -> list[tuple[str, bool]]:
+    """Return all non-loopback IP addresses (IPv4 and IPv6) on this host.
+
+    Returns a list of (address, is_tailscale) tuples.
+    """
     import subprocess
 
-    addresses: list[str] = []
+    addresses: list[tuple[str, bool]] = []
+
+    # Try to get Tailscale DNS hostname
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            import json as _json
+            ts_data = _json.loads(result.stdout)
+            dns_name = ts_data.get("Self", {}).get("DNSName", "")
+            if dns_name:
+                # Strip trailing dot
+                dns_name = dns_name.rstrip(".")
+                addresses.append((dns_name, True))
+    except (subprocess.SubprocessError, OSError, FileNotFoundError, ValueError):
+        pass
 
     # Get IPv6 global addresses
     try:
@@ -120,7 +140,7 @@ def _get_all_addresses() -> list[str]:
                 line = line.strip()
                 if line.startswith("inet6 "):
                     addr = line.split()[1].split("/")[0]
-                    addresses.append(addr)
+                    addresses.append((addr, _is_tailscale_addr(addr)))
     except (subprocess.SubprocessError, OSError, FileNotFoundError):
         pass
 
@@ -136,7 +156,7 @@ def _get_all_addresses() -> list[str]:
                 if line.startswith("inet "):
                     addr = line.split()[1].split("/")[0]
                     if not addr.startswith("127."):
-                        addresses.append(addr)
+                        addresses.append((addr, _is_tailscale_addr(addr)))
     except (subprocess.SubprocessError, OSError, FileNotFoundError):
         pass
 
@@ -153,11 +173,37 @@ def _generate_qr_data_uri(url: str) -> str:
     return f"data:image/svg+xml;base64,{b64}"
 
 
-def _make_url(addr: str, port: int) -> str:
-    """Build a URL from an IP address and port, bracketing IPv6."""
+def _is_tailscale_addr(addr: str) -> bool:
+    """Return True if the address belongs to a Tailscale interface.
+
+    Tailscale uses:
+    - IPv6 ULA prefix fd7a:115c:a1e0::/48
+    - IPv4 CGNAT range 100.64.0.0/10 (100.64-127.x.x.x)
+    """
+    if addr.startswith("fd7a:115c:a1e0:"):
+        return True
+    # Tailscale IPv4: 100.64.0.0 - 100.127.255.255
+    parts = addr.split(".")
+    if len(parts) == 4:
+        try:
+            first, second = int(parts[0]), int(parts[1])
+            if first == 100 and 64 <= second <= 127:
+                return True
+        except ValueError:
+            pass
+    return False
+
+
+def _make_url(addr: str, port: int, is_tailscale: bool = False, ssl_enabled: bool = False) -> str:
+    """Build a URL from an IP address and port, bracketing IPv6.
+
+    Uses https:// for Tailscale addresses when SSL is enabled.
+    """
+    scheme = "https" if (is_tailscale and ssl_enabled) else "http"
+    # DNS hostnames (no colons, no dots-only-as-IPv4)
     if ":" in addr:
-        return f"http://[{addr}]:{port}/scan"
-    return f"http://{addr}:{port}/scan"
+        return f"{scheme}://[{addr}]:{port}/scan"
+    return f"{scheme}://{addr}:{port}/scan"
 
 
 @router.get("/scan", response_class=HTMLResponse)
@@ -169,11 +215,19 @@ async def scan_page(
     if _templates is None:
         raise RuntimeError("Scan router not configured with templates.")
 
+    # Determine if SSL is active (cert files configured and exist)
+    ssl_enabled = (
+        config.ssl_certfile is not None
+        and config.ssl_keyfile is not None
+        and config.ssl_certfile.exists()
+        and config.ssl_keyfile.exists()
+    )
+
     # Generate QR codes for all available addresses
-    addresses = _get_all_addresses()
+    address_list = _get_all_addresses()
     qr_entries: list[dict[str, str]] = []
-    for addr in addresses:
-        url = _make_url(addr, config.port)
+    for addr, is_ts in address_list:
+        url = _make_url(addr, config.port, is_tailscale=is_ts, ssl_enabled=ssl_enabled)
         data_uri = _generate_qr_data_uri(url)
         qr_entries.append({"url": url, "qr": data_uri})
 

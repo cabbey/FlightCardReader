@@ -111,6 +111,8 @@ The application reads its configuration from a JSON file. By default it looks fo
 | `event_date_range` | object | today–today | Inclusive start/end dates (ISO 8601) for the launch event. Used to resolve day-of-week dates written on cards. |
 | `extraction_mode` | string | `"immediate"` | `"immediate"` or `"deferred"`. Controls whether extraction runs automatically on upload. |
 | `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit (number of parallel requests). |
+| `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Optional — enables HTTPS when paired with `ssl_keyfile`. |
+| `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Optional — enables HTTPS when paired with `ssl_certfile`. |
 
 All keys are optional — defaults are applied for any missing key.
 
@@ -120,13 +122,21 @@ Make sure Ollama is running, then start the server:
 
 ```bash
 source .venv/bin/activate
-uvicorn flight_card_scanner.main:app --host 0.0.0.0 --port 8000
+python -m flight_card_scanner
 ```
+
+This reads `config.json` (or `CONFIG_PATH`) and starts uvicorn on the configured host/port with SSL if configured.
 
 Or use a custom config path:
 
 ```bash
-CONFIG_PATH=/path/to/my-config.json uvicorn flight_card_scanner.main:app --host 0.0.0.0 --port 8000
+CONFIG_PATH=/path/to/my-config.json python -m flight_card_scanner
+```
+
+You can also use uvicorn directly (without automatic SSL):
+
+```bash
+uvicorn flight_card_scanner.main:app --host 0.0.0.0 --port 8000
 ```
 
 The app will:
@@ -163,6 +173,80 @@ For faster extraction at busy launches, you can distribute work across multiple 
 ```
 
 The concurrency value controls how many images are sent to that endpoint in parallel. Total worker count equals the sum of all concurrency values.
+
+## HTTPS with Tailscale
+
+Mobile browsers (especially iOS Safari) require HTTPS for camera access. The simplest way to get valid HTTPS certificates for local/home use is through Tailscale's built-in certificate provisioning.
+
+### Prerequisites
+
+- Tailscale installed on the server and on any mobile devices that will scan cards
+- All devices logged into the same Tailnet
+- MagicDNS enabled in your Tailscale admin console (enabled by default)
+- HTTPS certificates enabled in Tailscale admin console: **DNS** → **HTTPS Certificates** → Enable
+
+### Generating Certificates
+
+Run on the server (the machine running Flight Card Scanner):
+
+```bash
+tailscale cert $(tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))")
+```
+
+This creates two files in the current directory:
+- `<hostname>.crt` — the certificate (signed by Let's Encrypt via Tailscale)
+- `<hostname>.key` — the private key
+
+For example, if your machine is `cheshire.neon-tegus.ts.net`:
+- `cheshire.neon-tegus.ts.net.crt`
+- `cheshire.neon-tegus.ts.net.key`
+
+### Configuring the Application
+
+Add the certificate paths to your `config.json`:
+
+```json
+{
+  "host": "0.0.0.0",
+  "port": 8000,
+  "ssl_certfile": "/home/user/FlightCardReader/cheshire.neon-tegus.ts.net.crt",
+  "ssl_keyfile": "/home/user/FlightCardReader/cheshire.neon-tegus.ts.net.key",
+  ...
+}
+```
+
+Then start the server:
+
+```bash
+python -m flight_card_scanner
+```
+
+You'll see:
+```
+INFO:     SSL enabled — using cert: /home/user/FlightCardReader/cheshire.neon-tegus.ts.net.crt
+INFO:     Starting HTTPS server on 0.0.0.0:8000
+```
+
+The scan page will automatically generate QR codes with `https://` URLs for Tailscale addresses, making them work with iOS camera access.
+
+### Certificate Renewal
+
+Tailscale certificates are valid for 90 days. When a certificate expires, the server will detect it at startup and fall back to HTTP with a clear warning:
+
+```
+WARNING:  SSL disabled — certificate expired on 2025-09-15 12:00 UTC
+          Run 'tailscale cert <hostname>' to renew
+```
+
+To renew, re-run the `tailscale cert` command and restart the server.
+
+### Troubleshooting Tailscale HTTPS
+
+- **"SSL not configured"** — `ssl_certfile` and/or `ssl_keyfile` are not set in config.json
+- **"certificate file not found"** — the path in config.json doesn't point to an existing file
+- **"certificate expired"** — run `tailscale cert <hostname>` to get a fresh certificate
+- **Phone can't connect** — make sure the phone has Tailscale installed, is logged into the same tailnet, and has the VPN toggle enabled
+- **Camera still blocked** — verify you're accessing via the `https://` URL (not `http://`). The QR code on the scan page should show the correct `https://` URL for Tailscale addresses.
 
 ## Running Tests
 
@@ -207,7 +291,7 @@ Run `pnpm install` from the project root. This installs OpenCV.js into the stati
 Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed. Re-pull the model if needed: `ollama pull qwen3-vl`.
 
 **Camera not working in the scan UI**
-The camera API requires HTTPS in production (or `localhost` for development). If accessing from another device on the network, you'll need to serve over HTTPS (e.g., behind a reverse proxy with TLS).
+The camera API requires HTTPS on mobile browsers (iOS, Android Chrome). If accessing from a phone on the local network, set up HTTPS via Tailscale (see the "HTTPS with Tailscale" section above). On `localhost` in a desktop browser, HTTP works fine for development.
 
 **Database locked errors**
 SQLite supports limited concurrency. For high-volume events, consider running a single extraction worker per endpoint or tuning the `concurrency` values.
