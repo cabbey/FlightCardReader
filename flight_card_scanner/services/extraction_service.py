@@ -150,6 +150,8 @@ Fields to extract:
   If there is no clear mark in the checkbox area, the value is false.
 
 - rack (string or number), pad (integer)
+  If the card contains the words "low power flight card" and the rack field is blank/empty,
+  fill in rack with "L".
 
 - fso_rso_initials: safety officer initials. These are often written to the RIGHT of the
   checkbox area or in a dedicated "RSO" or "FSO" field. Do not confuse these initials with
