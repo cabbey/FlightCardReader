@@ -159,6 +159,54 @@ async def apply_extraction(
     await db.commit()
 
 
+async def update_fields(
+    db: AsyncSession,
+    record_id: int,
+    updates: dict[str, Any],
+) -> Optional[FlightRecord]:
+    """Update specific fields on a FlightRecord.
+
+    Only fields present in the updates dict are modified. The llm_raw_json
+    field is never updated through this function.
+
+    Args:
+        db: Active async database session.
+        record_id: The integer primary key of the record to update.
+        updates: A dict of field_name -> new_value pairs to apply.
+
+    Returns:
+        The updated FlightRecord if found, otherwise None.
+    """
+    record = await get(db, record_id)
+    if record is None:
+        return None
+
+    # Fields that can be updated via human review
+    editable_fields = {
+        "flight_date",
+        "flier_name",
+        "total_impulse_value",
+        "total_impulse_unit",
+        "flag_heads_up",
+        "flag_first_flight",
+        "flag_complex",
+        "rack",
+        "pad",
+        "fso_rso_initials",
+        "evaluation_outcome",
+        "evaluation_comments",
+        "overflow",
+    }
+
+    for field, value in updates.items():
+        if field in editable_fields:
+            setattr(record, field, value)
+
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
 def _format_motor(motor: dict[str, Any]) -> str:
     """Format a single motor dict into a designation string.
 

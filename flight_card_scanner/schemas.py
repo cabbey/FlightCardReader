@@ -152,3 +152,25 @@ class FlightRecordDetail(BaseModel):
     evaluation_comments: Optional[str] = None
     overflow: Optional[dict] = None
     created_at: datetime
+
+
+class FlightRecordUpdate(BaseModel):
+    """Request body for updating editable fields on a flight record.
+
+    All fields are optional — only provided fields are updated.
+    The llm_raw_json field is intentionally excluded (not editable).
+    """
+
+    flight_date: Optional[date] = None
+    flier_name: Optional[str] = None
+    total_impulse_value: Optional[float] = None
+    total_impulse_unit: Optional[str] = None
+    flag_heads_up: Optional[bool] = None
+    flag_first_flight: Optional[bool] = None
+    flag_complex: Optional[bool] = None
+    rack: Optional[str] = None
+    pad: Optional[int] = None
+    fso_rso_initials: Optional[str] = None
+    evaluation_outcome: Optional[str] = None
+    evaluation_comments: Optional[str] = None
+    overflow: Optional[dict] = None

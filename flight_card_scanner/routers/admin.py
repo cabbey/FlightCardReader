@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..schemas import ModeResponse, RequeueResponse, SetModeRequest, TriggerResponse
+from ..schemas import (
+    FlightRecordUpdate,
+    ModeResponse,
+    RequeueResponse,
+    SetModeRequest,
+    TriggerResponse,
+)
 from ..services import record_service
 from ..services.extraction_service import ExtractionMode, ExtractionService
 
@@ -134,3 +140,28 @@ async def extract_single(
     await record_service.set_status(db, record.id, "pending")
     await extraction_service.force_enqueue(record.id)
     return TriggerResponse(dispatched=1)
+
+
+@router.put("/record/{record_id}")
+async def update_record(
+    record_id: int,
+    body: FlightRecordUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update editable fields on a flight record (human review corrections).
+
+    Only fields provided in the request body are updated. The llm_raw_json
+    field is intentionally excluded from editing.
+    Returns 404 if the record does not exist.
+    """
+    record = await record_service.get(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    # Only include fields that were explicitly set in the request
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update")
+
+    updated_record = await record_service.update_fields(db, record_id, updates)
+    return {"message": "Record updated", "id": updated_record.id}

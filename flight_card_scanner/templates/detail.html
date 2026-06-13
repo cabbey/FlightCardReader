@@ -148,6 +148,115 @@
     border-bottom: 1px solid #e5e7eb;
   }
 
+  /* Editable field styles */
+  .editable-field {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 1.5rem;
+  }
+
+  .field-display {
+    cursor: pointer;
+    padding: 0.1rem 0.25rem;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    min-width: 2rem;
+    min-height: 1.2rem;
+  }
+
+  .field-display:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+  }
+
+  .field-input {
+    font-size: 0.85rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid #2563eb;
+    border-radius: 3px;
+    outline: none;
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .field-input:focus {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  .field-select {
+    font-size: 0.85rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid #2563eb;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  .field-select:focus {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  .field-textarea {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.3rem;
+    border: 1px solid #2563eb;
+    border-radius: 3px;
+    outline: none;
+    width: 100%;
+    min-height: 4rem;
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .field-textarea:focus {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  .edit-hint {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  /* Save/cancel buttons */
+  .btn-save {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    background: #16a34a;
+    color: #fff;
+  }
+
+  .btn-save:hover {
+    background: #15803d;
+  }
+
+  .btn-save:disabled {
+    background: #86efac;
+    cursor: not-allowed;
+  }
+
+  .btn-cancel {
+    margin-top: 1rem;
+    margin-left: 0.5rem;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    background: #fff;
+    color: #374151;
+  }
+
+  .btn-cancel:hover {
+    background: #f3f4f6;
+  }
+
   /* Re-queue button */
   .btn-requeue {
     margin-top: 1rem;
@@ -185,6 +294,30 @@
   .btn-extract:disabled {
     background: #93c5fd;
     cursor: not-allowed;
+  }
+
+  /* Save feedback */
+  .save-feedback {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: #16a34a;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .save-feedback.show {
+    opacity: 1;
+  }
+
+  .save-feedback.error {
+    color: #dc2626;
+  }
+
+  /* Dirty indicator */
+  .field-dirty .field-display {
+    border-color: #f59e0b;
+    background: #fffbeb;
   }
 
   /* Raw JSON collapsible */
@@ -246,6 +379,7 @@
 <div class="detail-header">
   <h2>Record #{{ record.id }}</h2>
   <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
+  <span class="edit-hint">(click any value to edit)</span>
 </div>
 
 <div class="detail-layout">
@@ -264,43 +398,84 @@
   <div class="fields-column">
     <dl class="fields-grid">
       <dt>Flight Date</dt>
-      <dd>{{ record.flight_date or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
+          <span class="field-display">{{ record.flight_date or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Flier Name</dt>
-      <dd>{{ record.flier_name or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="flier_name" data-type="text" data-value="{{ record.flier_name or '' }}">
+          <span class="field-display">{{ record.flier_name or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Total Impulse</dt>
       <dd>
-        {% if record.total_impulse_value is not none %}
-          {{ record.total_impulse_value }} {{ record.total_impulse_unit or "" }}
-        {% else %}
-          —
-        {% endif %}
+        <div class="editable-field" data-field="total_impulse_value" data-type="number" data-value="{{ record.total_impulse_value if record.total_impulse_value is not none else '' }}" style="display: inline-flex;">
+          <span class="field-display">{{ record.total_impulse_value if record.total_impulse_value is not none else "—" }}</span>
+        </div>
+        <div class="editable-field" data-field="total_impulse_unit" data-type="select" data-value="{{ record.total_impulse_unit or '' }}" data-options="Ns,LbsFt" style="display: inline-flex;">
+          <span class="field-display">{{ record.total_impulse_unit or "" }}</span>
+        </div>
       </dd>
 
       <dt>Heads Up</dt>
-      <dd>{{ "Yes" if record.flag_heads_up else ("No" if record.flag_heads_up is not none else "—") }}</dd>
+      <dd>
+        <div class="editable-field" data-field="flag_heads_up" data-type="bool" data-value="{{ record.flag_heads_up | string if record.flag_heads_up is not none else '' }}">
+          <span class="field-display">{{ "Yes" if record.flag_heads_up else ("No" if record.flag_heads_up is not none else "—") }}</span>
+        </div>
+      </dd>
 
       <dt>First Flight</dt>
-      <dd>{{ "Yes" if record.flag_first_flight else ("No" if record.flag_first_flight is not none else "—") }}</dd>
+      <dd>
+        <div class="editable-field" data-field="flag_first_flight" data-type="bool" data-value="{{ record.flag_first_flight | string if record.flag_first_flight is not none else '' }}">
+          <span class="field-display">{{ "Yes" if record.flag_first_flight else ("No" if record.flag_first_flight is not none else "—") }}</span>
+        </div>
+      </dd>
 
       <dt>Complex</dt>
-      <dd>{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</dd>
+      <dd>
+        <div class="editable-field" data-field="flag_complex" data-type="bool" data-value="{{ record.flag_complex | string if record.flag_complex is not none else '' }}">
+          <span class="field-display">{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</span>
+        </div>
+      </dd>
 
       <dt>Rack</dt>
-      <dd>{{ record.rack or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="rack" data-type="text" data-value="{{ record.rack or '' }}">
+          <span class="field-display">{{ record.rack or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Pad</dt>
-      <dd>{{ record.pad if record.pad is not none else "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="pad" data-type="integer" data-value="{{ record.pad if record.pad is not none else '' }}">
+          <span class="field-display">{{ record.pad if record.pad is not none else "—" }}</span>
+        </div>
+      </dd>
 
       <dt>FSO/RSO Initials</dt>
-      <dd>{{ record.fso_rso_initials or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="fso_rso_initials" data-type="text" data-value="{{ record.fso_rso_initials or '' }}">
+          <span class="field-display">{{ record.fso_rso_initials or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Evaluation</dt>
-      <dd>{{ record.evaluation_outcome or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="evaluation_outcome" data-type="select" data-value="{{ record.evaluation_outcome or '' }}" data-options="good,motor,airframe,recovery">
+          <span class="field-display">{{ record.evaluation_outcome or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Comments</dt>
-      <dd>{{ record.evaluation_comments or "—" }}</dd>
+      <dd>
+        <div class="editable-field" data-field="evaluation_comments" data-type="text" data-value="{{ record.evaluation_comments or '' }}">
+          <span class="field-display">{{ record.evaluation_comments or "—" }}</span>
+        </div>
+      </dd>
 
       <dt>Created</dt>
       <dd>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</dd>
@@ -310,21 +485,45 @@
         {% if record.overflow.membership %}
         <div class="fields-section-title">Membership</div>
         <dt>Club</dt>
-        <dd>{{ record.overflow.membership.club or "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
+            <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
+          </div>
+        </dd>
         <dt>Member #</dt>
-        <dd>{{ record.overflow.membership.member_number or "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
+            <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
+          </div>
+        </dd>
         <dt>Cert Level</dt>
-        <dd>{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
+            <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
+          </div>
+        </dd>
         {% endif %}
 
         {% if record.overflow.rocket_name or record.overflow.rocket_manufacturer or record.overflow.rocket_colors %}
         <div class="fields-section-title">Rocket</div>
         <dt>Name</dt>
-        <dd>{{ record.overflow.rocket_name or "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
+            <span class="field-display">{{ record.overflow.rocket_name or "—" }}</span>
+          </div>
+        </dd>
         <dt>Manufacturer</dt>
-        <dd>{{ record.overflow.rocket_manufacturer or "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
+            <span class="field-display">{{ record.overflow.rocket_manufacturer or "—" }}</span>
+          </div>
+        </dd>
         <dt>Colors</dt>
-        <dd>{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
+            <span class="field-display">{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</span>
+          </div>
+        </dd>
         {% endif %}
 
         {% if record.overflow.rocket_measurements %}
@@ -332,15 +531,36 @@
           {% set m = record.overflow.rocket_measurements %}
           {% if m.diameter is not none %}
           <dt>Diameter</dt>
-          <dd>{{ m.diameter }} {{ m.diameter_unit or "" }}</dd>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.diameter }}</span>
+            </div>
+            <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.diameter_unit or "" }}</span>
+            </div>
+          </dd>
           {% endif %}
           {% if m.length is not none %}
           <dt>Length</dt>
-          <dd>{{ m.length }} {{ m.length_unit or "" }}</dd>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.length }}</span>
+            </div>
+            <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.length_unit or "" }}</span>
+            </div>
+          </dd>
           {% endif %}
           {% if m.weight is not none %}
           <dt>Weight</dt>
-          <dd>{{ m.weight }} {{ m.weight_unit or "" }}</dd>
+          <dd>
+            <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.weight }}</span>
+            </div>
+            <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
+              <span class="field-display">{{ m.weight_unit or "" }}</span>
+            </div>
+          </dd>
           {% endif %}
         {% endif %}
 
@@ -359,7 +579,11 @@
         {% if record.overflow.notes %}
         <div class="fields-section-title">Notes</div>
         <dt>Notes</dt>
-        <dd>{{ record.overflow.notes }}</dd>
+        <dd>
+          <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
+            <span class="field-display">{{ record.overflow.notes | replace("\n", "<br>") | safe }}</span>
+          </div>
+        </dd>
         {% endif %}
 
         {% if record.overflow.raw_flight_date %}
@@ -368,6 +592,12 @@
         {% endif %}
       {% endif %}
     </dl>
+
+    <div class="button-row">
+      <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
+      <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
+      <span class="save-feedback" id="saveFeedback"></span>
+    </div>
 
     {% if record.extraction_status == "extraction_failed" %}
     <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
@@ -385,10 +615,257 @@
 
 <script>
 (function() {
-  var btn = document.getElementById('btnRequeue');
-  if (btn) {
-    btn.addEventListener('click', function() {
-      fetch('/api/admin/requeue/{{ record.id }}', { method: 'POST' })
+  var recordId = {{ record.id }};
+  var pendingChanges = {};
+  var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
+
+  // --- Inline editing logic ---
+
+  document.querySelectorAll('.editable-field').forEach(function(wrapper) {
+    var display = wrapper.querySelector('.field-display');
+    display.addEventListener('click', function() {
+      if (wrapper.querySelector('.field-input, .field-select')) return; // already editing
+      startEditing(wrapper);
+    });
+  });
+
+  function startEditing(wrapper) {
+    var field = wrapper.dataset.field;
+    var type = wrapper.dataset.type;
+    var value = wrapper.dataset.value;
+    var display = wrapper.querySelector('.field-display');
+    display.style.display = 'none';
+
+    var input;
+    if (type === 'bool') {
+      input = document.createElement('select');
+      input.className = 'field-select';
+      var opts = [['', '—'], ['True', 'Yes'], ['False', 'No']];
+      opts.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o[0];
+        opt.textContent = o[1];
+        if (o[0] === value) opt.selected = true;
+        input.appendChild(opt);
+      });
+    } else if (type === 'select') {
+      input = document.createElement('select');
+      input.className = 'field-select';
+      var options = (wrapper.dataset.options || '').split(',');
+      // Add empty option
+      var emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '—';
+      if (!value) emptyOpt.selected = true;
+      input.appendChild(emptyOpt);
+      options.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o;
+        opt.textContent = o;
+        if (o === value) opt.selected = true;
+        input.appendChild(opt);
+      });
+    } else if (type === 'date') {
+      input = document.createElement('input');
+      input.type = 'date';
+      input.className = 'field-input';
+      input.value = value;
+    } else if (type === 'number') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.step = 'any';
+      input.className = 'field-input';
+      input.value = value;
+    } else if (type === 'integer') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.step = '1';
+      input.className = 'field-input';
+      input.value = value;
+    } else if (type === 'textarea') {
+      input = document.createElement('textarea');
+      input.className = 'field-textarea';
+      input.value = value;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'field-input';
+      input.value = value;
+    }
+
+    wrapper.appendChild(input);
+    input.focus();
+
+    function commitEdit() {
+      var newValue = input.value;
+      wrapper.removeChild(input);
+      display.style.display = '';
+
+      if (newValue !== value) {
+        wrapper.dataset.value = newValue;
+        // Update display text
+        if (type === 'bool') {
+          display.textContent = newValue === 'True' ? 'Yes' : (newValue === 'False' ? 'No' : '—');
+        } else if (type === 'textarea') {
+          display.innerHTML = (newValue || '—').replace(/\n/g, '<br>');
+        } else {
+          display.textContent = newValue || '—';
+        }
+        wrapper.classList.add('field-dirty');
+        registerChange(field, newValue, type);
+      }
+    }
+
+    input.addEventListener('blur', commitEdit);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && type !== 'textarea') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        wrapper.removeChild(input);
+        display.style.display = '';
+      }
+    });
+  }
+
+  function registerChange(field, value, type) {
+    // Convert value to appropriate type for the API
+    var converted;
+    if (value === '' || value === null) {
+      converted = null;
+    } else if (type === 'bool') {
+      converted = value === 'True';
+    } else if (type === 'number') {
+      converted = parseFloat(value);
+    } else if (type === 'integer') {
+      converted = parseInt(value, 10);
+    } else {
+      converted = value;
+    }
+
+    pendingChanges[field] = converted;
+    updateSaveButton();
+  }
+
+  function updateSaveButton() {
+    var hasChanges = Object.keys(pendingChanges).length > 0;
+    document.getElementById('btnSave').disabled = !hasChanges;
+    document.getElementById('btnCancel').style.display = hasChanges ? '' : 'none';
+  }
+
+  // --- Save button ---
+  document.getElementById('btnSave').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    // Build the request body, handling overflow dot-notation fields
+    var body = {};
+    var overflowUpdates = {};
+    var hasOverflowChanges = false;
+
+    Object.keys(pendingChanges).forEach(function(field) {
+      if (field.startsWith('overflow.')) {
+        hasOverflowChanges = true;
+        var path = field.substring('overflow.'.length);
+        setNestedValue(overflowUpdates, path, pendingChanges[field]);
+      } else {
+        body[field] = pendingChanges[field];
+      }
+    });
+
+    if (hasOverflowChanges) {
+      // Merge overflow updates into the existing overflow object
+      var merged = JSON.parse(JSON.stringify(originalOverflow || {}));
+      deepMerge(merged, overflowUpdates);
+      body['overflow'] = merged;
+    }
+
+    fetch('/api/admin/record/' + recordId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(res) {
+      if (res.ok) {
+        showFeedback('Saved!', false);
+        pendingChanges = {};
+        // Update original overflow for subsequent edits
+        if (body['overflow']) {
+          originalOverflow = body['overflow'];
+        }
+        document.querySelectorAll('.field-dirty').forEach(function(el) {
+          el.classList.remove('field-dirty');
+        });
+        updateSaveButton();
+      } else {
+        return res.json().then(function(data) {
+          showFeedback('Error: ' + (data.detail || 'Save failed'), true);
+        });
+      }
+    })
+    .catch(function() {
+      showFeedback('Network error', true);
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
+      updateSaveButton();
+    });
+  });
+
+  // --- Cancel button ---
+  document.getElementById('btnCancel').addEventListener('click', function() {
+    pendingChanges = {};
+    // Reset all dirty fields to their original displayed values
+    document.querySelectorAll('.field-dirty').forEach(function(wrapper) {
+      wrapper.classList.remove('field-dirty');
+      // Reload to reset — simplest approach
+    });
+    location.reload();
+  });
+
+  // --- Helper functions ---
+
+  function setNestedValue(obj, path, value) {
+    var keys = path.split('.');
+    var current = obj;
+    for (var i = 0; i < keys.length - 1; i++) {
+      if (!current[keys[i]] || typeof current[keys[i]] !== 'object') {
+        current[keys[i]] = {};
+      }
+      current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
+  }
+
+  function deepMerge(target, source) {
+    Object.keys(source).forEach(function(key) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        if (!target[key] || typeof target[key] !== 'object') {
+          target[key] = {};
+        }
+        deepMerge(target[key], source[key]);
+      } else {
+        target[key] = source[key];
+      }
+    });
+  }
+
+  function showFeedback(message, isError) {
+    var el = document.getElementById('saveFeedback');
+    el.textContent = message;
+    el.className = 'save-feedback show' + (isError ? ' error' : '');
+    setTimeout(function() {
+      el.className = 'save-feedback';
+    }, 3000);
+  }
+
+  // --- Re-queue button ---
+  var btnRequeue = document.getElementById('btnRequeue');
+  if (btnRequeue) {
+    btnRequeue.addEventListener('click', function() {
+      fetch('/api/admin/requeue/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
@@ -402,12 +879,13 @@
     });
   }
 
+  // --- Extract button ---
   var btnExtract = document.getElementById('btnExtract');
   if (btnExtract) {
     btnExtract.addEventListener('click', function() {
       btnExtract.disabled = true;
       btnExtract.textContent = 'Extracting…';
-      fetch('/api/admin/extract/{{ record.id }}', { method: 'POST' })
+      fetch('/api/admin/extract/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
