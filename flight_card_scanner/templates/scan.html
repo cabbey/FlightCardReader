@@ -281,15 +281,18 @@
   <!-- State 1: Live Preview -->
   <div id="livePreviewState">
     <div class="preview-wrapper">
-      <video id="preview" autoplay playsinline muted></video>
+      <video id="preview" autoplay playsinline webkit-playsinline muted></video>
       <canvas id="overlay"></canvas>
 
       <!-- Error: Camera permission denied -->
       <div id="errorPermission" class="error-overlay" role="alert">
         <div>
           <p class="error-title">Camera Access Required</p>
-          <p>Camera permission was denied. This app needs camera access to scan flight cards.</p>
-          <p>Please allow camera access in your browser settings and reload the page.</p>
+          <p>Camera permission was denied or is unavailable.</p>
+          <p>On iOS and most mobile browsers, camera access requires HTTPS.
+             If you are accessing this page over HTTP, the camera will not work on mobile devices.</p>
+          <p>Please allow camera access in your browser settings and reload the page,
+             or access this page over HTTPS.</p>
         </div>
       </div>
 

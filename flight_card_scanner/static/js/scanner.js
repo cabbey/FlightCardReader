@@ -168,20 +168,33 @@
       constraints = {
         video: {
           deviceId: { exact: deviceId }
-        }
+        },
+        audio: false
       };
     } else {
       // First call — prefer environment-facing (rear) camera
+      // Keep constraints minimal for maximum iOS compatibility
       constraints = {
         video: {
           facingMode: { ideal: 'environment' }
-        }
+        },
+        audio: false
       };
     }
 
     try {
       currentStream = await navigator.mediaDevices.getUserMedia(constraints);
       videoEl.srcObject = currentStream;
+
+      // iOS Safari requires an explicit play() call
+      // and a loadedmetadata listener before video renders
+      await new Promise(function (resolve, reject) {
+        videoEl.onloadedmetadata = function () {
+          videoEl.play().then(resolve).catch(resolve);
+        };
+        // Fallback timeout in case loadedmetadata never fires
+        setTimeout(resolve, 3000);
+      });
 
       // After first successful getUserMedia, enumerate to get labels
       await enumerateCameras();
@@ -199,7 +212,24 @@
         }
       }
     } catch (err) {
-      handleCameraError(err);
+      // On iOS, if facingMode constraint fails, retry with basic video: true
+      if (!deviceId && err.name === 'OverconstrainedError') {
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          videoEl.srcObject = currentStream;
+          await new Promise(function (resolve) {
+            videoEl.onloadedmetadata = function () {
+              videoEl.play().then(resolve).catch(resolve);
+            };
+            setTimeout(resolve, 3000);
+          });
+          await enumerateCameras();
+        } catch (retryErr) {
+          handleCameraError(retryErr);
+        }
+      } else {
+        handleCameraError(err);
+      }
     }
   }
 
@@ -1141,8 +1171,38 @@
       return;
     }
 
-    // Start camera with environment-facing default
+    // iOS Safari blocks getUserMedia on non-HTTPS origins (except localhost).
+    // Detect if we're on an insecure context and show a helpful message.
+    var isSecureContext = window.isSecureContext ||
+      location.protocol === 'https:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+
+    if (!isSecureContext) {
+      // Show a warning but still attempt — some browsers are more lenient
+      console.warn('Camera access may require HTTPS on this device.');
+    }
+
+    // Start camera — on iOS this may require user gesture, so we also
+    // wire it to a tap on the video element as a fallback
     startCamera(null);
+
+    // Fallback: if the video doesn't start playing within 2s,
+    // show a "tap to start" prompt (helps with iOS gesture requirement)
+    var cameraStartTimeout = setTimeout(function () {
+      if (!currentStream || (videoEl && videoEl.readyState < 2)) {
+        videoEl.style.cursor = 'pointer';
+        videoEl.setAttribute('aria-label', 'Tap to start camera');
+        var tapHandler = function () {
+          videoEl.removeEventListener('click', tapHandler);
+          videoEl.removeEventListener('touchend', tapHandler);
+          videoEl.style.cursor = '';
+          startCamera(null);
+        };
+        videoEl.addEventListener('click', tapHandler);
+        videoEl.addEventListener('touchend', tapHandler);
+      }
+    }, 2000);
 
     // Wire up switch camera button
     if (switchBtn) {
