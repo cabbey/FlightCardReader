@@ -22,7 +22,7 @@ from .config import AppConfig, load_config
 from .database import create_all, init_engine
 from .exceptions import ConfigError
 from .routers import admin, review, scan
-from .services.extraction_service import ExtractionService
+from .services.extraction_service import ExtractionMode, ExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -154,12 +154,31 @@ async def lifespan(app: FastAPI):
 
     # 5. Instantiate and start the extraction service
     from .database import _async_session as session_factory
+    from .services import record_service
 
     extraction_service = ExtractionService(
         config=config, session_factory=session_factory
     )
+
+    # Roll back any records stuck in "processing" from a previous unclean shutdown
+    async with session_factory() as db:
+        stale_records = await record_service.get_by_status(db, "processing")
+        for record in stale_records:
+            await record_service.set_status(db, record.id, "pending")
+        if stale_records:
+            logger.info(
+                "Rolled back %d stale 'processing' records to 'pending'",
+                len(stale_records),
+            )
+
     await extraction_service.start()
     logger.info("Extraction service started.")
+
+    # In immediate mode, enqueue any pending records (including rolled-back ones)
+    if extraction_service.mode == ExtractionMode.IMMEDIATE:
+        dispatched = await extraction_service.trigger_pending()
+        if dispatched:
+            logger.info("Enqueued %d pending records for extraction", dispatched)
 
     # 6. Configure routers with their dependencies
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
