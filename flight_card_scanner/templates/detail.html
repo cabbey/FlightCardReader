@@ -400,7 +400,7 @@
       <dt>Flight Date</dt>
       <dd>
         <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
-          <span class="field-display">{{ record.flight_date or "—" }}</span>
+          <span class="field-display">{{ record.flight_date.strftime("%A %-m/%-d/%Y") if record.flight_date else "—" }}</span>
         </div>
       </dd>
 
