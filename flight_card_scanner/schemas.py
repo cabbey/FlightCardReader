@@ -68,6 +68,14 @@ class FlightCardExtraction(BaseModel):
     total_impulse_value: Optional[float] = None
     total_impulse_unit: Optional[str] = Field(None, description="'Ns' or 'LbsFt'")
     notes: Optional[str] = None
+    recovery_plan: Optional[str] = Field(
+        None,
+        description=(
+            "The recovery method for this flight. Often a pre-printed option "
+            "(parachute, streamer, tumble, dual deploy, none) that is circled or "
+            "underlined. This is separate from notes."
+        ),
+    )
     flag_heads_up: Optional[bool] = None
     flag_first_flight: Optional[bool] = None
     flag_complex: Optional[bool] = None

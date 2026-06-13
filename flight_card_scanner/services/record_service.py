@@ -148,6 +148,9 @@ async def apply_extraction(
     if extracted.notes is not None:
         overflow["notes"] = extracted.notes
 
+    if extracted.recovery_plan is not None:
+        overflow["recovery_plan"] = extracted.recovery_plan
+
     if extracted.flight_date_raw is not None:
         overflow["raw_flight_date"] = extracted.flight_date_raw
 

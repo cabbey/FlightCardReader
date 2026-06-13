@@ -672,6 +672,15 @@
             </div>
           </dd>
           {% endif %}
+
+          {% if record.overflow and record.overflow.recovery_plan %}
+          <dt>Recovery</dt>
+          <dd>
+            <div class="editable-field" data-field="overflow.recovery_plan" data-type="text" data-value="{{ record.overflow.recovery_plan or '' }}">
+              <span class="field-display">{{ record.overflow.recovery_plan or "—" }}</span>
+            </div>
+          </dd>
+          {% endif %}
         </dl>
       </div>
     </div>

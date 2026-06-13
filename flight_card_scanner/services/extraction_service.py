@@ -38,32 +38,126 @@ EXTRACTION_PROMPT = """/no_think
 You are an expert data-entry assistant reading a handwritten rocketry flight card.
 Extract every readable field from the card image and return them as a JSON object.
 Use null for any field that is absent, illegible, or not present on this card.
-Do not invent or infer values — only transcribe what is physically written or marked on the card.
+Do not invent values that have no basis on the card. However, you SHOULD apply domain knowledge
+to correct obvious handwriting misreads and ambiguous characters — for example, interpreting "O"
+as "0" in a numeric field, or reading "I218R" instead of "I2/8R" for a motor designation. Use
+the format expectations described below to guide your interpretation of ambiguous handwriting.
 
-IMPORTANT: Some fields use pre-printed options that the flier selects by circling one of the words.
-Treat a circled pre-printed word exactly as if the flier had written that word. Specifically:
-- Flight date: some cards pre-print the days of the week; a circled day name is the flight date.
-- Recovery plan: some cards pre-print recovery method options (e.g. "parachute", "streamer",
-  "tumble"); a circled option is the recovery method.
-- Post-flight evaluation: some cards pre-print outcome options ("good", "motor", "airframe",
-  "recovery"); a circled option is the evaluation_outcome value.
+IMPORTANT — HOW USERS SELECT PRE-PRINTED OPTIONS:
+Many fields on these cards have pre-printed options. Users indicate their selection by:
+- CIRCLING the chosen word/option (most common)
+- UNDERLINING the chosen word/option
+- Putting a CHECK MARK next to the option
+Any of these markings means that option is the selected value. Treat them identically.
+Do NOT interpret circling as parentheses around text. If you see what looks like "(Sun)" on a
+line of pre-printed day names, that is "Sun" circled — the selected value is "Sun".
+Do NOT default to the first option in a list. If no option is clearly marked, use null.
+
+IMPORTANT — SELECTION BIAS WARNING:
+When multiple options are pre-printed (e.g. "NAR TRA CAR" or "Fri Sat Sun"), you MUST
+carefully look for which specific option has a circle, underline, or check mark.
+Do NOT assume the first item is selected. If "TRA" is circled/underlined, the value is "TRA"
+even though "NAR" appears first in the list. Look at the ink marks, not the position.
 
 Fields to extract:
-- flight_date_raw: the date or day-of-week written or circled on the card, exactly as it appears
+
+- flight_date_raw: the date or day-of-week written or circled/underlined on the card, exactly
+  as it appears. Some cards pre-print days of the week; a circled or underlined day name is the
+  flight date.
+  CONTEXT: This event runs from {event_start} to {event_end}. All flights occurred within this
+  date range. If you read a numeric date that seems impossible (e.g. "36" for a day in April),
+  consider that sloppy handwriting may be the cause — "36" is likely "26", "31" might be "21",
+  etc. Apply reasonable corrections when the literal reading would be an invalid date but a
+  similar-looking digit gives a valid date within the event range.
+
 - flier_name: the name of the person flying the rocket
-- membership: club (TRA/NAR/CAR), member_number (may have trailing letter), cert_level (integer)
+
+- membership:
+  - club: one of TRA, NAR, or CAR — and ONLY one of these exact values, or null.
+    These are usually pre-printed on the card and the user circles or underlines their club.
+    Look carefully at which one is actually marked — do NOT default to the first one in the
+    list. If none is clearly marked/selected, use null. Do NOT combine them (e.g. "NAR/TRA"
+    is NOT valid — if you cannot determine which single club is selected, use null).
+  - member_number: This is ALWAYS a numeric string (digits only, possibly with a trailing
+    letter suffix like "12345A"). It is a membership ID number. When reading handwriting in
+    this field, strongly prefer digit interpretations: O→0, I→1, l→1, S→5, B→8, R is NOT
+    valid — if you see what looks like "R" consider it might be "12" written together.
+    The typical format is 4-6 digits, optionally followed by a single letter.
+  - cert_level: an integer 0-4. On many cards this is pre-printed as "L __" (the letter L
+    followed by a blank) and the flier writes a single digit (0, 1, 2, 3, or 4) on the blank
+    line after the L. The "L" stands for "Level" — do not include it in the value. Just
+    extract the number that follows it.
+
 - rocket_name, rocket_manufacturer, rocket_colors (list of strings)
+  Note: "Scratch" is a common manufacturer value meaning the rocket was scratch-built
+  (designed and built by the flier, not from a kit). Treat it as a valid manufacturer name.
+
 - measurements: diameter, diameter_unit, length, length_unit, weight, weight_unit
+
 - motors: nested by stage then motor; each motor has manufacturer, leading_number,
           letter (e.g. M), number (e.g. 2560), suffix (e.g. WT or -P or /180)
+  MOTOR DESIGNATION FORMAT: A motor designation follows a strict pattern:
+    [leading_number-]<letter><number>[-suffix]
+  Where:
+  - leading_number (optional): a numeric prefix like "54" or "75" (diameter in mm),
+    separated from the rest by a dash
+  - letter: a SINGLE uppercase letter (A through T) indicating the total impulse class.
+    Common letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P
+  - number: the average thrust in Newtons, ALWAYS a pure integer (no slashes, no decimals).
+    Examples: 218, 1000, 2560, 450, 65, 180
+  - suffix (optional): a code for propellant type like "WT", "R", "P", "DMS", "SS", "FJ"
+  
+  CRITICAL: The letter+number portion has NO separator between them. "I218" is correct
+  (letter=I, number=218). If you see what looks like "I2/8" or "I2-8", that is almost
+  certainly "I218" with a misread — the slash or dash is actually part of a digit.
+  The number is always an integer: 218, not 2/8 or 2.8.
+  
+  Examples of valid motor designations:
+  - "H128W" → letter=H, number=128, suffix=W
+  - "I218R" → letter=I, number=218, suffix=R
+  - "J450DMS" → letter=J, number=450, suffix=DMS
+  - "54-M2560WT" → leading_number=54, letter=M, number=2560, suffix=WT
+  - "K600" → letter=K, number=600 (no suffix)
+  
+  Common manufacturer prefixes (written before the designation, space-separated):
+  AT (Aerotech), CTI (Cesaroni), AMW (Animal Motor Works), Loki, SCR (Sky Ripper)
+
 - total_impulse_value (number), total_impulse_unit (Ns or LbsFt)
-- notes: all free-text notes, recovery plan (including circled pre-printed option if present),
-         competition notes, tracking info
-- flag_heads_up, flag_first_flight, flag_complex: boolean checkboxes
+
+- recovery_plan: The recovery method for this flight. Often pre-printed options like
+  "parachute", "streamer", "tumble", "dual deploy", "none" that the user circles or
+  underlines. May also be handwritten. This is a SEPARATE field from notes — do NOT merge
+  recovery plan information into the notes field.
+  IMPORTANT: When you see patterns like "main @ ______" or "drogue @ ______", the "@" symbol
+  means "at" (deployment altitude/event). The value after "@" is almost always "apogee" or an
+  altitude measurement like "500m", "1000'", "800ft", "300m AGL". These are recovery deployment
+  events, NOT email addresses. For example "main @ 700'" means "main parachute deploys at 700
+  feet". "drogue @ apogee" means "drogue deploys at apogee". Transcribe these exactly as written.
+
+- notes: Free-text notes, competition notes, tracking info. Do NOT include recovery plan
+  here — that goes in the recovery_plan field above.
+  Same as recovery_plan: if you see "@ <value>" patterns in notes, the "@" means "at" and
+  the value is an altitude or event, not an email address.
+
+- flag_heads_up, flag_first_flight, flag_complex: These are CHECKBOX fields (boolean).
+  CRITICAL: The checkbox or check area is ALWAYS positioned to the LEFT of its text label,
+  or ABOVE its text label. It is NEVER to the right of the label.
+  A checkbox is true ONLY if there is a check mark, X, or filled box IN the checkbox area
+  (left of or above the label). Do NOT interpret any writing to the RIGHT of a label as
+  indicating that checkbox is checked — that writing belongs to a different field (often
+  fso_rso_initials is written to the right of the checkboxes area).
+  If there is no clear mark in the checkbox area, the value is false.
+
 - rack (string or number), pad (integer)
-- fso_rso_initials: safety officer initials
-- evaluation_outcome: one of good / motor / airframe / recovery
-  (may be a circled pre-printed word rather than handwritten text)
+
+- fso_rso_initials: safety officer initials. These are often written to the RIGHT of the
+  checkbox area or in a dedicated "RSO" or "FSO" field. Do not confuse these initials with
+  checkbox markings.
+
+- evaluation_outcome: one of good / motor / airframe / recovery.
+  Usually pre-printed options that the user circles or underlines. Look for which specific
+  word is marked — do not default to the first option.
+
 - evaluation_comments: any comments written in the evaluation section
 """
 
@@ -313,7 +407,10 @@ class ExtractionService:
             "messages": [
                 {
                     "role": "user",
-                    "content": EXTRACTION_PROMPT,
+                    "content": EXTRACTION_PROMPT.format(
+                        event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
+                        event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
+                    ),
                     "images": [b64_image],
                 }
             ],
