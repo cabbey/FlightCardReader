@@ -397,19 +397,117 @@
   <!-- Extracted fields column -->
   <div class="fields-column">
     <dl class="fields-grid">
-      <dt>Flight Date</dt>
-      <dd>
-        <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
-          <span class="field-display">{{ record.flight_date.strftime("%A %-m/%-d/%Y") if record.flight_date else "—" }}</span>
-        </div>
-      </dd>
+      <!-- ═══ FLIER ═══ -->
+      <div class="fields-section-title">Flier</div>
 
-      <dt>Flier Name</dt>
+      <dt>Name</dt>
       <dd>
         <div class="editable-field" data-field="flier_name" data-type="text" data-value="{{ record.flier_name or '' }}">
           <span class="field-display">{{ record.flier_name or "—" }}</span>
         </div>
       </dd>
+
+      {% if record.overflow and record.overflow.membership %}
+      <dt>Club</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
+          <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
+        </div>
+      </dd>
+      <dt>Member #</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
+          <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
+        </div>
+      </dd>
+      <dt>Cert Level</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
+          <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
+        </div>
+      </dd>
+      {% endif %}
+
+      <!-- ═══ ROCKET ═══ -->
+      <div class="fields-section-title">Rocket</div>
+
+      {% if record.overflow and record.overflow.rocket_name %}
+      <dt>Name</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
+          <span class="field-display">{{ record.overflow.rocket_name or "—" }}</span>
+        </div>
+      </dd>
+      {% endif %}
+
+      {% if record.overflow and record.overflow.rocket_manufacturer %}
+      <dt>Manufacturer</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
+          <span class="field-display">{{ record.overflow.rocket_manufacturer or "—" }}</span>
+        </div>
+      </dd>
+      {% endif %}
+
+      {% if record.overflow and record.overflow.rocket_colors %}
+      <dt>Colors</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
+          <span class="field-display">{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</span>
+        </div>
+      </dd>
+      {% endif %}
+
+      {% if record.overflow and record.overflow.rocket_measurements %}
+        {% set m = record.overflow.rocket_measurements %}
+        {% if m.diameter is not none %}
+        <dt>Diameter</dt>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.diameter }}</span>
+          </div>
+          <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.diameter_unit or "" }}</span>
+          </div>
+        </dd>
+        {% endif %}
+        {% if m.length is not none %}
+        <dt>Length</dt>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.length }}</span>
+          </div>
+          <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.length_unit or "" }}</span>
+          </div>
+        </dd>
+        {% endif %}
+        {% if m.weight is not none %}
+        <dt>Weight</dt>
+        <dd>
+          <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.weight }}</span>
+          </div>
+          <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
+            <span class="field-display">{{ m.weight_unit or "" }}</span>
+          </div>
+        </dd>
+        {% endif %}
+      {% endif %}
+
+      <!-- ═══ FLIGHT ═══ -->
+      <div class="fields-section-title">Flight</div>
+
+      {% if record.overflow and record.overflow.motors %}
+      <dt>Motors</dt>
+      <dd>
+        {% for stage in record.overflow.motors %}
+          {% for motor in stage %}
+            {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
+          {% endfor %}{% if not loop.last %} / {% endif %}
+        {% endfor %}
+      </dd>
+      {% endif %}
 
       <dt>Total Impulse</dt>
       <dd>
@@ -441,6 +539,30 @@
           <span class="field-display">{{ "Yes" if record.flag_complex else ("No" if record.flag_complex is not none else "—") }}</span>
         </div>
       </dd>
+
+      {% if record.overflow and record.overflow.notes %}
+      <dt>Notes</dt>
+      <dd>
+        <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
+          <span class="field-display">{{ record.overflow.notes | replace("\n", "<br>") | safe }}</span>
+        </div>
+      </dd>
+      {% endif %}
+
+      <!-- ═══ LAUNCH ═══ -->
+      <div class="fields-section-title">Launch</div>
+
+      <dt>Flight Date</dt>
+      <dd>
+        <div class="editable-field" data-field="flight_date" data-type="date" data-value="{{ record.flight_date.isoformat() if record.flight_date else '' }}">
+          <span class="field-display">{{ record.flight_date.strftime("%A %-m/%-d/%Y") if record.flight_date else "—" }}</span>
+        </div>
+      </dd>
+
+      {% if record.overflow and record.overflow.raw_flight_date %}
+      <dt>Raw Flight Date</dt>
+      <dd>{{ record.overflow.raw_flight_date }}</dd>
+      {% endif %}
 
       <dt>Rack</dt>
       <dd>
@@ -477,120 +599,10 @@
         </div>
       </dd>
 
+      <!-- ═══ META ═══ -->
+      <div class="fields-section-title">Record</div>
       <dt>Created</dt>
       <dd>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</dd>
-
-      <!-- Overflow fields -->
-      {% if record.overflow %}
-        {% if record.overflow.membership %}
-        <div class="fields-section-title">Membership</div>
-        <dt>Club</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
-            <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
-          </div>
-        </dd>
-        <dt>Member #</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
-            <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
-          </div>
-        </dd>
-        <dt>Cert Level</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
-            <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
-          </div>
-        </dd>
-        {% endif %}
-
-        {% if record.overflow.rocket_name or record.overflow.rocket_manufacturer or record.overflow.rocket_colors %}
-        <div class="fields-section-title">Rocket</div>
-        <dt>Name</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
-            <span class="field-display">{{ record.overflow.rocket_name or "—" }}</span>
-          </div>
-        </dd>
-        <dt>Manufacturer</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
-            <span class="field-display">{{ record.overflow.rocket_manufacturer or "—" }}</span>
-          </div>
-        </dd>
-        <dt>Colors</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
-            <span class="field-display">{{ record.overflow.rocket_colors | join(", ") if record.overflow.rocket_colors else "—" }}</span>
-          </div>
-        </dd>
-        {% endif %}
-
-        {% if record.overflow.rocket_measurements %}
-        <div class="fields-section-title">Measurements</div>
-          {% set m = record.overflow.rocket_measurements %}
-          {% if m.diameter is not none %}
-          <dt>Diameter</dt>
-          <dd>
-            <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.diameter }}</span>
-            </div>
-            <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.diameter_unit or "" }}</span>
-            </div>
-          </dd>
-          {% endif %}
-          {% if m.length is not none %}
-          <dt>Length</dt>
-          <dd>
-            <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.length }}</span>
-            </div>
-            <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.length_unit or "" }}</span>
-            </div>
-          </dd>
-          {% endif %}
-          {% if m.weight is not none %}
-          <dt>Weight</dt>
-          <dd>
-            <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.weight }}</span>
-            </div>
-            <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
-              <span class="field-display">{{ m.weight_unit or "" }}</span>
-            </div>
-          </dd>
-          {% endif %}
-        {% endif %}
-
-        {% if record.overflow.motors %}
-        <div class="fields-section-title">Motors</div>
-        <dt>Designation</dt>
-        <dd>
-          {% for stage in record.overflow.motors %}
-            {% for motor in stage %}
-              {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
-            {% endfor %}{% if not loop.last %} / {% endif %}
-          {% endfor %}
-        </dd>
-        {% endif %}
-
-        {% if record.overflow.notes %}
-        <div class="fields-section-title">Notes</div>
-        <dt>Notes</dt>
-        <dd>
-          <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
-            <span class="field-display">{{ record.overflow.notes | replace("\n", "<br>") | safe }}</span>
-          </div>
-        </dd>
-        {% endif %}
-
-        {% if record.overflow.raw_flight_date %}
-        <dt>Raw Flight Date</dt>
-        <dd>{{ record.overflow.raw_flight_date }}</dd>
-        {% endif %}
-      {% endif %}
     </dl>
 
     <div class="button-row">
