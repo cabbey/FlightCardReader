@@ -749,10 +749,10 @@
       ctx.textBaseline = 'middle';
       ctx.fillText('+', cx - 4, cy - 4);
     } else if (countdown > 0 && countdown <= COUNTDOWN_CHARS.length) {
-      // Show countdown: map stableFrameCount to descending ❺❹❸❷❶
-      var charIndex = COUNTDOWN_CHARS.length - countdown;
+      // Show countdown: stableFrameCount 1=❺, 2=❹, 3=❸, 4=❷, 5=❶
+      var charIndex = countdown - 1;
       var countdownChar = COUNTDOWN_CHARS[charIndex];
-      ctx.font = 'bold 64px sans-serif';
+      ctx.font = 'bold 192px sans-serif';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
