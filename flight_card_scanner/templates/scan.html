@@ -11,7 +11,9 @@
 
   /* Live preview state */
   .preview-wrapper {
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 10;
     width: 100%;
     background: #000;
     border-radius: 4px;
@@ -22,7 +24,7 @@
     display: block;
     width: 100%;
     height: auto;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   #overlay {
@@ -32,6 +34,29 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
+  }
+
+  /* Debug overlay */
+  .debug-overlay {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.3rem 0.5rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .debug-overlay.active {
+    display: block;
   }
 
   /* Confirmation state */
@@ -48,6 +73,22 @@
     height: auto;
     border-radius: 4px;
     margin: 0 auto;
+    cursor: zoom-in;
+    transition: none;
+  }
+
+  #capturePreview.zoomed {
+    width: auto;
+    max-width: none;
+    cursor: zoom-out;
+  }
+
+  .confirmation-preview-wrapper {
+    overflow: auto;
+    max-height: 70vh;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+  }
   }
 
   /* Controls */
@@ -203,11 +244,12 @@
   .video-options {
     display: flex;
     justify-content: center;
+    gap: 1.5rem;
     margin-top: 0.5rem;
     font-size: 0.85rem;
   }
 
-  .mirror-toggle {
+  .option-toggle {
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -215,11 +257,15 @@
     color: #4b5563;
   }
 
-  .mirror-toggle input {
+  .option-toggle input {
     cursor: pointer;
   }
 
   #preview.mirrored {
+    transform: scaleX(-1);
+  }
+
+  #overlay.mirrored {
     transform: scaleX(-1);
   }
 
@@ -283,6 +329,7 @@
     <div class="preview-wrapper">
       <video id="preview" autoplay playsinline webkit-playsinline muted></video>
       <canvas id="overlay"></canvas>
+      <div class="debug-overlay" id="debugOverlay"></div>
 
       <!-- Error: Camera permission denied -->
       <div id="errorPermission" class="error-overlay" role="alert">
@@ -311,15 +358,20 @@
     </div>
 
     <div class="video-options">
-      <label class="mirror-toggle">
-        <input type="checkbox" id="mirrorToggle"> Mirror video
+      <label class="option-toggle">
+        <input type="checkbox" id="mirrorToggle"> Mirror
+      </label>
+      <label class="option-toggle">
+        <input type="checkbox" id="debugToggle"> Debug
       </label>
     </div>
   </div>
 
   <!-- State 2: Confirmation Screen -->
   <div id="confirmationState" class="confirmation-wrapper">
-    <img id="capturePreview" alt="Captured flight card" />
+    <div class="confirmation-preview-wrapper" id="previewWrapper">
+      <img id="capturePreview" alt="Captured flight card" />
+    </div>
     <div class="controls">
       <button id="acceptBtn" type="button">&#x2714; Accept</button>
       <button id="rejectBtn" type="button">&#x2718; Retake</button>
@@ -357,10 +409,23 @@
 // Mirror toggle
 document.getElementById('mirrorToggle').addEventListener('change', function() {
   var video = document.getElementById('preview');
+  var overlay = document.getElementById('overlay');
   if (this.checked) {
     video.classList.add('mirrored');
+    overlay.classList.add('mirrored');
   } else {
     video.classList.remove('mirrored');
+    overlay.classList.remove('mirrored');
+  }
+});
+
+// Debug toggle
+document.getElementById('debugToggle').addEventListener('change', function() {
+  var debugEl = document.getElementById('debugOverlay');
+  if (this.checked) {
+    debugEl.classList.add('active');
+  } else {
+    debugEl.classList.remove('active');
   }
 });
 

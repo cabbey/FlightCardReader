@@ -51,25 +51,27 @@ Many fields on these cards have pre-printed options. Users indicate their select
 - Putting a CHECK MARK next to the option
 Any of these markings means that option is the selected value. Treat them identically.
 Do NOT interpret circling as parentheses around text. If you see what looks like "(Sun)" on a
-line of pre-printed day names, that is "Sun" circled — the selected value is "Sun".
+line of pre-printed day names, that is usually "Sun" circled — the selected value is "Sun".
 Do NOT default to the first option in a list. If no option is clearly marked, use null.
 
 IMPORTANT — SELECTION BIAS WARNING:
 When multiple options are pre-printed (e.g. "NAR TRA CAR" or "Fri Sat Sun"), you MUST
 carefully look for which specific option has a circle, underline, or check mark.
 Do NOT assume the first item is selected. If "TRA" is circled/underlined, the value is "TRA"
-even though "NAR" appears first in the list. Look at the ink marks, not the position.
+even though "NAR" appears first in the list. Look at the hand drawn ink marks, not the position.
 
 Fields to extract:
 
 - flight_date_raw: the date or day-of-week written or circled/underlined on the card, exactly
   as it appears. Some cards pre-print days of the week; a circled or underlined day name is the
-  flight date.
+  flight date. Many cards also have an expiration date for club membership below, be sure not to
+  use the expiration date as the flight date.
   CONTEXT: This event runs from {event_start} to {event_end}. All flights occurred within this
   date range. If you read a numeric date that seems impossible (e.g. "36" for a day in April),
   consider that sloppy handwriting may be the cause — "36" is likely "26", "31" might be "21",
   etc. Apply reasonable corrections when the literal reading would be an invalid date but a
-  similar-looking digit gives a valid date within the event range.
+  similar-looking digit gives a valid date within the event range. If there is any conflict
+  between a written numeric date and a selected day of week, use the day of week. 
 
 - flier_name: the name of the person flying the rocket
 
@@ -98,30 +100,33 @@ Fields to extract:
 - motors: nested by stage then motor; each motor has manufacturer, leading_number,
           letter (e.g. M), number (e.g. 2560), suffix (e.g. WT or -P or /180)
   MOTOR DESIGNATION FORMAT: A motor designation follows a strict pattern:
-    [leading_number-]<letter><number>[-suffix]
+    [leading_number]<letter><number>[-suffix]
   Where:
-  - leading_number (optional): a numeric prefix like "54" or "75" (diameter in mm),
-    separated from the rest by a dash
-  - letter: a SINGLE uppercase letter (A through T) indicating the total impulse class.
-    Common letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P
+  - leading_number (optional, rare): the total thrust in Newtons, ALWAYS a pure integer (no slashes, no decimals).
+  - letter: a SINGLE uppercase letter (A through O) indicating the total impulse class.
+    Common letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O
   - number: the average thrust in Newtons, ALWAYS a pure integer (no slashes, no decimals).
     Examples: 218, 1000, 2560, 450, 65, 180
-  - suffix (optional): a code for propellant type like "WT", "R", "P", "DMS", "SS", "FJ"
+  - suffix (optional): a code for propellant type like "WT", "R", "P", "DMS", "SS", "FJ" may be
+    listed after a space or a hyphen. In smaller motors, this may also be numeric to infidate a
+    delay time.
   
   CRITICAL: The letter+number portion has NO separator between them. "I218" is correct
-  (letter=I, number=218). If you see what looks like "I2/8" or "I2-8", that is almost
+  (letter=I, number=218). If you see what looks like "I2/8" or "I2|8", that is almost
   certainly "I218" with a misread — the slash or dash is actually part of a digit.
   The number is always an integer: 218, not 2/8 or 2.8.
   
   Examples of valid motor designations:
+  - "C6-7"  → letter=C, number=6, suffix=7
   - "H128W" → letter=H, number=128, suffix=W
   - "I218R" → letter=I, number=218, suffix=R
   - "J450DMS" → letter=J, number=450, suffix=DMS
-  - "54-M2560WT" → leading_number=54, letter=M, number=2560, suffix=WT
+  - "54M2560WT" → leading_number=54, letter=M, number=2560, suffix=WT
   - "K600" → letter=K, number=600 (no suffix)
   
-  Common manufacturer prefixes (written before the designation, space-separated):
-  AT (Aerotech), CTI (Cesaroni), AMW (Animal Motor Works), Loki, SCR (Sky Ripper)
+  Common manufacturer prefixes (sometimes written before the designation, space-separated):
+  AT (Aerotech), CTI (Cesaroni), AMW (Animal Motor Works), Loki, Estes, Q-jet, Quest, Sugar,
+  Experimental, or Research
 
 - total_impulse_value (number), total_impulse_unit (Ns or LbsFt)
 
@@ -129,37 +134,41 @@ Fields to extract:
   "parachute", "streamer", "tumble", "dual deploy", "none" that the user circles or
   underlines. May also be handwritten. This is a SEPARATE field from notes — do NOT merge
   recovery plan information into the notes field.
-  IMPORTANT: When you see patterns like "main @ ______" or "drogue @ ______", the "@" symbol
-  means "at" (deployment altitude/event). The value after "@" is almost always "apogee" or an
+  IMPORTANT: When you see patterns like "_____ @ ______", the "@" symbol
+  means (recovery type) "at" (deployment altitude/event). The value before "@" is usually 
+  a type of recovery like "main" or "drogue" for types of parachute, or other recovery methods
+  like "streamer", "tumble", or "chute release". The value after "@" is almost always "apogee" or an
   altitude measurement like "500m", "1000'", "800ft", "300m AGL". These are recovery deployment
   events, NOT email addresses. For example "main @ 700'" means "main parachute deploys at 700
   feet". "drogue @ apogee" means "drogue deploys at apogee". Transcribe these exactly as written.
 
 - notes: Free-text notes, competition notes, tracking info. Do NOT include recovery plan
   here — that goes in the recovery_plan field above.
-  Same as recovery_plan: if you see "@ <value>" patterns in notes, the "@" means "at" and
-  the value is an altitude or event, not an email address.
+  Same as recovery_plan: if you see "<event> @ <value>" patterns in notes, this is unlikely to
+  be an email address.
 
 - flag_heads_up, flag_first_flight, flag_complex: These are CHECKBOX fields (boolean).
-  CRITICAL: The checkbox or check area is ALWAYS positioned to the LEFT of its text label,
-  or ABOVE its text label. It is NEVER to the right of the label.
-  A checkbox is true ONLY if there is a check mark, X, or filled box IN the checkbox area
-  (left of or above the label). Do NOT interpret any writing to the RIGHT of a label as
-  indicating that checkbox is checked — that writing belongs to a different field (often
-  fso_rso_initials is written to the right of the checkboxes area).
-  If there is no clear mark in the checkbox area, the value is false.
+  CRITICAL: The checkbox or check area is ALWAYS an outlined shape adjacent to its text label,
+  it is never a label for a line of text to be written in. A checkbox is true ONLY if there
+  is a check mark, X, slash, or any mark IN or through the checkbox shape, or if the shape is
+  filled in entirely. Do NOT interpret any hand writing near the label as indicating that checkbox
+  is checked — that writing probably belongs to a different field (often fso_rso_initials is
+  written to the right of the checkboxes area). If there is no clear mark in the checkbox area,
+  the value is false.
 
 - rack (string or number), pad (integer)
   If the card contains the words "low power flight card" and the rack field is blank/empty,
-  fill in rack with "L".
+  fill in rack with "L". The rack should be an integer less than 6 or the letters "L", "LP",
+  "Low", or "Low Power"
 
 - fso_rso_initials: safety officer initials. These are often written to the RIGHT of the
   checkbox area or in a dedicated "RSO" or "FSO" field. Do not confuse these initials with
-  checkbox markings.
+  checkbox markings near them.
 
 - evaluation_outcome: one of good / motor / airframe / recovery.
   Usually pre-printed options that the user circles or underlines. Look for which specific
-  word is marked — do not default to the first option.
+  word is marked — do not default to the first option. Some flight cards use older terms:
+  "shred" means "airframe", and "cato" means "motor".
 
 - evaluation_comments: any comments written in the evaluation section
 """
@@ -419,9 +428,22 @@ class ExtractionService:
             ],
             "format": FlightCardExtraction.model_json_schema(),
             "stream": False,
-            "options": {"temperature": 0, "num_ctx": 8192},
+            "options": {"temperature": 0, "num_ctx": 16384, "num_predict": 4096},
             "think": False,
         }
+
+        # Save the request payload as a sidecar .request file (without the base64 image)
+        request_filename = Path(image_path).stem + ".request"
+        request_path = self._config.image_store_path / request_filename
+        try:
+            # Replace the large base64 image with a placeholder for readability
+            request_dump = json.loads(json.dumps(payload))
+            for msg in request_dump.get("messages", []):
+                if "images" in msg:
+                    msg["images"] = [f"<base64 image: {len(b64_image)} chars>"]
+            request_path.write_text(json.dumps(request_dump, indent=2, ensure_ascii=False))
+        except OSError as exc:
+            logger.warning("Failed to write request file %s: %s", request_path, exc)
 
         # Send request to Ollama
         try:

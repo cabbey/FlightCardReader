@@ -14,14 +14,14 @@
   /** Minimum card-area / frame-area ratio for a valid detection */
   var MIN_FILL = 0.15;
 
-  /** Max corner displacement (px) between frames to count as stable */
-  var STABILITY_THRESHOLD = 10;
+  /** Max corner displacement as a fraction of frame width (0.5% = very steady hand-hold) */
+  var STABILITY_THRESHOLD_RATIO = 0.005;
 
   /** Consecutive stable frames required before auto-capture */
-  var STABILITY_FRAMES = 8;
+  var STABILITY_FRAMES = 5;
 
   /** Laplacian variance threshold for focus check */
-  var FOCUS_THRESHOLD = 80.0;
+  var FOCUS_THRESHOLD = 20.0;
 
   /** Minimum output width (px) after perspective correction */
   var OUTPUT_W = 1000;
@@ -32,6 +32,22 @@
   // =========================================================================
   // Module-level State
   // =========================================================================
+
+  /** @type {HTMLDivElement|null} Debug overlay element */
+  var debugOverlayEl = null;
+
+  /**
+   * Log a scanner debug message to console and the debug overlay.
+   * @param {string} msg
+   */
+  function debugLog(msg) {
+    console.log(msg);
+    if (debugOverlayEl) {
+      // Strip the [Scanner] prefix for the on-screen display
+      var display = msg.replace(/^\[Scanner\]\s*/, '');
+      debugOverlayEl.textContent = display;
+    }
+  }
 
   /** @type {MediaDeviceInfo[]} List of available video input devices */
   var cameras = [];
@@ -167,16 +183,20 @@
       // Explicit device requested (e.g. from switchCamera)
       constraints = {
         video: {
-          deviceId: { exact: deviceId }
+          deviceId: { exact: deviceId },
+          width: { ideal: 4032 },
+          height: { ideal: 3024 }
         },
         audio: false
       };
     } else {
       // First call — prefer environment-facing (rear) camera
-      // Keep constraints minimal for maximum iOS compatibility
+      // Request high resolution for quality card images
       constraints = {
         video: {
-          facingMode: { ideal: 'environment' }
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 4032 },
+          height: { ideal: 3024 }
         },
         audio: false
       };
@@ -210,12 +230,42 @@
             break;
           }
         }
+        // Log camera resolution
+        var camW = settings.width || videoEl.videoWidth;
+        var camH = settings.height || videoEl.videoHeight;
+        debugLog('[Scanner] Camera started: ' + camW + 'x' + camH +
+          ' (device: ' + (activeTrack.label || activeDeviceId) + ')');
+
+        // Set preview container aspect ratio to match camera
+        if (camW > 0 && camH > 0) {
+          var wrapper = videoEl.closest('.preview-wrapper');
+          if (wrapper) {
+            var aspectRatio = camW / camH;
+            wrapper.style.aspectRatio = aspectRatio.toString();
+            debugLog('[Scanner] Container aspect ratio set to ' + aspectRatio.toFixed(3));
+          }
+        }
+
+        // Check if camera resolution is sufficient
+        if (camW < OUTPUT_W || camH < OUTPUT_H) {
+          debugLog('[Scanner] WARNING: Camera resolution ' + camW + 'x' + camH +
+            ' is below minimum ' + OUTPUT_W + 'x' + OUTPUT_H +
+            '. Auto-capture will never trigger. Use a higher-resolution camera.');
+          showResolutionWarning(camW, camH);
+        } else {
+          debugLog('[Scanner] Camera resolution is sufficient for auto-capture ' +
+            '(min: ' + OUTPUT_W + 'x' + OUTPUT_H + ')');
+          hideResolutionWarning();
+        }
       }
     } catch (err) {
       // On iOS, if facingMode constraint fails, retry with basic video: true
       if (!deviceId && err.name === 'OverconstrainedError') {
         try {
-          currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          currentStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 4032 }, height: { ideal: 3024 } },
+            audio: false
+          });
           videoEl.srcObject = currentStream;
           await new Promise(function (resolve) {
             videoEl.onloadedmetadata = function () {
@@ -295,17 +345,61 @@
     showError(errorUnsupportedEl);
   }
 
+  /**
+   * Show a warning that camera resolution is too low for auto-capture.
+   *
+   * @param {number} w - Camera width
+   * @param {number} h - Camera height
+   */
+  function showResolutionWarning(w, h) {
+    var existing = document.getElementById('resolutionWarning');
+    if (existing) {
+      existing.style.display = 'block';
+      return;
+    }
+    var warning = document.createElement('div');
+    warning.id = 'resolutionWarning';
+    warning.style.cssText = 'background:#fef3c7;color:#92400e;padding:0.6rem 1rem;border-radius:4px;font-size:0.85rem;margin-top:0.5rem;text-align:center;';
+    warning.textContent = 'Camera resolution (' + w + '×' + h +
+      ') is too low for auto-capture (need ' + OUTPUT_W + '×' + OUTPUT_H +
+      '). Try a different camera or move the device.';
+    var controls = document.querySelector('.controls');
+    if (controls) {
+      controls.parentNode.insertBefore(warning, controls.nextSibling);
+    }
+  }
+
+  /**
+   * Hide the resolution warning.
+   */
+  function hideResolutionWarning() {
+    var existing = document.getElementById('resolutionWarning');
+    if (existing) {
+      existing.style.display = 'none';
+    }
+  }
+
+  // =========================================================================
+  // Detection Pipeline — Constants for downsampled processing
+  // =========================================================================
+
+  /** Target width for the detection frame (downsampled for performance) */
+  var DETECT_W = 960;
+
   // =========================================================================
   // OpenCV.js Detection Pipeline
   // =========================================================================
 
   /**
    * Capture and process a single video frame through the OpenCV.js pipeline.
-   * Steps: draw video → grayscale → blur → Canny → findContours →
-   * approxPolyDP → select largest 4-vertex contour → area check.
+   * The frame is downsampled to DETECT_W for faster processing, then detected
+   * corners are scaled back to full video resolution.
+   *
+   * Steps: draw video → downsample → grayscale → blur → Canny → findContours →
+   * approxPolyDP → select largest 4-vertex contour → area check → scale up.
    *
    * @returns {{corners: Array<{x: number, y: number}>}|null} Detected card
-   *   corners or null if no valid card found.
+   *   corners (in full video coordinates) or null if no valid card found.
    */
   function captureFrame() {
     if (!cvReady || !videoEl || videoEl.readyState < 2) {
@@ -318,7 +412,12 @@
       return null;
     }
 
-    // Ensure offscreen canvas matches video dimensions
+    // Compute downsampled dimensions (maintain aspect ratio)
+    var scale = (vw > DETECT_W) ? (DETECT_W / vw) : 1.0;
+    var dw = Math.round(vw * scale);
+    var dh = Math.round(vh * scale);
+
+    // Ensure offscreen canvas matches full video dimensions (for perspective transform later)
     if (!offscreenCanvas) {
       offscreenCanvas = document.createElement('canvas');
       offscreenCtx = offscreenCanvas.getContext('2d');
@@ -328,11 +427,18 @@
       offscreenCanvas.height = vh;
     }
 
-    // Draw video frame to offscreen canvas
+    // Draw full-resolution video frame to offscreen canvas
     offscreenCtx.drawImage(videoEl, 0, 0, vw, vh);
 
-    // OpenCV Mat from canvas
-    var src = cv.imread(offscreenCanvas);
+    // Create a downsampled canvas for detection
+    var detectCanvas = document.createElement('canvas');
+    detectCanvas.width = dw;
+    detectCanvas.height = dh;
+    var detectCtx = detectCanvas.getContext('2d');
+    detectCtx.drawImage(offscreenCanvas, 0, 0, dw, dh);
+
+    // OpenCV Mat from downsampled canvas
+    var src = cv.imread(detectCanvas);
     var gray = new cv.Mat();
     var blurred = new cv.Mat();
     var edges = new cv.Mat();
@@ -343,17 +449,22 @@
       // Convert to grayscale
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-      // Gaussian blur (5×5, σ=0)
-      var ksize = new cv.Size(5, 5);
+      // Gaussian blur — 7×7 works well at ~960px width
+      var ksize = new cv.Size(7, 7);
       cv.GaussianBlur(gray, blurred, ksize, 0);
 
-      // Canny edge detection (threshold1=75, threshold2=200)
-      cv.Canny(blurred, edges, 75, 200);
+      // Canny edge detection (tuned for downsampled frame)
+      cv.Canny(blurred, edges, 50, 150);
+
+      // Dilate edges slightly to close gaps
+      var dilateKernel = cv.Mat.ones(3, 3, cv.CV_8U);
+      cv.dilate(edges, edges, dilateKernel);
+      dilateKernel.delete();
 
       // Find external contours
       cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      var frameArea = vw * vh;
+      var frameArea = dw * dh;
       var bestContour = null;
       var bestArea = 0;
 
@@ -384,12 +495,13 @@
 
       // Area check: contour area / frame area ≥ MIN_FILL
       if (bestContour && (bestArea / frameArea) >= MIN_FILL) {
-        // Extract corner points from the best contour
+        // Extract corner points and scale back to full resolution
+        var invScale = 1.0 / scale;
         var corners = [];
         for (var j = 0; j < 4; j++) {
           corners.push({
-            x: bestContour.data32S[j * 2],
-            y: bestContour.data32S[j * 2 + 1]
+            x: Math.round(bestContour.data32S[j * 2] * invScale),
+            y: Math.round(bestContour.data32S[j * 2 + 1] * invScale)
           });
         }
         bestContour.delete();
@@ -413,8 +525,7 @@
   /**
    * Check if detected corners are stable compared to previous frame.
    * Compares max corner displacement between current and previous corners.
-   * Requires < STABILITY_THRESHOLD px displacement for STABILITY_FRAMES
-   * consecutive frames.
+   * Threshold is proportional to video width for resolution independence.
    *
    * @param {Array<{x: number, y: number}>} corners - Current frame corners
    * @returns {boolean} True if card has been stable long enough
@@ -425,6 +536,9 @@
       stableFrameCount = 1;
       return false;
     }
+
+    // Compute threshold based on video width
+    var threshold = videoEl.videoWidth * STABILITY_THRESHOLD_RATIO;
 
     // Compute max displacement across all corners
     var maxDisplacement = 0;
@@ -439,7 +553,7 @@
 
     previousCorners = corners;
 
-    if (maxDisplacement < STABILITY_THRESHOLD) {
+    if (maxDisplacement < threshold) {
       stableFrameCount++;
     } else {
       stableFrameCount = 1;
@@ -508,12 +622,40 @@
   }
 
   /**
+   * Check if the detected card region meets minimum size requirements.
+   *
+   * @param {Array<{x: number, y: number}>} corners - Detected card corners
+   * @returns {boolean} True if the card region is large enough
+   */
+  function sizeCheck(corners) {
+    var ordered = orderCorners(corners);
+    var tl = ordered[0], tr = ordered[1], br = ordered[2], bl = ordered[3];
+
+    var widthTop = distance(tl, tr);
+    var widthBottom = distance(bl, br);
+    var computedWidth = Math.max(widthTop, widthBottom);
+
+    var heightLeft = distance(tl, bl);
+    var heightRight = distance(tr, br);
+    var computedHeight = Math.max(heightLeft, heightRight);
+
+    return computedWidth >= OUTPUT_W && computedHeight >= OUTPUT_H;
+  }
+
+  /** Circled number characters for countdown display (index 0 = ❺, index 4 = ❶) */
+  var COUNTDOWN_CHARS = ['\u277A', '\u2779', '\u2778', '\u2777', '\u2776']; // ❺ ❹ ❸ ❷ ❶
+
+  /**
    * Render the detected boundary polygon on the overlay canvas.
    *
    * @param {Array<{x: number, y: number}>|null} corners - Card boundary
    *   corners, or null to clear the overlay.
+   * @param {boolean} [tooSmall=false] - If true, render in red with a
+   *   magnifying glass icon indicating user should get closer.
+   * @param {number} [countdown=0] - Stable frame count (1..STABILITY_FRAMES).
+   *   Displayed as a countdown from ❺ to ❶, capturing after ❶.
    */
-  function renderOverlay(corners) {
+  function renderOverlay(corners, tooSmall, countdown) {
     if (!overlayEl) {
       return;
     }
@@ -545,61 +687,133 @@
     var scaleX = overlayEl.width / vw;
     var scaleY = overlayEl.height / vh;
 
+    var scaledCorners = [];
+    for (var i = 0; i < 4; i++) {
+      var sx = corners[i].x * scaleX;
+      var sy = corners[i].y * scaleY;
+      scaledCorners.push({ x: sx, y: sy });
+    }
+
+    // Choose color based on size
+    var strokeColor = tooSmall ? '#ff3333' : '#00ff00';
+    var fillColor = tooSmall ? 'rgba(255, 50, 50, 0.1)' : 'rgba(0, 255, 0, 0.1)';
+    var dotColor = tooSmall ? '#ff3333' : '#00ff00';
+
     // Draw the polygon
     ctx.beginPath();
-    ctx.moveTo(corners[0].x * scaleX, corners[0].y * scaleY);
-    for (var i = 1; i < 4; i++) {
-      ctx.lineTo(corners[i].x * scaleX, corners[i].y * scaleY);
+    ctx.moveTo(scaledCorners[0].x, scaledCorners[0].y);
+    for (var j = 1; j < 4; j++) {
+      ctx.lineTo(scaledCorners[j].x, scaledCorners[j].y);
     }
     ctx.closePath();
 
-    // Style: green semi-transparent fill with solid border
-    ctx.strokeStyle = '#00ff00';
+    ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 3;
-    ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+    ctx.fillStyle = fillColor;
     ctx.fill();
     ctx.stroke();
 
     // Draw corner dots
-    ctx.fillStyle = '#00ff00';
-    for (var j = 0; j < 4; j++) {
+    ctx.fillStyle = dotColor;
+    for (var k = 0; k < 4; k++) {
       ctx.beginPath();
-      ctx.arc(corners[j].x * scaleX, corners[j].y * scaleY, 6, 0, 2 * Math.PI);
+      ctx.arc(scaledCorners[k].x, scaledCorners[k].y, 6, 0, 2 * Math.PI);
       ctx.fill();
+    }
+
+    // Center point of the bounding box
+    var cx = (scaledCorners[0].x + scaledCorners[1].x + scaledCorners[2].x + scaledCorners[3].x) / 4;
+    var cy = (scaledCorners[0].y + scaledCorners[1].y + scaledCorners[2].y + scaledCorners[3].y) / 4;
+
+    if (tooSmall) {
+      // Draw a magnifying glass icon in the center
+      var iconSize = 24;
+
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 4, iconSize, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 4 + iconSize * 0.7, cy - 4 + iconSize * 0.7);
+      ctx.lineTo(cx - 4 + iconSize * 1.3, cy - 4 + iconSize * 1.3);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      ctx.font = 'bold ' + (iconSize * 1.2) + 'px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+', cx - 4, cy - 4);
+    } else if (countdown > 0 && countdown <= COUNTDOWN_CHARS.length) {
+      // Show countdown: map stableFrameCount to descending ❺❹❸❷❶
+      var charIndex = COUNTDOWN_CHARS.length - countdown;
+      var countdownChar = COUNTDOWN_CHARS[charIndex];
+      ctx.font = 'bold 64px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(countdownChar, cx, cy);
     }
   }
 
   /**
    * Main detection loop — called via requestAnimationFrame.
-   * Processes one frame per tick: capture → stability → focus → auto-capture.
+   * Processes one frame per tick: capture → size check → stability → focus → auto-capture.
    */
+  var _loopLogCounter = 0;
   function detectionLoop() {
     if (!detectionRunning) {
       return;
     }
 
     var result = captureFrame();
+    _loopLogCounter++;
 
     if (result && result.corners) {
-      // Card boundary detected — render overlay
-      renderOverlay(result.corners);
+      // Check if the card region is large enough
+      var largeEnough = sizeCheck(result.corners);
 
-      // Check stability
-      var stable = stabilityCheck(result.corners);
+      if (!largeEnough) {
+        // Card detected but too small — show red overlay with magnifying glass
+        if (_loopLogCounter % 30 === 0) {
+          debugLog('[Scanner] Card detected but too small — get closer');
+        }
+        renderOverlay(result.corners, true, 0);
+        previousCorners = null;
+        stableFrameCount = 0;
+      } else {
+        // Check stability
+        var stable = stabilityCheck(result.corners);
 
-      if (stable) {
-        // Check focus
-        var focused = focusCheck(result.corners);
+        // Card boundary detected and large enough — render green overlay with countdown
+        renderOverlay(result.corners, false, stableFrameCount);
 
-        if (focused) {
-          // Card is stable and in focus — trigger auto-capture
-          detectionRunning = false;
-          triggerAutoCapture(result.corners);
-          return;
+        if (stable) {
+          // Check focus
+          var focused = focusCheck(result.corners);
+
+          if (focused) {
+            debugLog('[Scanner] Auto-capture triggered — stable & focused');
+            // Card is stable, large enough, and in focus — trigger auto-capture
+            detectionRunning = false;
+            triggerAutoCapture(result.corners);
+            return;
+          } else {
+            if (_loopLogCounter % 30 === 0) {
+              debugLog('[Scanner] Stable but focus check failed — hold steady');
+            }
+          }
         }
       }
     } else {
       // No card detected — clear overlay, reset stability
+      if (_loopLogCounter % 60 === 0) {
+        debugLog('[Scanner] No card boundary detected');
+      }
       renderOverlay(null);
       previousCorners = null;
       stableFrameCount = 0;
@@ -613,11 +827,15 @@
    */
   function startDetection() {
     if (!cvReady) {
+      debugLog('[Scanner] OpenCV not ready — detection deferred');
       return;
     }
+    debugLog('[Scanner] Detection loop started (video: ' +
+      videoEl.videoWidth + 'x' + videoEl.videoHeight + ')');
     detectionRunning = true;
     previousCorners = null;
     stableFrameCount = 0;
+    _loopLogCounter = 0;
     rafId = requestAnimationFrame(detectionLoop);
   }
 
@@ -705,10 +923,13 @@
     var heightRight = distance(tr, br);
     var computedHeight = Math.max(heightLeft, heightRight);
 
-    // Enforce minimum output dimensions
-    var outW = Math.max(OUTPUT_W, Math.round(computedWidth));
-    var outH = Math.max(OUTPUT_H, Math.round(computedHeight));
-
+    // Enforce minimum output dimensions — reject if too small (never upscale)
+    var outW = Math.round(computedWidth);
+    var outH = Math.round(computedHeight);
+    if (outW < OUTPUT_W || outH < OUTPUT_H) {
+      // Card region is too small — caller should show "get closer" feedback
+      return null;
+    }
     // Read the source frame from offscreen canvas
     var src = cv.imread(offscreenCanvas);
     var dst = new cv.Mat();
@@ -747,7 +968,7 @@
       outputCanvas.height = outH;
       cv.imshow(outputCanvas, dst);
 
-      var dataUrl = outputCanvas.toDataURL('image/jpeg', 0.92);
+      var dataUrl = outputCanvas.toDataURL('image/jpeg', 0.95);
       return dataUrl;
     } catch (e) {
       console.error('perspectiveTransform failed:', e);
@@ -1072,10 +1293,41 @@
     }
     if (capturePreviewEl) {
       capturePreviewEl.src = dataUrl;
+      capturePreviewEl.classList.remove('zoomed');
     }
 
     // Add swipe-up gesture listener
     addSwipeListeners();
+  }
+
+  /**
+   * Toggle zoom on the capture preview image.
+   * Tap once to zoom to 100% (native pixels), tap again to fit-to-width.
+   */
+  function togglePreviewZoom(e) {
+    if (!capturePreviewEl) return;
+
+    if (capturePreviewEl.classList.contains('zoomed')) {
+      capturePreviewEl.classList.remove('zoomed');
+    } else {
+      capturePreviewEl.classList.add('zoomed');
+
+      // Scroll to the tapped point after zooming
+      var wrapper = document.getElementById('previewWrapper');
+      if (wrapper) {
+        var rect = wrapper.getBoundingClientRect();
+        var tapX = (e.clientX || (e.changedTouches && e.changedTouches[0].clientX) || rect.width / 2) - rect.left;
+        var tapY = (e.clientY || (e.changedTouches && e.changedTouches[0].clientY) || rect.height / 2) - rect.top;
+        // Scale tap position to full image coordinates
+        var scaleX = capturePreviewEl.naturalWidth / rect.width;
+        var scaleY = capturePreviewEl.naturalHeight / rect.height;
+        // After class change, scroll to center the tapped point
+        setTimeout(function() {
+          wrapper.scrollLeft = (tapX * scaleX) - (wrapper.clientWidth / 2);
+          wrapper.scrollTop = (tapY * scaleY) - (wrapper.clientHeight / 2);
+        }, 0);
+      }
+    }
   }
 
   /**
@@ -1100,6 +1352,7 @@
     }
     if (capturePreviewEl) {
       capturePreviewEl.src = '';
+      capturePreviewEl.classList.remove('zoomed');
     }
 
     // Reset stability and restart detection
@@ -1154,6 +1407,7 @@
     switchBtn = document.getElementById('switchCamera');
     errorPermissionEl = document.getElementById('errorPermission');
     errorUnsupportedEl = document.getElementById('errorUnsupported');
+    debugOverlayEl = document.getElementById('debugOverlay');
 
     // Grab DOM references — confirmation screen
     livePreviewStateEl = document.getElementById('livePreviewState');
@@ -1225,6 +1479,11 @@
           submitCard(capturedDataUrl);
         }
       });
+    }
+
+    // Wire up tap-to-zoom on capture preview
+    if (capturePreviewEl) {
+      capturePreviewEl.addEventListener('click', togglePreviewZoom);
     }
 
     // Initialize OpenCV.js detection pipeline
