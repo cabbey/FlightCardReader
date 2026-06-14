@@ -36,11 +36,21 @@ class RocketMeasurements(BaseModel):
 class MotorEntry(BaseModel):
     """A single motor designation parsed into components."""
 
-    manufacturer: Optional[str] = None
-    leading_number: Optional[str] = None  # CTI prefix e.g. "54"
-    letter: str  # e.g. "M"
-    number: str  # e.g. "2560"
-    suffix: Optional[str] = None  # e.g. "WT", "-P", "/180"
+    manufacturer: Optional[str] = Field(
+        None, description="Motor manufacturer, e.g. 'AT', 'CTI', 'AMW', 'Loki'"
+    )
+    leading_number: Optional[str] = Field(
+        None, description="Numeric prefix before the letter, e.g. '54' in '54-M2560WT'"
+    )
+    letter: str = Field(
+        description="Single uppercase impulse class letter, e.g. 'H', 'I', 'J', 'K', 'M'"
+    )
+    number: str = Field(
+        description="Average thrust as an integer string, e.g. '128', '218', '2560'. No commas, no decimals."
+    )
+    suffix: Optional[str] = Field(
+        None, description="Propellant/variant code after the number, e.g. 'WT', 'R', 'DMS', 'P'"
+    )
 
 
 class FlightCardExtraction(BaseModel):

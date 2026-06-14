@@ -94,6 +94,9 @@ Fields to extract:
 - rocket_name, rocket_manufacturer, rocket_colors (list of strings)
   Note: "Scratch" is a common manufacturer value meaning the rocket was scratch-built
   (designed and built by the flier, not from a kit). Treat it as a valid manufacturer name.
+  Other common manufacturers are: Estes, Wildman, LOC, LOC Precision, Aerotech, MadCow, Missle
+  Works, MAC Performance, Binder, and Apogee. These fields are not super important, just take
+  whatever looks right at first, do not put much effort into it.
 
 - measurements: diameter, diameter_unit, length, length_unit, weight, weight_unit
 
@@ -168,10 +171,58 @@ Fields to extract:
 - evaluation_outcome: one of good / motor / airframe / recovery.
   Usually pre-printed options that the user circles or underlines. Look for which specific
   word is marked — do not default to the first option. Some flight cards use older terms:
-  "shred" means "airframe", and "cato" means "motor".
+  "shred" means "airframe", and "cato" means "motor". Do not just default to the first
+  pre-printed value if there is no hand written indication that it was selected.
 
 - evaluation_comments: any comments written in the evaluation section
 """
+
+
+# ---------------------------------------------------------------------------
+# Schema simplification for constrained decoding
+# ---------------------------------------------------------------------------
+
+
+def _simplify_schema(schema: dict) -> dict:
+    """Simplify a Pydantic v2 JSON schema for better LLM constrained decoding.
+
+    Pydantic v2 emits `anyOf: [{type: X}, {type: null}]` for Optional fields,
+    which many constrained decoding engines struggle with. This replaces those
+    patterns with a simpler `type: X` (allowing the field to be omitted via
+    default, but not requiring the LLM to generate the union structure).
+    """
+    import copy
+    schema = copy.deepcopy(schema)
+    _simplify_node(schema)
+    # Also simplify $defs
+    for defn in schema.get("$defs", {}).values():
+        _simplify_node(defn)
+    return schema
+
+
+def _simplify_node(node: dict) -> None:
+    """Recursively simplify anyOf patterns in a schema node."""
+    if not isinstance(node, dict):
+        return
+
+    props = node.get("properties", {})
+    for key, prop in props.items():
+        if "anyOf" in prop:
+            # Check if it's the common Optional pattern: [{type: X}, {type: null}]
+            any_of = prop["anyOf"]
+            non_null = [t for t in any_of if t != {"type": "null"}]
+            has_null = {"type": "null"} in any_of
+            if has_null and len(non_null) == 1:
+                # Replace anyOf with the non-null type
+                simple_type = non_null[0]
+                prop.pop("anyOf")
+                prop.update(simple_type)
+        # Recurse into nested objects
+        if "properties" in prop:
+            _simplify_node(prop)
+        if "items" in prop:
+            if isinstance(prop["items"], dict):
+                _simplify_node(prop["items"])
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +493,7 @@ class ExtractionService:
                     "images": [b64_image],
                 }
             ],
-            "format": FlightCardExtraction.model_json_schema(),
+            "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
             "stream": False,
             "options": {"temperature": 0, "num_ctx": 16384, "num_predict": 4096},
             "think": False,
