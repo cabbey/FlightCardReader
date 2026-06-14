@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # Extraction Prompt
 # ---------------------------------------------------------------------------
 
-EXTRACTION_PROMPT = """/no_think
+EXTRACTION_PROMPT = """
 You are an expert data-entry assistant reading a handwritten rocketry flight card.
 Extract every readable field from the card image and return them as a JSON object.
 Use null for any field that is absent, illegible, or not present on this card.
@@ -100,8 +100,8 @@ Fields to extract:
 
 - measurements: diameter, diameter_unit, length, length_unit, weight, weight_unit
 
-- motors: nested by stage then motor; each motor has manufacturer, leading_number,
-          letter (e.g. M), number (e.g. 2560), suffix (e.g. WT or -P or /180)
+- motors: A flat array of motor objects used in this flight (most cards have just one).
+  Each motor object has: manufacturer, leading_number, letter, number, suffix.
   MOTOR DESIGNATION FORMAT: A motor designation follows a strict pattern:
     [leading_number]<letter><number>[-suffix]
   Where:
@@ -132,6 +132,9 @@ Fields to extract:
   Experimental, or Research
 
 - total_impulse_value (number), total_impulse_unit (Ns or LbsFt)
+  ONLY fill this in if there is a dedicated field/line on the card for total impulse.
+  Do NOT calculate or infer it from the motor designation. Many low-power flight cards
+  do not have this field at all — use null in that case.
 
 - recovery_plan: The recovery method for this flight. Often pre-printed options like
   "parachute", "streamer", "tumble", "dual deploy", "none" that the user circles or
@@ -188,15 +191,19 @@ def _simplify_schema(schema: dict) -> dict:
 
     Pydantic v2 emits `anyOf: [{type: X}, {type: null}]` for Optional fields,
     which many constrained decoding engines struggle with. This replaces those
-    patterns with a simpler `type: X` (allowing the field to be omitted via
-    default, but not requiring the LLM to generate the union structure).
+    patterns with a simpler `type: X`. Also inlines $ref definitions to avoid
+    reference resolution issues.
     """
     import copy
     schema = copy.deepcopy(schema)
-    _simplify_node(schema)
-    # Also simplify $defs
-    for defn in schema.get("$defs", {}).values():
+    defs = schema.pop("$defs", {})
+    # Simplify anyOf in definitions first
+    for defn in defs.values():
         _simplify_node(defn)
+    # Simplify the top-level schema
+    _simplify_node(schema)
+    # Inline all $ref references
+    _inline_refs(schema, defs)
     return schema
 
 
@@ -223,6 +230,24 @@ def _simplify_node(node: dict) -> None:
         if "items" in prop:
             if isinstance(prop["items"], dict):
                 _simplify_node(prop["items"])
+
+
+def _inline_refs(node, defs: dict) -> None:
+    """Recursively inline all $ref references using the provided definitions."""
+    if isinstance(node, dict):
+        for key in list(node.keys()):
+            if key == "$ref" and isinstance(node["$ref"], str):
+                ref_name = node["$ref"].split("/")[-1]
+                if ref_name in defs:
+                    # Replace the $ref with the inlined definition
+                    node.pop("$ref")
+                    import copy
+                    node.update(copy.deepcopy(defs[ref_name]))
+            else:
+                _inline_refs(node[key], defs)
+    elif isinstance(node, list):
+        for item in node:
+            _inline_refs(item, defs)
 
 
 # ---------------------------------------------------------------------------
@@ -491,11 +516,15 @@ class ExtractionService:
                         event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
                     ),
                     "images": [b64_image],
+                },
+                {
+                    "role": "system",
+                    "content": "/no_think"
                 }
             ],
             "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
             "stream": False,
-            "options": {"temperature": 0, "num_ctx": 16384, "num_predict": 4096},
+            "options": {"temperature": 0, "num_ctx": 32768, "num_predict": 8192},
             "think": False,
         }
 
@@ -549,8 +578,55 @@ class ExtractionService:
                 raw_response=raw_content or "(empty)",
             )
 
+        # Strip any <think>...</think> block that the model may have embedded in content
+        cleaned_content = raw_content.strip()
+        if "<think>" in cleaned_content:
+            # Remove everything from <think> to </think>
+            cleaned_content = re.sub(
+                r"<think>.*?</think>", "", cleaned_content, flags=re.DOTALL
+            ).strip()
+
+        # Also handle case where <think> is present but </think> is missing
+        # (model started thinking but didn't close the tag before JSON)
+        if cleaned_content.startswith("<think>"):
+            # Find the start of the JSON object
+            json_start = cleaned_content.find("{")
+            if json_start >= 0:
+                cleaned_content = cleaned_content[json_start:]
+
+        if not cleaned_content:
+            raise ExtractionParseError(
+                message="LLM content was only a think block with no JSON",
+                raw_response=raw_content,
+            )
+
+        # Pre-process: fix measurements where model merged value+unit into one field
         try:
-            return FlightCardExtraction.model_validate_json(raw_content)
+            parsed_json = json.loads(cleaned_content)
+            measurements = parsed_json.get("measurements")
+            if measurements and isinstance(measurements, dict):
+                for dim in ("diameter", "length", "weight"):
+                    val = measurements.get(dim)
+                    unit_key = f"{dim}_unit"
+                    if isinstance(val, str):
+                        # Try to split trailing unit from number, e.g. "2in" -> 2, "in"
+                        match = re.match(r"^([0-9]*\.?[0-9]+)\s*([a-zA-Z\"\']+)$", val)
+                        if match:
+                            measurements[dim] = float(match.group(1))
+                            if not measurements.get(unit_key):
+                                measurements[unit_key] = match.group(2)
+                        else:
+                            # Try to parse as plain number
+                            try:
+                                measurements[dim] = float(val)
+                            except ValueError:
+                                pass
+            cleaned_content = json.dumps(parsed_json)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass  # Let Pydantic handle the error
+
+        try:
+            return FlightCardExtraction.model_validate_json(cleaned_content)
         except ValidationError as exc:
             raise ExtractionParseError(
                 message=f"Failed to parse LLM response: {exc}",

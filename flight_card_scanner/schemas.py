@@ -36,20 +36,23 @@ class RocketMeasurements(BaseModel):
 class MotorEntry(BaseModel):
     """A single motor designation parsed into components."""
 
+    model_config = {"coerce_numbers_to_str": True}
+
     manufacturer: Optional[str] = Field(
         None, description="Motor manufacturer, e.g. 'AT', 'CTI', 'AMW', 'Loki'"
     )
     leading_number: Optional[str] = Field(
-        None, description="Numeric prefix before the letter, e.g. '54' in '54-M2560WT'"
+        None, description="Total thrust as an integer string, e.g. '128', '218', '2560'. No commas, no decimals, rarely used"
     )
     letter: str = Field(
         description="Single uppercase impulse class letter, e.g. 'H', 'I', 'J', 'K', 'M'"
     )
     number: str = Field(
-        description="Average thrust as an integer string, e.g. '128', '218', '2560'. No commas, no decimals."
+        description="Average thrust as an integer string, e.g. '128', '218', '2560'. Digits only, no commas or decimals.",
+        pattern=r"^\d+$",
     )
     suffix: Optional[str] = Field(
-        None, description="Propellant/variant code after the number, e.g. 'WT', 'R', 'DMS', 'P'"
+        None, description="Propellant/variant code after the number, separated by a space or a dash, e.g. 'WT', 'R', 'DMS', 'P', '7'"
     )
 
 
@@ -71,9 +74,9 @@ class FlightCardExtraction(BaseModel):
     rocket_manufacturer: Optional[str] = None
     rocket_colors: Optional[list[str]] = None
     measurements: Optional[RocketMeasurements] = None
-    motors: Optional[list[list[MotorEntry]]] = Field(
+    motors: Optional[list[MotorEntry]] = Field(
         None,
-        description="Outer list = stages (index 0 = stage 1). Inner list = motors in that stage.",
+        description="List of motors used in this flight.",
     )
     total_impulse_value: Optional[float] = None
     total_impulse_unit: Optional[str] = Field(None, description="'Ns' or 'LbsFt'")

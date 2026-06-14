@@ -624,10 +624,15 @@
           {% if record.overflow and record.overflow.motors %}
           <dt>Motors</dt>
           <dd>
-            {% for stage in record.overflow.motors %}
-              {% for motor in stage %}
+            {% for motor in record.overflow.motors %}
+              {% if motor is mapping %}
                 {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
-              {% endfor %}{% if not loop.last %} / {% endif %}
+              {% else %}
+                {# Legacy nested format #}
+                {% for m in motor %}
+                  {{ m.manufacturer or "" }}{{ " " if m.manufacturer else "" }}{{ m.leading_number or "" }}{{ m.letter }}{{ m.number }}{{ m.suffix or "" }}{% if not loop.last %}, {% endif %}
+                {% endfor %}{% if not loop.last %} / {% endif %}
+              {% endif %}
             {% endfor %}
           </dd>
           {% endif %}

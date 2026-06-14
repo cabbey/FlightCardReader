@@ -138,13 +138,22 @@ async def apply_extraction(
         overflow["rocket_colors"] = extracted.rocket_colors
 
     if extracted.measurements is not None:
-        overflow["rocket_measurements"] = extracted.measurements.model_dump()
+        measurements = extracted.measurements.model_dump()
+        # Normalize " to "in" for units
+        for unit_key in ("diameter_unit", "length_unit", "weight_unit"):
+            if measurements.get(unit_key) == '"':
+                measurements[unit_key] = "in"
+        # If diameter or length is missing a unit but the other has one, share it
+        d_unit = measurements.get("diameter_unit")
+        l_unit = measurements.get("length_unit")
+        if d_unit and not l_unit and measurements.get("length") is not None:
+            measurements["length_unit"] = d_unit
+        elif l_unit and not d_unit and measurements.get("diameter") is not None:
+            measurements["diameter_unit"] = l_unit
+        overflow["rocket_measurements"] = measurements
 
     if extracted.motors is not None:
-        overflow["motors"] = [
-            [motor.model_dump() for motor in stage]
-            for stage in extracted.motors
-        ]
+        overflow["motors"] = [motor.model_dump() for motor in extracted.motors]
 
     if extracted.notes is not None:
         overflow["notes"] = extracted.notes
@@ -256,9 +265,7 @@ def motor_designation_str(overflow: dict[str, Any] | None) -> str | None:
 
     Examples:
         - Single motor: "AT M2560-WT"
-        - Cluster: "2×AT J450-DMS"
-        - Multi-stage: "AT M2560-WT / AT K600-WT"
-        - Clustered multi-stage: "2×AT J450-DMS / AT K600-WT"
+        - Multiple motors: "AT M2560-WT / AT K600-WT"
 
     Args:
         overflow: The overflow dict from a FlightRecord, or None.
@@ -274,13 +281,19 @@ def motor_designation_str(overflow: dict[str, Any] | None) -> str | None:
     if not motors:
         return None
 
-    # motors is a list of stages; each stage is a list of motor dicts
-    stage_strs: list[str] = []
-    for stage in motors:
-        if stage:  # skip empty stages
-            stage_strs.append(_format_stage(stage))
+    # motors is a flat list of motor dicts (or legacy nested list of stages)
+    # Detect legacy format: list of lists
+    if motors and isinstance(motors[0], list):
+        # Legacy nested format — flatten
+        motor_strs: list[str] = []
+        for stage in motors:
+            for motor in stage:
+                motor_strs.append(_format_motor(motor))
+    else:
+        # New flat format
+        motor_strs = [_format_motor(m) for m in motors if m]
 
-    if not stage_strs:
+    if not motor_strs:
         return None
 
-    return " / ".join(stage_strs)
+    return " / ".join(motor_strs)
