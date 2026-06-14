@@ -408,10 +408,26 @@ class ExtractionService:
             OllamaUnavailableError: If the Ollama endpoint returns an HTTP error.
             ExtractionParseError: If the LLM response cannot be validated.
         """
-        # Read and base64-encode the image
+        # Read image, resize to 1600px tall for LLM context efficiency, then base64-encode
         full_path = self._config.image_store_path / image_path
         image_bytes = full_path.read_bytes()
-        b64_image = base64.b64encode(image_bytes).decode("ascii")
+
+        from io import BytesIO
+        from PIL import Image
+
+        img = Image.open(BytesIO(image_bytes))
+        target_height = 1600
+        if img.height > target_height:
+            scale = target_height / img.height
+            new_width = int(img.width * scale)
+            img = img.resize((new_width, target_height), Image.LANCZOS)
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            resized_bytes = buf.getvalue()
+        else:
+            resized_bytes = image_bytes
+
+        b64_image = base64.b64encode(resized_bytes).decode("ascii")
 
         # Build the Ollama /api/chat payload
         payload = {
