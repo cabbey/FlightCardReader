@@ -290,24 +290,52 @@ async def detail_record(
     llm_raw_json = None
     llm_content_json = None
     llm_thinking = None
+    llm_content_thinking = None  # thinking embedded in the content field
     json_filename = Path(record_obj.image_path).stem + ".json"
     json_path = config.image_store_path / json_filename
     if json_path.exists():
         try:
+            import re as _re
+
             llm_raw_json = json.loads(json_path.read_text())
             # Extract interpreted parts
             msg = llm_raw_json.get("message", {})
-            # Content is the structured JSON output
+
+            # Content field — may contain <think> block before the JSON
             content_str = msg.get("content", "")
             if content_str and content_str.strip():
-                try:
-                    llm_content_json = json.loads(content_str)
-                except json.JSONDecodeError:
-                    llm_content_json = content_str  # fallback to raw string
-            # Thinking block
+                cleaned = content_str.strip()
+
+                # Extract any <think>...</think> embedded in content
+                think_match = _re.search(
+                    r"<think>(.*?)</think>", cleaned, flags=_re.DOTALL
+                )
+                if think_match:
+                    llm_content_thinking = think_match.group(1).strip()
+                    cleaned = _re.sub(
+                        r"<think>.*?</think>", "", cleaned, flags=_re.DOTALL
+                    ).strip()
+                elif cleaned.startswith("<think>"):
+                    # Unclosed think tag — everything before { is thinking
+                    json_start = cleaned.find("{")
+                    if json_start >= 0:
+                        think_part = cleaned[:json_start]
+                        # Strip the <think> tag
+                        think_part = think_part.replace("<think>", "").strip()
+                        if think_part:
+                            llm_content_thinking = think_part
+                        cleaned = cleaned[json_start:]
+
+                # Parse the remaining content as JSON
+                if cleaned:
+                    try:
+                        llm_content_json = json.loads(cleaned)
+                    except json.JSONDecodeError:
+                        llm_content_json = cleaned  # fallback to raw string
+
+            # Thinking block (separate field from Ollama)
             thinking_str = msg.get("thinking", "")
             if thinking_str and thinking_str.strip():
-                # Strip <think> tags if present
                 thinking_str = thinking_str.strip()
                 if thinking_str.startswith("<think>"):
                     thinking_str = thinking_str[7:]
@@ -328,5 +356,6 @@ async def detail_record(
             "llm_raw_json": llm_raw_json,
             "llm_content_json": llm_content_json,
             "llm_thinking": llm_thinking,
+            "llm_content_thinking": llm_content_thinking,
         },
     )

@@ -749,12 +749,16 @@
   </div>
 </div>
 
-{% if llm_content_json or llm_thinking %}
+{% if llm_content_json or llm_thinking or llm_content_thinking %}
 <details class="raw-json-section">
   <summary>Interpreted LLM Output</summary>
   {% if llm_content_json %}
   <h4 style="margin: 0.75rem 0 0.25rem; font-size: 0.8rem; color: #4b5563;">Extracted Data</h4>
   <pre>{{ llm_content_json | tojson(indent=2) }}</pre>
+  {% endif %}
+  {% if llm_content_thinking %}
+  <h4 style="margin: 0.75rem 0 0.25rem; font-size: 0.8rem; color: #4b5563;">Thinking (from content)</h4>
+  <pre>{{ llm_content_thinking }}</pre>
   {% endif %}
   {% if llm_thinking %}
   <h4 style="margin: 0.75rem 0 0.25rem; font-size: 0.8rem; color: #4b5563;">Thinking</h4>
