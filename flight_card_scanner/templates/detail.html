@@ -626,11 +626,11 @@
           <dd>
             {% for motor in record.overflow.motors %}
               {% if motor is mapping %}
-                {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ motor.leading_number or "" }}{{ motor.letter }}{{ motor.number }}{{ motor.suffix or "" }}{% if not loop.last %}, {% endif %}
+                {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}{% if not loop.last %}, {% endif %}
               {% else %}
                 {# Legacy nested format #}
                 {% for m in motor %}
-                  {{ m.manufacturer or "" }}{{ " " if m.manufacturer else "" }}{{ m.leading_number or "" }}{{ m.letter }}{{ m.number }}{{ m.suffix or "" }}{% if not loop.last %}, {% endif %}
+                  {{ m.manufacturer or "" }}{{ " " if m.manufacturer else "" }}{{ (m.leading_number ~ "-") if m.leading_number else "" }}{{ m.letter }}{{ m.number }}{{ (" - " ~ m.suffix) if m.suffix else "" }}{% if not loop.last %}, {% endif %}
                 {% endfor %}{% if not loop.last %} / {% endif %}
               {% endif %}
             {% endfor %}

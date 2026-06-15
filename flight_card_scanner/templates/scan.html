@@ -84,10 +84,41 @@
   }
 
   .confirmation-preview-wrapper {
+    position: relative;
     overflow: auto;
     max-height: 70vh;
     border-radius: 4px;
     border: 1px solid #ddd;
+  }
+
+  .rotate-btn {
+    position: absolute;
+    top: 0.5rem;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  .rotate-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .rotate-ccw {
+    left: 0.5rem;
+  }
+
+  .rotate-cw {
+    right: 0.5rem;
   }
   }
 
@@ -370,6 +401,8 @@
   <!-- State 2: Confirmation Screen -->
   <div id="confirmationState" class="confirmation-wrapper">
     <div class="confirmation-preview-wrapper" id="previewWrapper">
+      <button class="rotate-btn rotate-ccw" id="rotateCCW" type="button" aria-label="Rotate counter-clockwise">&#x21BA;</button>
+      <button class="rotate-btn rotate-cw" id="rotateCW" type="button" aria-label="Rotate clockwise">&#x21BB;</button>
       <img id="capturePreview" alt="Captured flight card" />
     </div>
     <div class="controls">

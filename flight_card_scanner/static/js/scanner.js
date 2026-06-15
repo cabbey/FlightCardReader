@@ -184,8 +184,8 @@
       constraints = {
         video: {
           deviceId: { exact: deviceId },
-          width: { ideal: 4032 },
-          height: { ideal: 3024 }
+          width: { ideal: 3840 },
+          height: { ideal: 2160 }
         },
         audio: false
       };
@@ -195,8 +195,8 @@
       constraints = {
         video: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 4032 },
-          height: { ideal: 3024 }
+          width: { ideal: 3840 },
+          height: { ideal: 2160 }
         },
         audio: false
       };
@@ -233,6 +233,12 @@
         // Log camera resolution
         var camW = settings.width || videoEl.videoWidth;
         var camH = settings.height || videoEl.videoHeight;
+        // If dimensions still not available, wait one more frame
+        if (camW === 0 || camH === 0) {
+          await new Promise(function(resolve) { requestAnimationFrame(resolve); });
+          camW = videoEl.videoWidth;
+          camH = videoEl.videoHeight;
+        }
         debugLog('[Scanner] Camera started: ' + camW + 'x' + camH +
           ' (device: ' + (activeTrack.label || activeDeviceId) + ')');
 
@@ -263,7 +269,7 @@
       if (!deviceId && err.name === 'OverconstrainedError') {
         try {
           currentStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 4032 }, height: { ideal: 3024 } },
+            video: { width: { ideal: 3840 }, height: { ideal: 2160 } },
             audio: false
           });
           videoEl.srcObject = currentStream;
@@ -852,6 +858,78 @@
   }
 
   // =========================================================================
+  // Image Rotation
+  // =========================================================================
+
+  /** Current rotation applied to the captured image (degrees, multiple of 90) */
+  var captureRotation = 0;
+
+  /**
+   * Rotate a JPEG data URL by the given degrees (90, 180, 270).
+   *
+   * @param {string} dataUrl - Source image data URL
+   * @param {number} degrees - Rotation in degrees (must be multiple of 90)
+   * @returns {Promise<string>} Rotated image data URL
+   */
+  function rotateDataUrl(dataUrl, degrees) {
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var rad = (degrees * Math.PI) / 180;
+
+        if (degrees === 90 || degrees === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(rad);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * Apply rotation to the current captured image and update the preview.
+   *
+   * @param {number} addDegrees - Degrees to add (90 for CW, -90 for CCW)
+   */
+  async function applyRotation(addDegrees) {
+    if (!capturedDataUrl) return;
+
+    captureRotation = (captureRotation + addDegrees + 360) % 360;
+
+    if (captureRotation === 0) {
+      // Back to original
+      capturePreviewEl.src = capturedDataUrl;
+    } else {
+      var rotated = await rotateDataUrl(capturedDataUrl, captureRotation);
+      capturePreviewEl.src = rotated;
+    }
+    // Reset zoom state
+    capturePreviewEl.classList.remove('zoomed');
+  }
+
+  /**
+   * Get the final (rotated) data URL for submission.
+   *
+   * @returns {Promise<string>} The data URL with rotation applied
+   */
+  async function getFinalDataUrl() {
+    if (captureRotation === 0) {
+      return capturedDataUrl;
+    }
+    return rotateDataUrl(capturedDataUrl, captureRotation);
+  }
+
+  // =========================================================================
   // Perspective Transform and Auto-Capture
   // =========================================================================
 
@@ -1010,8 +1088,8 @@
   }
 
   /**
-   * Trigger auto-capture: apply perspective transform, play shutter sound,
-   * and transition to the confirmation screen.
+   * Trigger auto-capture: apply perspective transform, auto-rotate if landscape,
+   * play shutter sound, and transition to the confirmation screen.
    *
    * @param {Array<{x: number, y: number}>} corners - Detected card corners
    */
@@ -1027,11 +1105,24 @@
     // Play shutter sound
     playShutterSound();
 
-    // Store the captured data URL
+    // Store the captured data URL (original, unrotated)
     capturedDataUrl = dataUrl;
+    captureRotation = 0;
 
-    // Transition to confirmation screen (State 2)
-    transitionToConfirmation(dataUrl);
+    // Check if image is landscape (width > height) and auto-rotate
+    var img = new Image();
+    img.onload = function() {
+      if (img.width > img.height) {
+        // Landscape — auto-rotate 90° CW
+        captureRotation = 90;
+        rotateDataUrl(dataUrl, 90).then(function(rotated) {
+          transitionToConfirmation(rotated);
+        });
+      } else {
+        transitionToConfirmation(dataUrl);
+      }
+    };
+    img.src = dataUrl;
   }
 
   // =========================================================================
@@ -1144,7 +1235,9 @@
     if (deltaY > 80) {
       // Swipe up detected — accept the card
       if (capturedDataUrl) {
-        submitCard(capturedDataUrl);
+        getFinalDataUrl().then(function(finalUrl) {
+          submitCard(finalUrl);
+        });
       }
     }
   }
@@ -1476,7 +1569,9 @@
     if (acceptBtn) {
       acceptBtn.addEventListener('click', function () {
         if (capturedDataUrl && typeof submitCard === 'function') {
-          submitCard(capturedDataUrl);
+          getFinalDataUrl().then(function(finalUrl) {
+            submitCard(finalUrl);
+          });
         }
       });
     }
@@ -1484,6 +1579,22 @@
     // Wire up tap-to-zoom on capture preview
     if (capturePreviewEl) {
       capturePreviewEl.addEventListener('click', togglePreviewZoom);
+    }
+
+    // Wire up rotation buttons
+    var rotateCCW = document.getElementById('rotateCCW');
+    var rotateCW = document.getElementById('rotateCW');
+    if (rotateCCW) {
+      rotateCCW.addEventListener('click', function(e) {
+        e.stopPropagation();
+        applyRotation(-90);
+      });
+    }
+    if (rotateCW) {
+      rotateCW.addEventListener('click', function(e) {
+        e.stopPropagation();
+        applyRotation(90);
+      });
     }
 
     // Initialize OpenCV.js detection pipeline

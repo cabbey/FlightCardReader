@@ -220,31 +220,32 @@ async def update_fields(
 def _format_motor(motor: dict[str, Any]) -> str:
     """Format a single motor dict into a designation string.
 
-    Format: [manufacturer ][[leading_number]-]letter+number[-suffix]
+    Format: [manufacturer ][[leading_number]-]letter+number[ - suffix]
 
-    Suffix rules:
-    - If suffix starts with '-' or '/', use as-is
-    - Otherwise prepend '-'
+    Suffix is always separated by " - " for readability.
     """
     parts: list[str] = []
 
-    # Core designation: [leading_number-]letter+number[-suffix]
+    # Core designation: [leading_number-]letter+number
     core = ""
     if motor.get("leading_number"):
         core += f"{motor['leading_number']}-"
     core += f"{motor['letter']}{motor['number']}"
-    if motor.get("suffix"):
-        suffix = motor["suffix"]
-        if suffix.startswith("-") or suffix.startswith("/"):
-            core += suffix
-        else:
-            core += f"-{suffix}"
 
     # Manufacturer prefix (space-separated from core)
     if motor.get("manufacturer"):
         parts.append(motor["manufacturer"])
 
     parts.append(core)
+
+    # Suffix separated by " - "
+    if motor.get("suffix"):
+        suffix = motor["suffix"]
+        # Strip any leading - or / that the model may have included
+        suffix = suffix.lstrip("-/")
+        parts.append("-")
+        parts.append(suffix)
+
     return " ".join(parts)
 
 
