@@ -76,20 +76,11 @@ Fields to extract:
 - flier_name: the name of the person flying the rocket
 
 - membership:
-  - club: one of TRA, NAR, or CAR — and ONLY one of these exact values, or null.
-    These are usually pre-printed on the card and the user circles or underlines their club.
-    Look carefully at which one is actually marked — do NOT default to the first one in the
-    list. If none is clearly marked/selected, use null. Do NOT combine them (e.g. "NAR/TRA"
-    is NOT valid — if you cannot determine which single club is selected, use null).
   - member_number: This is ALWAYS a numeric string (digits only, possibly with a trailing
     letter suffix like "12345A"). It is a membership ID number. When reading handwriting in
     this field, strongly prefer digit interpretations: O→0, I→1, l→1, S→5, B→8, R is NOT
     valid — if you see what looks like "R" consider it might be "12" written together.
     The typical format is 4-6 digits, optionally followed by a single letter.
-  - cert_level: an integer 0-4. On many cards this is pre-printed as "L __" (the letter L
-    followed by a blank) and the flier writes a single digit (0, 1, 2, 3, or 4) on the blank
-    line after the L. The "L" stands for "Level" — do not include it in the value. Just
-    extract the number that follows it.
 
 - rocket_name, rocket_manufacturer, rocket_colors (list of strings)
   Note: "Scratch" is a common manufacturer value meaning the rocket was scratch-built

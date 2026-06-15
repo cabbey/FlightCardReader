@@ -220,11 +220,16 @@ async def update_fields(
 def _format_motor(motor: dict[str, Any]) -> str:
     """Format a single motor dict into a designation string.
 
-    Format: [manufacturer ][[leading_number]-]letter+number[ - suffix]
+    Format: [Nx ][manufacturer ][[leading_number]-]letter+number[ - suffix]
 
-    Suffix is always separated by " - " for readability.
+    Quantity prefix shown only when > 1. Suffix separated by " - ".
     """
     parts: list[str] = []
+
+    # Quantity prefix for clusters
+    qty = motor.get("quantity", 1)
+    if qty and qty > 1:
+        parts.append(f"{qty}×")
 
     # Core designation: [leading_number-]letter+number
     core = ""

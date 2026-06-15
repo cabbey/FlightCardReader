@@ -54,6 +54,9 @@ class MotorEntry(BaseModel):
     suffix: Optional[str] = Field(
         None, description="Propellant/variant code after the number, separated by a space or a dash, e.g. 'WT', 'R', 'DMS', 'P', '7'"
     )
+    quantity: int = Field(
+        default=1, description="Number of this motor used (for clusters). Defaults to 1."
+    )
 
 
 class FlightCardExtraction(BaseModel):
