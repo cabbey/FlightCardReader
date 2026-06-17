@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -102,6 +103,20 @@ def _matches_search(record: FlightRecord, q_lower: str) -> bool:
         if motor_str and q_lower in motor_str.lower():
             return True
     return False
+
+
+def _build_event_dates(config: "AppConfig") -> list[dict[str, str]]:
+    """Build a list of {value, label} dicts for every date in the event range."""
+    dates = []
+    current = config.event_date_range.start
+    end = config.event_date_range.end
+    while current <= end:
+        dates.append({
+            "value": current.isoformat(),
+            "label": current.strftime("%A %-m/%-d"),
+        })
+        current += timedelta(days=1)
+    return dates
 
 
 # ---------------------------------------------------------------------------
@@ -376,5 +391,6 @@ async def detail_record(
             "llm_content_thinking": llm_content_thinking,
             "tc_metadata": _thrustcurve_service._metadata if _thrustcurve_service else None,
             "enriched_motors": enriched_motors,
+            "event_dates": _build_event_dates(config),
         },
     )
