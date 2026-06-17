@@ -187,6 +187,13 @@ async def reports_overview(
         if r.extraction_status == "extracted":
             extracted_records.append(r)
 
+    # Collect failed records for display
+    failed_records = [
+        {"id": r.id, "flier_name": r.flier_name or "Unknown"}
+        for r in all_records
+        if r.extraction_status == "extraction_failed"
+    ]
+
     # Overall stats (extracted records only)
     overall_stats = _compute_stats(extracted_records)
 
@@ -236,6 +243,7 @@ async def reports_overview(
             "extracted_count": len(extracted_records),
             "overall_stats": overall_stats,
             "day_summaries": day_summaries,
+            "failed_records": failed_records,
         },
     )
 
