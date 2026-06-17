@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from .config import AppConfig, load_config
 from .database import create_all, init_engine
 from .exceptions import ConfigError
-from .routers import admin, review, scan
+from .routers import admin, reports, review, scan
 from .services.extraction_service import ExtractionMode, ExtractionService
 
 logger = logging.getLogger(__name__)
@@ -187,6 +187,7 @@ async def lifespan(app: FastAPI):
     review.configure(
         templates=templates, config=config, extraction_service=extraction_service
     )
+    reports.configure(templates=templates, config=config)
 
     # Mount /images now that we know the path and it exists
     app.mount(
@@ -221,4 +222,5 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # Include routers
 app.include_router(scan.router)
 app.include_router(review.router)
+app.include_router(reports.router)
 app.include_router(admin.router)

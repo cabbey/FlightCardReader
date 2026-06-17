@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .report-nav {
+    margin-bottom: 1rem;
+  }
+
+  .report-nav a {
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .report-nav a:hover {
+    text-decoration: underline;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .summary-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .summary-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .summary-card .label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stats-table th,
+  .stats-table td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .stats-table th {
+    background: #f9fafb;
+    font-weight: 600;
+  }
+
+  .stats-table td.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stats-table th.numeric {
+    text-align: right;
+  }
+
+  .motor-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .motor-pill {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e40af;
+  }
+
+  @media (max-width: 600px) {
+    .summary-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="report-nav">
+  <a href="/reports">← Back to Reports</a>
+</nav>
+
+<h2 style="margin:0 0 1rem; font-size:1.2rem;">{{ date_label }}</h2>
+
+<!-- Summary Cards -->
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="value">{{ card_count }}</div>
+    <div class="label">Cards</div>
+  </div>
+  <div class="summary-card">
+    <div class="value">{{ flight_count }}</div>
+    <div class="label">Flights</div>
+  </div>
+  <div class="summary-card">
+    <div class="value">{{ "%.1f"|format(total_impulse_ns) }}</div>
+    <div class="label">Total Ns</div>
+  </div>
+</div>
+
+<!-- Motor Counts by Letter Class -->
+{% if motor_counts %}
+<h3 class="section-title">Motors by Impulse Class</h3>
+<div class="motor-pills">
+  {% for letter, count in motor_counts.items() %}
+  <span class="motor-pill">{{ letter }}: {{ count }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Flyer Statistics -->
+{% if flyer_stats %}
+<h3 class="section-title">Flyer Statistics</h3>
+<div style="overflow-x: auto;">
+  <table class="stats-table">
+    <thead>
+      <tr>
+        <th>Flyer</th>
+        <th class="numeric">Flights</th>
+        <th class="numeric">Motors</th>
+        <th>Breakdown</th>
+        <th class="numeric">Impulse (Ns)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, stats in flyer_stats.items() %}
+      <tr>
+        <td>{{ name }}</td>
+        <td class="numeric">{{ stats.flights }}</td>
+        <td class="numeric">{{ stats.motor_total }}</td>
+        <td>
+          {% for letter, count in stats.motors.items() %}
+          <span class="motor-pill">{{ letter }}: {{ count }}</span>
+          {% endfor %}
+        </td>
+        <td class="numeric">{{ "%.1f"|format(stats.impulse_ns) if stats.impulse_ns else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

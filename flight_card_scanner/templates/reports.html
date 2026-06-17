@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .report-nav {
+    margin-bottom: 1rem;
+  }
+
+  .report-nav a {
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .report-nav a:hover {
+    text-decoration: underline;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .summary-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .summary-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .summary-card .label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stats-table th,
+  .stats-table td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .stats-table th {
+    background: #f9fafb;
+    font-weight: 600;
+  }
+
+  .stats-table td.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stats-table th.numeric {
+    text-align: right;
+  }
+
+  .day-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .day-header h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .day-header h3 a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .day-header h3 a:hover {
+    text-decoration: underline;
+  }
+
+  .day-header .day-card-count {
+    font-size: 0.8rem;
+    color: #6b7280;
+  }
+
+  .motor-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .motor-pill {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e40af;
+  }
+
+  .inline-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: #374151;
+  }
+
+  .inline-stats .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .inline-stats .stat-value {
+    font-weight: 600;
+  }
+
+  @media (max-width: 600px) {
+    .summary-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .day-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+  }
+
+  /* Status badges */
+  .count-item {
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .badge-pending {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .badge-processing {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .badge-extracted {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .badge-extraction_failed {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .no-date-records {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .no-date-records a {
+    color: #2563eb;
+    text-decoration: none;
+    margin-right: 0.75rem;
+  }
+
+  .no-date-records a:hover {
+    text-decoration: underline;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="report-nav">
+  <a href="/">← Back to Records</a>
+</nav>
+
+<h2 style="margin:0 0 1rem; font-size:1.2rem;">Event Report</h2>
+
+<!-- Status Counts -->
+<div class="status-counts" style="display:flex; flex-wrap:wrap; gap:0.4rem; font-size:0.8rem; margin-bottom:1rem;">
+  <span class="count-item badge-pending">Pending: {{ status_counts.pending }}</span>
+  <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
+  <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
+  <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
+</div>
+
+<!-- Overall Summary Cards -->
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="value">{{ total_cards }}</div>
+    <div class="label">Total Cards</div>
+  </div>
+  <div class="summary-card">
+    <div class="value">{{ overall_stats.flight_count }}</div>
+    <div class="label">Flights</div>
+  </div>
+  <div class="summary-card">
+    <div class="value">{{ "%.1f"|format(overall_stats.total_impulse_ns) }}</div>
+    <div class="label">Total Ns</div>
+  </div>
+</div>
+
+<!-- Motor Counts by Letter Class -->
+{% if overall_stats.motor_counts %}
+<h3 class="section-title">Motors by Impulse Class</h3>
+<div class="motor-pills">
+  {% for letter, count in overall_stats.motor_counts.items() %}
+  <span class="motor-pill">{{ letter }}: {{ count }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Flyer Statistics -->
+{% if overall_stats.flyer_stats %}
+<h3 class="section-title">Flyer Statistics</h3>
+<div style="overflow-x: auto;">
+  <table class="stats-table">
+    <thead>
+      <tr>
+        <th>Flyer</th>
+        <th class="numeric">Flights</th>
+        <th class="numeric">Motors</th>
+        <th>Breakdown</th>
+        <th class="numeric">Impulse (Ns)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, stats in overall_stats.flyer_stats.items() %}
+      <tr>
+        <td>{{ name }}</td>
+        <td class="numeric">{{ stats.flights }}</td>
+        <td class="numeric">{{ stats.motor_total }}</td>
+        <td>
+          {% for letter, count in stats.motors.items() %}
+          <span class="motor-pill">{{ letter }}: {{ count }}</span>
+          {% endfor %}
+        </td>
+        <td class="numeric">{{ "%.1f"|format(stats.impulse_ns) if stats.impulse_ns else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Per-Day Breakdown -->
+<h3 class="section-title">Daily Breakdown</h3>
+{% if day_summaries %}
+  {% for day in day_summaries %}
+  <div class="day-section">
+    <div class="day-header">
+      <h3>
+        {% if day.date %}
+        <a href="/reports/{{ day.date.isoformat() }}">{{ day.label }}</a>
+        {% else %}
+        {{ day.label }}
+        {% endif %}
+      </h3>
+      <span class="day-card-count">{{ day.card_count }} card{{ "s" if day.card_count != 1 else "" }}</span>
+    </div>
+
+    <div class="inline-stats">
+      <span class="stat-item"><span class="stat-value">{{ day.flight_count }}</span> flights</span>
+      <span class="stat-item"><span class="stat-value">{{ "%.1f"|format(day.total_impulse_ns) }}</span> Ns</span>
+    </div>
+
+    {% if day.motor_counts %}
+    <div class="motor-pills" style="margin-top: 0.5rem;">
+      {% for letter, count in day.motor_counts.items() %}
+      <span class="motor-pill">{{ letter }}: {{ count }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not day.date and day.records %}
+    <div class="no-date-records">
+      {% for rec in day.records %}
+      <a href="/record/{{ rec.id }}">#{{ rec.id }} {{ rec.flier_name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<p style="color: #6b7280; text-align: center; padding: 1rem;">No extracted records to report on.</p>
+{% endif %}
+{% endblock %}
