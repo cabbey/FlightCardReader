@@ -741,23 +741,24 @@
             </div>
           </dd>
 
-          {% if record.overflow and record.overflow.membership %}
+          {% if record.overflow and record.overflow.membership or show_all_fields %}
+          {% set membership = record.overflow.membership if record.overflow and record.overflow.membership else {} %}
           <dt>Club</dt>
           <dd>
-            <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ record.overflow.membership.club or '' }}" data-options="TRA,NAR,CAR">
-              <span class="field-display">{{ record.overflow.membership.club or "—" }}</span>
+            <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ membership.club or '' }}" data-options="TRA,NAR,CAR">
+              <span class="field-display">{{ membership.club or "—" }}</span>
             </div>
           </dd>
           <dt>Member #</dt>
           <dd>
-            <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ record.overflow.membership.member_number or '' }}">
-              <span class="field-display">{{ record.overflow.membership.member_number or "—" }}</span>
+            <div class="editable-field" data-field="overflow.membership.member_number" data-type="text" data-value="{{ membership.member_number or '' }}">
+              <span class="field-display">{{ membership.member_number or "—" }}</span>
             </div>
           </dd>
           <dt>Cert Level</dt>
           <dd>
-            <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
-              <span class="field-display">{{ record.overflow.membership.cert_level if record.overflow.membership.cert_level is not none else "—" }}</span>
+            <div class="editable-field" data-field="overflow.membership.cert_level" data-type="select" data-value="{{ membership.cert_level if membership.cert_level is not none else '' }}" data-options="0,1,2,3,4">
+              <span class="field-display">{{ membership.cert_level if membership.cert_level is not none else "—" }}</span>
             </div>
           </dd>
           {% endif %}
@@ -770,7 +771,7 @@
       <div class="fields-section-label"><span>Rocket</span></div>
       <div class="fields-section-content">
         <dl class="fields-grid">
-          {% if record.overflow and record.overflow.rocket_name %}
+          {% if record.overflow and record.overflow.rocket_name or show_all_fields %}
           <dt>Name</dt>
           <dd>
             <div class="editable-field" data-field="overflow.rocket_name" data-type="text" data-value="{{ record.overflow.rocket_name or '' }}">
@@ -779,7 +780,7 @@
           </dd>
           {% endif %}
 
-          {% if record.overflow and record.overflow.rocket_manufacturer %}
+          {% if record.overflow and record.overflow.rocket_manufacturer or show_all_fields %}
           <dt>Manufacturer</dt>
           <dd>
             <div class="editable-field" data-field="overflow.rocket_manufacturer" data-type="text" data-value="{{ record.overflow.rocket_manufacturer or '' }}">
@@ -788,7 +789,7 @@
           </dd>
           {% endif %}
 
-          {% if record.overflow and record.overflow.rocket_colors %}
+          {% if record.overflow and record.overflow.rocket_colors or show_all_fields %}
           <dt>Colors</dt>
           <dd>
             <div class="editable-field" data-field="overflow.rocket_colors" data-type="text" data-value="{{ record.overflow.rocket_colors | join(', ') if record.overflow.rocket_colors else '' }}">
@@ -797,35 +798,35 @@
           </dd>
           {% endif %}
 
-          {% if record.overflow and record.overflow.rocket_measurements %}
-            {% set m = record.overflow.rocket_measurements %}
-            {% if m.diameter is not none %}
+          {% if record.overflow and record.overflow.rocket_measurements or show_all_fields %}
+            {% set m = record.overflow.rocket_measurements if record.overflow and record.overflow.rocket_measurements else {} %}
+            {% if m.diameter is not none or show_all_fields %}
             <dt>Diameter</dt>
             <dd>
-              <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.diameter }}</span>
+              <div class="editable-field" data-field="overflow.rocket_measurements.diameter" data-type="number" data-value="{{ m.diameter if m.diameter is not none else '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.diameter if m.diameter is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
                 <span class="field-display">{{ m.diameter_unit or "" }}</span>
               </div>
             </dd>
             {% endif %}
-            {% if m.length is not none %}
+            {% if m.length is not none or show_all_fields %}
             <dt>Length</dt>
             <dd>
-              <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.length }}</span>
+              <div class="editable-field" data-field="overflow.rocket_measurements.length" data-type="number" data-value="{{ m.length if m.length is not none else '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.length if m.length is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
                 <span class="field-display">{{ m.length_unit or "" }}</span>
               </div>
             </dd>
             {% endif %}
-            {% if m.weight is not none %}
+            {% if m.weight is not none or show_all_fields %}
             <dt>Weight</dt>
             <dd>
-              <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.weight }}</span>
+              <div class="editable-field" data-field="overflow.rocket_measurements.weight" data-type="number" data-value="{{ m.weight if m.weight is not none else '' }}" style="display: inline-flex;">
+                <span class="field-display">{{ m.weight if m.weight is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
                 <span class="field-display">{{ m.weight_unit or "" }}</span>
@@ -987,7 +988,7 @@
             </div>
           </dd>
 
-          {% if record.overflow and record.overflow.notes %}
+          {% if record.overflow and record.overflow.notes or show_all_fields %}
           <dt>Notes</dt>
           <dd>
             <div class="editable-field" data-field="overflow.notes" data-type="textarea" data-value="{{ record.overflow.notes or '' }}">
@@ -1003,7 +1004,7 @@
               <span class="field-display">{{ record.overflow.recovery_plan or "—" }}</span>
             </div>
           </dd>
-          {% elif record.recovery_plan %}
+          {% elif record.recovery_plan or show_all_fields %}
           <dt>Recovery</dt>
           <dd>
             <div class="editable-field" data-field="recovery_plan" data-type="text" data-value="{{ record.recovery_plan or '' }}">

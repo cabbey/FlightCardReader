@@ -392,5 +392,6 @@ async def detail_record(
             "tc_metadata": _thrustcurve_service._metadata if _thrustcurve_service else None,
             "enriched_motors": enriched_motors,
             "event_dates": _build_event_dates(config),
+            "show_all_fields": record_obj.extraction_status in ("extraction_failed", "pending"),
         },
     )
