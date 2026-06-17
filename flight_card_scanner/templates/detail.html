@@ -419,6 +419,13 @@
     background: #fffbeb;
   }
 
+  .motor-entry.field-dirty {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding-left: 0.5rem;
+  }
+
   /* Raw JSON collapsible */
   .raw-json-section {
     margin-top: 1.5rem;
@@ -454,6 +461,220 @@
     .image-placeholder {
       max-width: 100%;
     }
+  }
+
+  /* Motor editor styles */
+  .motor-entry {
+    margin-bottom: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .motor-entry:last-child {
+    border-bottom: none;
+  }
+
+  .motor-designation {
+    font-weight: 500;
+  }
+
+  .tc-status {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  .tc-resolved {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .tc-ambiguous {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .tc-error {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .tc-pending {
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .tc-select-wrapper {
+    display: block;
+    margin-top: 0.3rem;
+  }
+
+  .tc-candidate-select {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.3rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .btn-tc-select {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .btn-tc-select:hover {
+    background: #15803d;
+  }
+
+  .tc-search-form {
+    display: inline-block;
+    margin-left: 0.25rem;
+  }
+
+  .btn-tc-search {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.3rem;
+    background: none;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
+  .btn-tc-search:hover {
+    background: #f3f4f6;
+  }
+
+  .tc-search-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.3rem;
+    align-items: center;
+  }
+
+  .tc-search-fields .field-input {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.25rem;
+    max-width: 80px;
+  }
+
+  .tc-field-label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #6b7280;
+    gap: 0.1rem;
+  }
+
+  .tc-field-label select,
+  .tc-field-label input {
+    font-size: 0.8rem;
+  }
+
+  .btn-tc-query {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .btn-tc-query:hover {
+    background: #1d4ed8;
+  }
+
+  .tc-motor-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .tc-motor-link:hover {
+    text-decoration: underline;
+  }
+
+  .motor-controls {
+    display: none;
+  }
+
+  .motor-qty-display {
+    display: inline-block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4b5563;
+    cursor: pointer;
+    padding: 0.1rem 0.2rem;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    min-width: 1rem;
+    vertical-align: middle;
+  }
+
+  .motor-qty-display:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+  }
+
+  .motor-qty-input {
+    width: 3.5rem;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.25rem;
+    text-align: center;
+    border: 1px solid #2563eb;
+    border-radius: 3px;
+  }
+
+  .motor-qty-input:focus {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    outline: none;
+  }
+
+  .btn-motor-delete {
+    display: none;
+  }
+
+  .motor-add-row {
+    margin-top: 0.5rem;
+  }
+
+  .btn-motor-add {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.6rem;
+    background: #f3f4f6;
+    border: 1px dashed #d1d5db;
+    border-radius: 4px;
+    color: #4b5563;
+    cursor: pointer;
+  }
+
+  .btn-motor-add:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+  }
+
+  .motor-entry.motor-deleted {
+    opacity: 0.4;
+    text-decoration: line-through;
+    pointer-events: none;
+  }
+
+  .calc-impulse-value {
+    font-weight: 500;
+    color: #4b5563;
+    font-size: 0.85rem;
   }
 </style>
 {% endblock %}
@@ -621,12 +842,84 @@
       <div class="fields-section-label"><span>Flight</span></div>
       <div class="fields-section-content">
         <dl class="fields-grid">
-          {% if record.overflow and record.overflow.motors %}
+          {% set display_motors = enriched_motors if enriched_motors else (record.overflow.motors if record.overflow else none) %}
+          {% if display_motors %}
           <dt>Motors</dt>
           <dd>
-            {% for motor in record.overflow.motors %}
+            {% for motor in display_motors %}
               {% if motor is mapping %}
-                {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}{% if not loop.last %}, {% endif %}
+              <div class="motor-entry" data-motor-index="{{ loop.index0 }}">
+                <span class="motor-qty-display" data-motor-index="{{ loop.index0 }}" data-value="{{ motor.quantity or 1 }}" title="Click to edit quantity">{{ motor.quantity or 1 }}×</span>
+                {% if motor.thrustcurve_id and motor.thrustcurve_data %}
+                <span class="motor-designation">
+                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
+                </span>
+                <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
+                {% elif motor.thrustcurve_id %}
+                <span class="motor-designation">
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                </span>
+                <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
+                {% else %}
+                <span class="motor-designation">
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                </span>
+                {% endif %}
+                {% if motor.thrustcurve_candidates %}
+                <span class="tc-status tc-ambiguous" title="{{ motor.thrustcurve_candidates | length }} candidates">⚠ {{ motor.thrustcurve_candidates | length }} candidates</span>
+                <div class="tc-select-wrapper">
+                  <select class="tc-candidate-select" data-motor-index="{{ loop.index0 }}">
+                    <option value="">— Select motor —</option>
+                    {% for candidate in motor.thrustcurve_candidates %}
+                    <option value="{{ candidate.motorId }}">{{ candidate.manufacturer or "" }} {{ candidate.commonName or candidate.designation or "" }}{% if candidate.propInfo %} ({{ candidate.propInfo }}){% endif %}{% if candidate.totImpulseNs %} {{ "%.1f"|format(candidate.totImpulseNs) }}Ns{% endif %}{% if candidate.diameter %} {{ candidate.diameter }}mm{% endif %}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                {% elif motor.thrustcurve_error %}
+                <span class="tc-status tc-error" title="{{ motor.thrustcurve_error }}">✗ {{ motor.thrustcurve_error }}</span>
+                {% elif not motor.thrustcurve_id %}
+                <span class="tc-status tc-pending">? Not looked up</span>
+                {% endif %}
+                <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
+                  <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Re-search ThrustCurve">🔍</button>
+                  {% if motor.thrustcurve_candidates %}
+                  <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}">Select</button>
+                  {% endif %}
+                  <div class="tc-search-fields" style="display:none;" data-motor-index="{{ loop.index0 }}">
+                    <label class="tc-field-label">Class
+                      <select class="field-select tc-field-letter">
+                        <option value="">—</option>
+                        {% if tc_metadata and tc_metadata.impulseClasses %}
+                          {% for cls in tc_metadata.impulseClasses %}
+                        <option value="{{ cls }}"{{ ' selected' if cls == motor.letter else '' }}>{{ cls }}</option>
+                          {% endfor %}
+                        {% else %}
+                          {% for cls in ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O'] %}
+                        <option value="{{ cls }}"{{ ' selected' if cls == motor.letter else '' }}>{{ cls }}</option>
+                          {% endfor %}
+                        {% endif %}
+                      </select>
+                    </label>
+                    <label class="tc-field-label">Avg Thrust
+                      <input type="text" class="field-input tc-field-number" value="{{ motor.number or '' }}" size="5">
+                    </label>
+                    <label class="tc-field-label">Manufacturer
+                      <select class="field-select tc-field-mfr">
+                        <option value="">— Any —</option>
+                        {% if tc_metadata and tc_metadata.manufacturers %}
+                          {% for mfr in tc_metadata.manufacturers %}
+                        <option value="{{ mfr.abbrev }}"{{ ' selected' if mfr.abbrev == motor._resolved_manufacturer else '' }}>{{ mfr.abbrev }}</option>
+                          {% endfor %}
+                        {% endif %}
+                      </select>
+                    </label>
+                    <label class="tc-field-label">Suffix
+                      <input type="text" class="field-input tc-field-suffix" value="{{ motor.suffix or '' }}" size="5">
+                    </label>
+                    <button type="button" class="btn-tc-query" data-motor-index="{{ loop.index0 }}">Search</button>
+                  </div>
+                </div>
+              </div>
               {% else %}
                 {# Legacy nested format #}
                 {% for m in motor %}
@@ -634,7 +927,33 @@
                 {% endfor %}{% if not loop.last %} / {% endif %}
               {% endif %}
             {% endfor %}
+            <div class="motor-add-row">
+              <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
+            </div>
           </dd>
+          {% else %}
+          <dt>Motors</dt>
+          <dd>
+            <div class="motor-add-row">
+              <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
+            </div>
+          </dd>
+          {% endif %}
+
+          {% if display_motors %}
+          {# Calculate total impulse from ThrustCurve data #}
+          {% set ns = namespace(calc_impulse=0.0, has_tc_data=false) %}
+          {% for motor in display_motors %}
+            {% if motor is mapping and motor.thrustcurve_data and motor.thrustcurve_data.totImpulseNs %}
+              {% set ns.has_tc_data = true %}
+              {% set qty = motor.quantity if motor.quantity else 1 %}
+              {% set ns.calc_impulse = ns.calc_impulse + (qty * motor.thrustcurve_data.totImpulseNs) %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.has_tc_data %}
+          <dt>Calc. Impulse</dt>
+          <dd><span class="calc-impulse-value">{{ "%.1f"|format(ns.calc_impulse) }} Ns</span></dd>
+          {% endif %}
           {% endif %}
 
           <dt>Total Impulse</dt>
@@ -932,7 +1251,10 @@
     var hasOverflowChanges = false;
 
     Object.keys(pendingChanges).forEach(function(field) {
-      if (field.startsWith('overflow.')) {
+      if (field.startsWith('_motor_')) {
+        // Motor changes handled separately below
+        hasOverflowChanges = true;
+      } else if (field.startsWith('overflow.')) {
         hasOverflowChanges = true;
         var path = field.substring('overflow.'.length);
         setNestedValue(overflowUpdates, path, pendingChanges[field]);
@@ -945,6 +1267,59 @@
       // Merge overflow updates into the existing overflow object
       var merged = JSON.parse(JSON.stringify(originalOverflow || {}));
       deepMerge(merged, overflowUpdates);
+
+      // Apply motor changes to the motors array
+      var motors = merged.motors || [];
+
+      // Apply edits (TC id, quantity, letter/number changes)
+      if (Object.keys(pendingMotorChanges).length > 0) {
+        Object.keys(pendingMotorChanges).forEach(function(idx) {
+          var i = parseInt(idx, 10);
+          if (i >= 0 && i < motors.length) {
+            var changes = pendingMotorChanges[idx];
+            if (changes.thrustcurve_id) {
+              motors[i].thrustcurve_id = changes.thrustcurve_id;
+              delete motors[i].thrustcurve_candidates;
+              delete motors[i].thrustcurve_error;
+              delete motors[i].thrustcurve_data;
+            }
+            if (changes.letter) motors[i].letter = changes.letter;
+            if (changes.number) motors[i].number = changes.number;
+            if (changes.manufacturer !== undefined) motors[i].manufacturer = changes.manufacturer;
+            if (changes.suffix !== undefined) motors[i].suffix = changes.suffix;
+            if (changes.quantity !== undefined) motors[i].quantity = changes.quantity;
+          }
+        });
+      }
+
+      // Remove deleted motors (in reverse order to preserve indices)
+      if (deletedMotors.length > 0) {
+        var sortedDeletes = deletedMotors.slice().sort(function(a, b) { return b - a; });
+        sortedDeletes.forEach(function(i) {
+          if (i >= 0 && i < motors.length) {
+            motors.splice(i, 1);
+          }
+        });
+      }
+
+      // Append added motors
+      if (addedMotors.length > 0) {
+        addedMotors.forEach(function(m) {
+          if (m === null) return; // removed before save
+          var newMotor = {
+            letter: m.letter,
+            number: m.number,
+            manufacturer: m.manufacturer,
+            suffix: m.suffix,
+            quantity: m.quantity || 1,
+          };
+          if (m.thrustcurve_id) newMotor.thrustcurve_id = m.thrustcurve_id;
+          if (m.thrustcurve_candidates) newMotor.thrustcurve_candidates = m.thrustcurve_candidates;
+          motors.push(newMotor);
+        });
+      }
+
+      merged.motors = motors;
       body['overflow'] = merged;
     }
 
@@ -957,6 +1332,9 @@
       if (res.ok) {
         showFeedback('Saved!', false);
         pendingChanges = {};
+        pendingMotorChanges = {};
+        deletedMotors = [];
+        addedMotors = [];
         // Update original overflow for subsequent edits
         if (body['overflow']) {
           originalOverflow = body['overflow'];
@@ -1140,6 +1518,400 @@
       lightbox.classList.remove('dragging');
     }
   });
+
+  // --- Motor ThrustCurve editor ---
+  // Track motor changes separately (merged into overflow on save)
+  var pendingMotorChanges = {}; // idx -> {thrustcurve_id: ..., letter: ..., number: ..., etc}
+
+  // Toggle search fields
+  document.querySelectorAll('.btn-tc-search').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var idx = btn.dataset.motorIndex;
+      var fields = document.querySelector('.tc-search-fields[data-motor-index="' + idx + '"]');
+      if (fields) {
+        fields.style.display = fields.style.display === 'none' ? 'flex' : 'none';
+      }
+    });
+  });
+
+  // Search button
+  document.querySelectorAll('.btn-tc-query').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var idx = btn.dataset.motorIndex;
+      var fields = document.querySelector('.tc-search-fields[data-motor-index="' + idx + '"]');
+      var letter = fields.querySelector('.tc-field-letter').value.trim();
+      var number = fields.querySelector('.tc-field-number').value.trim();
+      var mfr = fields.querySelector('.tc-field-mfr').value.trim();
+      var suffix = fields.querySelector('.tc-field-suffix').value.trim();
+
+      if (!letter || !number) {
+        alert('Impulse class and average thrust are required.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+
+      fetch('/api/admin/record/' + recordId + '/motor/' + idx + '/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          letter: letter,
+          number: number,
+          manufacturer: mfr || null,
+          suffix: suffix || null
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.motorId) {
+          // Unique match — register as pending change
+          registerMotorChange(idx, {
+            thrustcurve_id: data.motorId,
+            letter: letter,
+            number: number,
+            manufacturer: mfr || null,
+            suffix: suffix || null
+          });
+          // Update display with TC data
+          updateMotorDisplay(entry, data.motorId, data.motorData);
+          entry.classList.add('field-dirty');
+          fields.style.display = 'none';
+          var selectWrapper = entry.querySelector('.tc-select-wrapper');
+          if (selectWrapper) selectWrapper.style.display = 'none';
+        } else if (data.candidates && data.candidates.length > 0) {
+          // Multiple candidates — show dropdown
+          var selectWrapper = entry.querySelector('.tc-select-wrapper');
+          if (!selectWrapper) {
+            selectWrapper = document.createElement('div');
+            selectWrapper.className = 'tc-select-wrapper';
+            entry.querySelector('.tc-search-form').insertAdjacentElement('beforebegin', selectWrapper);
+          }
+          var html = '<select class="tc-candidate-select" data-motor-index="' + idx + '">';
+          html += '<option value="">— Select motor —</option>';
+          data.candidates.forEach(function(c) {
+            html += '<option value="' + c.motorId + '">' + (c.manufacturer || '') + ' ' + (c.commonName || c.designation || '');
+            if (c.propInfo) html += ' (' + c.propInfo + ')';
+            if (c.totImpulseNs) html += ' ' + c.totImpulseNs.toFixed(1) + 'Ns';
+            if (c.diameter) html += ' ' + c.diameter + 'mm';
+            html += '</option>';
+          });
+          html += '</select> <button type="button" class="btn-tc-select" data-motor-index="' + idx + '">Select</button>';
+          selectWrapper.innerHTML = html;
+          selectWrapper.style.display = '';
+          // Store candidates data and motor details for the select handler
+          selectWrapper._searchContext = { letter: letter, number: number, manufacturer: mfr, suffix: suffix };
+          selectWrapper._candidateData = {};
+          data.candidates.forEach(function(c) { selectWrapper._candidateData[c.motorId] = c; });
+          selectWrapper.querySelector('.btn-tc-select').addEventListener('click', handleMotorSelect);
+          // Update status
+          var statusEl = entry.querySelector('.tc-status');
+          if (statusEl) {
+            statusEl.className = 'tc-status tc-ambiguous';
+            statusEl.textContent = '⚠ ' + data.candidates.length + ' candidates';
+          }
+          fields.style.display = 'none';
+        } else {
+          var statusEl = entry.querySelector('.tc-status');
+          if (statusEl) {
+            statusEl.className = 'tc-status tc-error';
+            statusEl.textContent = '✗ ' + (data.error || 'No matches');
+          }
+        }
+      })
+      .catch(function() {
+        alert('Network error searching ThrustCurve.');
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Search';
+      });
+    });
+  });
+
+  // Select candidate button
+  function handleMotorSelect() {
+    var btn = this;
+    var idx = btn.dataset.motorIndex;
+    var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+    var select = entry.querySelector('.tc-candidate-select[data-motor-index="' + idx + '"]');
+    var motorId = select.value;
+
+    if (!motorId) {
+      alert('Please select a motor from the dropdown.');
+      return;
+    }
+
+    // Get the search context from when the search was performed
+    var selectWrapper = entry.querySelector('.tc-select-wrapper');
+    var ctx = (selectWrapper && selectWrapper._searchContext) || {};
+
+    // Register as pending change
+    registerMotorChange(idx, {
+      thrustcurve_id: motorId,
+      letter: ctx.letter || null,
+      number: ctx.number || null,
+      manufacturer: ctx.manufacturer || null,
+      suffix: ctx.suffix || null
+    });
+
+    // Use candidate data we already have, or fetch from select endpoint
+    var candidateData = (selectWrapper && selectWrapper._candidateData && selectWrapper._candidateData[motorId]) || null;
+    if (candidateData) {
+      // Build a motorData-like object from candidate info
+      var motorData = {
+        commonName: candidateData.commonName,
+        manufacturerAbbrev: candidateData.manufacturer,
+        propInfo: candidateData.propInfo,
+        source_url: null // candidates don't have source_url, will show without link
+      };
+      updateMotorDisplay(entry, motorId, motorData);
+      entry.classList.add('field-dirty');
+      if (selectWrapper) selectWrapper.style.display = 'none';
+    } else {
+      // Fetch full motor data from select endpoint
+      btn.disabled = true;
+      btn.textContent = '…';
+      fetch('/api/admin/record/' + recordId + '/motor/' + idx + '/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motor_id: motorId })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(resp) {
+        updateMotorDisplay(entry, motorId, resp.motorData);
+        entry.classList.add('field-dirty');
+        if (selectWrapper) selectWrapper.style.display = 'none';
+      })
+      .catch(function() {
+        // Fallback: just show the ID
+        updateMotorDisplay(entry, motorId, null);
+        entry.classList.add('field-dirty');
+        if (selectWrapper) selectWrapper.style.display = 'none';
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Select';
+      });
+    }
+  }
+
+  document.querySelectorAll('.btn-tc-select').forEach(function(btn) {
+    btn.addEventListener('click', handleMotorSelect);
+  });
+
+  function registerMotorChange(idx, changes) {
+    pendingMotorChanges[idx] = changes;
+    // Register a synthetic pending change so the Save button activates
+    pendingChanges['_motor_' + idx] = changes.thrustcurve_id || '_modified';
+    updateSaveButton();
+  }
+
+  function updateMotorDisplay(entry, motorId, motorData) {
+    // Update the motor designation span to show TC info with link
+    var desig = entry.querySelector('.motor-designation');
+    if (desig && motorData && motorData.commonName) {
+      var label = (motorData.manufacturerAbbrev || '') + ' ' + motorData.commonName;
+      if (motorData.propInfo) label += ' (' + motorData.propInfo + ')';
+      if (motorData.source_url) {
+        desig.innerHTML = '<a href="' + motorData.source_url + '" target="_blank" rel="noopener" class="tc-motor-link">' + label + '</a>';
+      } else {
+        desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
+      }
+    }
+    // Update or create the status badge
+    var statusEl = entry.querySelector('.tc-status');
+    if (statusEl) {
+      statusEl.className = 'tc-status tc-resolved';
+      statusEl.textContent = '✓';
+      statusEl.title = 'ThrustCurve ID: ' + motorId + ' (unsaved)';
+    } else {
+      var badge = document.createElement('span');
+      badge.className = 'tc-status tc-resolved';
+      badge.textContent = '✓';
+      badge.title = 'ThrustCurve ID: ' + motorId + ' (unsaved)';
+      if (desig) desig.insertAdjacentElement('afterend', badge);
+    }
+  }
+
+  // --- Motor quantity editing (click to reveal spinner) ---
+  document.querySelectorAll('.motor-qty-display').forEach(function(span) {
+    span.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (span.querySelector('.motor-qty-input')) return; // already editing
+      var idx = span.dataset.motorIndex;
+      var currentVal = parseInt(span.dataset.value, 10) || 1;
+      span.textContent = '';
+
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'motor-qty-input';
+      input.value = currentVal;
+      input.min = '0';
+      input.max = '99';
+      input.step = '1';
+      span.appendChild(input);
+      input.focus();
+      input.select();
+
+      function commit() {
+        var qty = parseInt(input.value, 10);
+        if (isNaN(qty) || qty < 0) qty = 1;
+        span.dataset.value = qty;
+
+        var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+
+        if (qty === 0) {
+          // Treat as delete
+          span.textContent = '';
+          if (entry) {
+            entry.classList.add('motor-deleted');
+            entry.classList.add('field-dirty');
+          }
+          deletedMotors.push(parseInt(idx, 10));
+          pendingChanges['_motor_delete_' + idx] = true;
+        } else {
+          span.textContent = qty > 1 ? qty + '×' : '1×';
+          if (entry) entry.classList.add('field-dirty');
+          if (!pendingMotorChanges[idx]) pendingMotorChanges[idx] = {};
+          pendingMotorChanges[idx].quantity = qty;
+          pendingChanges['_motor_' + idx] = '_qty_' + qty;
+        }
+        updateSaveButton();
+      }
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') {
+          span.textContent = currentVal + '×';
+        }
+      });
+    });
+  });
+
+  // --- Motor delete (legacy — kept for added motors) ---
+  var deletedMotors = [];
+
+  // --- Motor add ---
+  var addedMotors = []; // [{letter, number, manufacturer, suffix, quantity}]
+
+  var btnAddMotor = document.getElementById('btnAddMotor');
+  if (btnAddMotor) {
+    btnAddMotor.addEventListener('click', function() {
+      var newIdx = 'new_' + addedMotors.length;
+      addedMotors.push({ letter: '', number: '', manufacturer: null, suffix: null, quantity: 1 });
+
+      // Create a minimal add form
+      var row = document.createElement('div');
+      row.className = 'motor-entry field-dirty';
+      row.dataset.motorIndex = newIdx;
+      row.innerHTML = '<div class="tc-search-fields" style="display:flex;" data-motor-index="' + newIdx + '">' +
+        '<label class="tc-field-label">Class <select class="field-select tc-field-letter">' +
+        '<option value="">—</option>' +
+        '{% if tc_metadata and tc_metadata.impulseClasses %}{% for cls in tc_metadata.impulseClasses %}<option value="{{ cls }}">{{ cls }}</option>{% endfor %}{% else %}{% for cls in ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O"] %}<option value="{{ cls }}">{{ cls }}</option>{% endfor %}{% endif %}' +
+        '</select></label>' +
+        '<label class="tc-field-label">Avg Thrust <input type="text" class="field-input tc-field-number" size="5"></label>' +
+        '<label class="tc-field-label">Manufacturer <select class="field-select tc-field-mfr">' +
+        '<option value="">— Any —</option>' +
+        '{% if tc_metadata and tc_metadata.manufacturers %}{% for mfr in tc_metadata.manufacturers %}<option value="{{ mfr.abbrev }}">{{ mfr.abbrev }}</option>{% endfor %}{% endif %}' +
+        '</select></label>' +
+        '<label class="tc-field-label">Suffix <input type="text" class="field-input tc-field-suffix" size="5"></label>' +
+        '<label class="tc-field-label">Qty <input type="number" class="field-input motor-qty-input" value="1" min="1" max="99" step="1" style="width:3rem;"></label>' +
+        '<button type="button" class="btn-tc-query" data-motor-index="' + newIdx + '">Search</button>' +
+        '<button type="button" class="btn-motor-delete" data-motor-index="' + newIdx + '" title="Remove">✕</button>' +
+        '</div>';
+
+      // Insert before the Add Motor button row
+      btnAddMotor.parentNode.insertBefore(row, btnAddMotor.parentNode.querySelector('.motor-add-row'));
+
+      // Bind search for the new row
+      row.querySelector('.btn-tc-query').addEventListener('click', function() {
+        var fields = row.querySelector('.tc-search-fields');
+        var letter = fields.querySelector('.tc-field-letter').value.trim();
+        var number = fields.querySelector('.tc-field-number').value.trim();
+        var mfr = fields.querySelector('.tc-field-mfr').value.trim();
+        var suffix = fields.querySelector('.tc-field-suffix').value.trim();
+        var qty = parseInt(fields.querySelector('.motor-qty-input').value, 10) || 1;
+
+        if (!letter || !number) {
+          alert('Impulse class and average thrust are required.');
+          return;
+        }
+
+        var addIdx = addedMotors.length - 1;
+        addedMotors[addIdx] = { letter: letter, number: number, manufacturer: mfr || null, suffix: suffix || null, quantity: qty };
+
+        var searchBtn = row.querySelector('.btn-tc-query');
+        searchBtn.disabled = true;
+        searchBtn.textContent = '…';
+
+        fetch('/api/admin/record/' + recordId + '/motor/0/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ letter: letter, number: number, manufacturer: mfr || null, suffix: suffix || null })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.motorId) {
+            addedMotors[addIdx].thrustcurve_id = data.motorId;
+            // Show resolved display
+            var desig = document.createElement('span');
+            desig.className = 'motor-designation';
+            if (data.motorData && data.motorData.commonName) {
+              var label = (data.motorData.manufacturerAbbrev || '') + ' ' + data.motorData.commonName;
+              if (data.motorData.propInfo) label += ' (' + data.motorData.propInfo + ')';
+              if (data.motorData.source_url) {
+                desig.innerHTML = '<a href="' + data.motorData.source_url + '" target="_blank" rel="noopener" class="tc-motor-link">' + label + '</a>';
+              } else {
+                desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
+              }
+            } else {
+              desig.textContent = letter + number;
+            }
+            fields.style.display = 'none';
+            row.insertBefore(desig, row.firstChild);
+            var badge = document.createElement('span');
+            badge.className = 'tc-status tc-resolved';
+            badge.textContent = '✓';
+            badge.title = 'ThrustCurve ID: ' + data.motorId;
+            desig.insertAdjacentElement('afterend', badge);
+          } else if (data.candidates && data.candidates.length > 0) {
+            // Show candidates in a note
+            addedMotors[addIdx].thrustcurve_candidates = data.candidates;
+            var note = document.createElement('span');
+            note.className = 'tc-status tc-ambiguous';
+            note.textContent = '⚠ ' + data.candidates.length + ' candidates — save and use detail page to select';
+            row.appendChild(note);
+          } else {
+            var note = document.createElement('span');
+            note.className = 'tc-status tc-error';
+            note.textContent = '✗ ' + (data.error || 'No matches');
+            row.appendChild(note);
+          }
+        })
+        .catch(function() { alert('Network error.'); })
+        .finally(function() {
+          searchBtn.disabled = false;
+          searchBtn.textContent = 'Search';
+        });
+      });
+
+      // Bind delete for new row
+      row.querySelector('.btn-motor-delete').addEventListener('click', function() {
+        row.classList.add('motor-deleted');
+        var addIdx = parseInt(newIdx.split('_')[1], 10);
+        addedMotors[addIdx] = null; // mark as removed
+        pendingChanges['_motor_add_removed_' + addIdx] = true;
+        updateSaveButton();
+      });
+
+      pendingChanges['_motor_add_' + addedMotors.length] = true;
+      updateSaveButton();
+    });
+  }
 })();
 </script>
 {% endblock %}

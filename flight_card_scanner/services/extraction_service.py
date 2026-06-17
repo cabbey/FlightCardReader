@@ -267,12 +267,18 @@ class ExtractionService:
     _process to handle the extraction lifecycle.
     """
 
-    def __init__(self, config: AppConfig, session_factory) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        session_factory,
+        thrustcurve_service=None,
+    ) -> None:
         """Initialise the extraction service.
 
         Args:
             config: The application configuration (endpoints, mode, date range).
             session_factory: An async_sessionmaker for creating DB sessions.
+            thrustcurve_service: Optional ThrustCurveService for motor lookups.
         """
         self._config = config
         self._mode = ExtractionMode(config.extraction_mode)
@@ -280,6 +286,7 @@ class ExtractionService:
         self._session_factory = session_factory
         self._endpoints = config.extraction_endpoints
         self._workers: list[asyncio.Task] = []
+        self._thrustcurve = thrustcurve_service
         # One semaphore per endpoint, keyed by URL
         self._endpoint_semaphores: dict[str, asyncio.Semaphore] = {
             ep.url: asyncio.Semaphore(ep.concurrency) for ep in self._endpoints
@@ -461,6 +468,26 @@ class ExtractionService:
             await record_service.apply_extraction(
                 db, record_id, extracted, resolved_date
             )
+
+        # Post-extraction: look up motors via ThrustCurve
+        if self._thrustcurve and extracted.motors:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record and record.overflow and record.overflow.get("motors"):
+                        motors = record.overflow["motors"]
+                        annotated = await self._thrustcurve.lookup_motors(motors)
+                        overflow = dict(record.overflow)
+                        overflow["motors"] = annotated
+                        await record_service.update_fields(
+                            db, record_id, {"overflow": overflow}
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "ThrustCurve lookup failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
 
     async def _call_ollama(
         self, client: httpx.AsyncClient, image_path: str

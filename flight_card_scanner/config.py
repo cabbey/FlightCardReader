@@ -36,8 +36,8 @@ class AppConfig:
     """Top-level application configuration."""
     host: str = "0.0.0.0"
     port: int = 8000
-    image_store_path: Path = field(default_factory=lambda: Path("./images"))
-    db_path: Path = field(default_factory=lambda: Path("./flight_cards.db"))
+    event_data_path: Path = field(default_factory=lambda: Path("./data"))
+    thrustcurve_cache_path: Path = field(default_factory=lambda: Path("./thrustcurve_cache"))
     event_name: str = "Flight Card Scanner"
     event_date_range: DateRange = field(
         default_factory=lambda: DateRange(start=date.today(), end=date.today())
@@ -48,6 +48,16 @@ class AppConfig:
     )
     ssl_certfile: Path | None = None
     ssl_keyfile: Path | None = None
+
+    @property
+    def image_store_path(self) -> Path:
+        """Images directory within the event data path."""
+        return self.event_data_path / "images"
+
+    @property
+    def db_path(self) -> Path:
+        """Database file within the event data path."""
+        return self.event_data_path / "flight_cards.db"
 
 
 def _parse_date(value: str, field_name: str) -> date:
@@ -135,11 +145,11 @@ def load_config(path: Path) -> AppConfig:
     if not isinstance(port, int) or isinstance(port, bool):
         raise ConfigError(f"Config key 'port' must be an integer, got {port!r}.")
 
-    # --- image_store_path ---
-    image_store_path = Path(get_with_default("image_store_path", "./images"))
+    # --- event_data_path ---
+    event_data_path = Path(get_with_default("event_data_path", "./data"))
 
-    # --- db_path ---
-    db_path = Path(get_with_default("db_path", "./flight_cards.db"))
+    # --- thrustcurve_cache_path ---
+    thrustcurve_cache_path = Path(get_with_default("thrustcurve_cache_path", "./thrustcurve_cache"))
 
     # --- event_name ---
     event_name = get_with_default("event_name", "Flight Card Scanner")
@@ -208,8 +218,8 @@ def load_config(path: Path) -> AppConfig:
     return AppConfig(
         host=host,
         port=port,
-        image_store_path=image_store_path,
-        db_path=db_path,
+        event_data_path=event_data_path,
+        thrustcurve_cache_path=thrustcurve_cache_path,
         event_name=event_name,
         event_date_range=event_date_range,
         extraction_mode=extraction_mode,

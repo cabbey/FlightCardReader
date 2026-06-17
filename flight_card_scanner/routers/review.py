@@ -31,18 +31,21 @@ from ..services.record_service import motor_designation_str
 _templates: Jinja2Templates | None = None
 _config: AppConfig | None = None
 _extraction_service: ExtractionService | None = None
+_thrustcurve_service = None
 
 
 def configure(
     templates: Jinja2Templates,
     config: AppConfig,
     extraction_service: ExtractionService,
+    thrustcurve_service=None,
 ) -> None:
     """Set module-level dependencies. Called once during app startup."""
-    global _templates, _config, _extraction_service
+    global _templates, _config, _extraction_service, _thrustcurve_service
     _templates = templates
     _config = config
     _extraction_service = extraction_service
+    _thrustcurve_service = thrustcurve_service
 
 
 def _get_templates() -> Jinja2Templates:
@@ -345,6 +348,20 @@ async def detail_record(
         except (OSError, json.JSONDecodeError):
             pass
 
+    # Enrich motors with cached ThrustCurve data for display (not persisted)
+    enriched_motors = None
+    if _thrustcurve_service and record_obj.overflow and record_obj.overflow.get("motors"):
+        enriched_motors = await _thrustcurve_service.enrich_motors_for_display(
+            record_obj.overflow["motors"]
+        )
+        # Also resolve manufacturer names for dropdown pre-selection
+        for motor in enriched_motors:
+            raw_mfr = motor.get("manufacturer")
+            if raw_mfr:
+                resolved = _thrustcurve_service.resolve_manufacturer_for_display(raw_mfr)
+                if resolved:
+                    motor["_resolved_manufacturer"] = resolved
+
     return templates.TemplateResponse(
         "detail.html",
         {
@@ -357,5 +374,7 @@ async def detail_record(
             "llm_content_json": llm_content_json,
             "llm_thinking": llm_thinking,
             "llm_content_thinking": llm_content_thinking,
+            "tc_metadata": _thrustcurve_service._metadata if _thrustcurve_service else None,
+            "enriched_motors": enriched_motors,
         },
     )

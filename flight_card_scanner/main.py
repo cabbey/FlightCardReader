@@ -23,6 +23,7 @@ from .database import create_all, init_engine
 from .exceptions import ConfigError
 from .routers import admin, reports, review, scan
 from .services.extraction_service import ExtractionMode, ExtractionService
+from .services.thrustcurve_service import ThrustCurveService
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +116,10 @@ def _log_config_summary(config: AppConfig) -> None:
                 config.event_name,
                 config.event_date_range.start,
                 config.event_date_range.end)
+    logger.info("Event data: %s", config.event_data_path.resolve())
     logger.info("Database: %s", config.db_path.resolve())
     logger.info("Image store: %s", config.image_store_path.resolve())
+    logger.info("ThrustCurve cache: %s", config.thrustcurve_cache_path.resolve())
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +159,14 @@ async def lifespan(app: FastAPI):
     from .database import _async_session as session_factory
     from .services import record_service
 
+    # 5a. Start ThrustCurve service (metadata fetch)
+    thrustcurve_service = ThrustCurveService(cache_dir=config.thrustcurve_cache_path)
+    await thrustcurve_service.startup()
+
     extraction_service = ExtractionService(
-        config=config, session_factory=session_factory
+        config=config,
+        session_factory=session_factory,
+        thrustcurve_service=thrustcurve_service,
     )
 
     # Roll back any records stuck in "processing" from a previous unclean shutdown
@@ -185,7 +194,8 @@ async def lifespan(app: FastAPI):
     scan.configure(config=config, extraction_service=extraction_service, templates=templates)
     admin.configure(extraction_service=extraction_service)
     review.configure(
-        templates=templates, config=config, extraction_service=extraction_service
+        templates=templates, config=config, extraction_service=extraction_service,
+        thrustcurve_service=thrustcurve_service,
     )
     reports.configure(templates=templates, config=config)
 
@@ -199,6 +209,7 @@ async def lifespan(app: FastAPI):
     # Store config on app state for potential access elsewhere
     app.state.config = config
     app.state.extraction_service = extraction_service
+    app.state.thrustcurve_service = thrustcurve_service
 
     yield
 

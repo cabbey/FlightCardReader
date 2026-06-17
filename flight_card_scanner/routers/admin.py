@@ -1,16 +1,18 @@
-"""Admin API router (mode switch, trigger, re-queue).
+"""Admin API router (mode switch, trigger, re-queue, motor resolution).
 
 Provides endpoints for:
 - Switching extraction mode (immediate/deferred)
 - Manually triggering extraction of pending records
 - Requeuing failed records (all or by ID)
+- Motor resolution via ThrustCurve API
 """
 
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -164,3 +166,100 @@ async def update_record(
 
     updated_record = await record_service.update_fields(db, record_id, updates)
     return {"message": "Record updated", "id": updated_record.id}
+
+
+# ---------------------------------------------------------------------------
+# Motor resolution endpoints
+# ---------------------------------------------------------------------------
+
+
+class MotorSearchRequest(BaseModel):
+    """Request body for searching ThrustCurve for a motor."""
+
+    letter: str
+    number: str
+    manufacturer: str | None = None
+    suffix: str | None = None
+
+
+class MotorSelectRequest(BaseModel):
+    """Request body for selecting a specific motor from candidates."""
+
+    motor_id: str
+
+
+@router.post("/record/{record_id}/motor/{motor_index}/search")
+async def search_motor(
+    request: Request,
+    record_id: int,
+    motor_index: int,
+    body: MotorSearchRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Search ThrustCurve for a motor using provided parameters.
+
+    This is a pure search — it does NOT modify the record. The client
+    tracks the result as a pending change and saves via the normal Save flow.
+    """
+    record = await record_service.get(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    tc_service = getattr(request.app.state, "thrustcurve_service", None)
+    if tc_service is None:
+        raise HTTPException(
+            status_code=503, detail="ThrustCurve service not available"
+        )
+
+    overflow = dict(record.overflow) if record.overflow else {}
+    motors = overflow.get("motors", [])
+
+    if motor_index < 0 or motor_index >= len(motors):
+        raise HTTPException(status_code=404, detail="Motor index out of range")
+
+    # Build a motor dict from the request
+    search_motor_data = {
+        "letter": body.letter,
+        "number": body.number,
+        "manufacturer": body.manufacturer,
+        "suffix": body.suffix,
+    }
+
+    result = await tc_service.search_motor(search_motor_data)
+
+    # If unique match, include motor data for display
+    motor_data = None
+    if result["motorId"]:
+        motor_data = await tc_service.get_motor(result["motorId"])
+
+    return {
+        "motorId": result["motorId"],
+        "motorData": motor_data,
+        "candidates": result.get("candidates", []),
+        "error": result.get("error"),
+        "query": result.get("query"),
+    }
+
+
+@router.post("/record/{record_id}/motor/{motor_index}/select")
+async def select_motor(
+    request: Request,
+    record_id: int,
+    motor_index: int,
+    body: MotorSelectRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Validate a motor selection (does not persist — use Save for that).
+
+    Returns motor data from the cache for display purposes.
+    """
+    tc_service = getattr(request.app.state, "thrustcurve_service", None)
+    motor_data = None
+    if tc_service:
+        motor_data = await tc_service.get_motor(body.motor_id)
+
+    return {
+        "message": "Motor validated",
+        "motorId": body.motor_id,
+        "motorData": motor_data,
+    }
