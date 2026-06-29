@@ -2,7 +2,7 @@
   "host": "0.0.0.0",
   "port": 8000,
   "event_data_path": "/home/cabbey/OROC/FlightCardDbs/2026/march",
-  "thrustcurve_cache_path": "/home/cabbey/OROC/FlightCardDbs/2026/march/thrustcurve_cache",
+  "thrustcurve_cache_path": "/home/cabbey/OROC/FlightCardDbs/thrustcurve_cache",
   "ssl_certfile": "/home/cabbey/OROC/FlightCardDbs/cheshire.neon-tegus.ts.net.crt",
   "ssl_keyfile": "/home/cabbey/OROC/FlightCardDbs/cheshire.neon-tegus.ts.net.key",
   "event_name": "Missle Madness 2026",
