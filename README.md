@@ -85,8 +85,8 @@ The application reads its configuration from a JSON file. By default it looks fo
 {
   "host": "0.0.0.0",
   "port": 8000,
-  "image_store_path": "./images",
-  "db_path": "./flight_cards.db",
+  "event_data_path": "./data",
+  "thrustcurve_cache_path": "./thrustcurve_cache",
   "event_name": "My Launch Event 2025",
   "event_date_range": {
     "start": "2025-07-18",
@@ -105,14 +105,16 @@ The application reads its configuration from a JSON file. By default it looks fo
 |-----|------|---------|-------------|
 | `host` | string | `"0.0.0.0"` | Address to bind the HTTP server to |
 | `port` | integer | `8000` | Port to listen on |
-| `image_store_path` | string | `"./images"` | Directory where uploaded card images are saved |
-| `db_path` | string | `"./flight_cards.db"` | Path to the SQLite database file |
+| `event_data_path` | string | `"./data"` | Base directory for event data. Images are stored in `<event_data_path>/images/` and the database at `<event_data_path>/flight_cards.db`. |
+| `thrustcurve_cache_path` | string | `"./thrustcurve_cache"` | Directory for caching ThrustCurve.org motor data. |
 | `event_name` | string | `"Flight Card Scanner"` | Display name shown in the web UI |
 | `event_date_range` | object | today–today | Inclusive start/end dates (ISO 8601) for the launch event. Used to resolve day-of-week dates written on cards. |
 | `extraction_mode` | string | `"immediate"` | `"immediate"` or `"deferred"`. Controls whether extraction runs automatically on upload. |
 | `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit (number of parallel requests). |
 | `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Optional — enables HTTPS when paired with `ssl_keyfile`. |
 | `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Optional — enables HTTPS when paired with `ssl_certfile`. |
+| `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification. Requires `flier_match_model` to also be set. |
+| `flier_match_model` | string | *(none)* | Ollama model name used for flier name matching (e.g., `qwen2.5:7b`). Required when `known_fliers_path` is set. |
 
 All keys are optional — defaults are applied for any missing key.
 

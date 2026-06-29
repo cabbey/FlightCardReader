@@ -1,0 +1,217 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "Existing tests fail with these counterexamples:\n\n1. test_full_config_fields_match:\n   Falsifying example: config_dict={'host': '0', 'port': 1, 'image_store_path': '0', 'db_path': '0', 'event_name': '0', 'event_date_range': {'start': '2000-01-01', 'end': '2000-01-01'}, 'extraction_mode': 'immediate', 'extraction_endpoints': [{'url': 'http://0', 'concurrency': 1}]}\n   AssertionError: assert PosixPath('data/images') == PosixPath('0')\n   (result.image_store_path is derived from event_data_path, not from the ignored config key)\n\n2. test_absent_keys_get_documented_defaults (failure 1 - key present but ignored):\n   Falsifying example: config_dict={'image_store_path': '0'}\n   AssertionError: assert PosixPath('data/images') == PosixPath('0')\n\n3. test_absent_keys_get_documented_defaults (failure 2 - stale default):\n   Falsifying example: config_dict={}\n   AssertionError: assert PosixPath('data/images') == PosixPath('images')\n   (actual default is Path(\"./data/images\"), not Path(\"./images\"))",
+      "lastRunTimestamp": 1782748894803
+    },
+    "2. Write preservation property tests (BEFORE implementing fix)": {
+      "status": "passed",
+      "lastRunTimestamp": 1782748986620
+    },
+    "3.6 Verify bug condition exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1782749484690
+    },
+    "3.7 Verify preservation tests still pass": {
+      "status": "passed",
+      "lastRunTimestamp": 1782749520722
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819360
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747833716
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782748909694
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819389
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782748913398
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782748997541
+      }
+    ],
+    "3.1 Replace `image_store_path` and `db_path` in `full_config_dicts` strategy with `event_data_path`": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819428
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749004043
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749040944
+      }
+    ],
+    "3.2 Update assertions in `test_full_config_fields_match`": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819443
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749047155
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749085459
+      }
+    ],
+    "3.3 Update `OPTIONAL_KEYS` list": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819458
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749091646
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749232498
+      }
+    ],
+    "3.4 Update `partial_config_dicts` strategy": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819474
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749235788
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749403031
+      }
+    ],
+    "3.5 Update default assertions in `test_absent_keys_get_documented_defaults`": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819489
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749406532
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749452984
+      }
+    ],
+    "3.6 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819499
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749459233
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749493821
+      }
+    ],
+    "3.7 Verify preservation tests still pass": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819514
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749497070
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749531077
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819529
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749536083
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749576486
+      }
+    ],
+    "5. Update README.md documentation for current config schema": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782747819546
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749580195
+      },
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749637714
+      }
+    ],
+    "3. Fix stale config keys in test_config_loading_fidelity.py": [
+      {
+        "executionId": "b9c22ab3-a42b-4edc-9343-7c40a1105b0c",
+        "chatSessionId": "sess_90ecf826-42f0-4e22-8a21-17c8dcce1ee4",
+        "timestamp": 1782749531111
+      }
+    ]
+  }
+}

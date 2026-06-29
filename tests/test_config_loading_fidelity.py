@@ -74,8 +74,7 @@ def full_config_dicts(draw):
     return {
         "host": draw(hosts),
         "port": draw(ports),
-        "image_store_path": draw(path_strings),
-        "db_path": draw(path_strings),
+        "event_data_path": draw(path_strings),
         "event_name": draw(event_names),
         "event_date_range": {
             "start": start.isoformat(),
@@ -88,7 +87,7 @@ def full_config_dicts(draw):
 
 # Config dict with a random subset of optional keys absent
 OPTIONAL_KEYS = [
-    "host", "port", "image_store_path", "db_path",
+    "host", "port", "event_data_path",
     "event_name", "event_date_range", "extraction_mode",
     "extraction_endpoints",
 ]
@@ -114,10 +113,8 @@ def partial_config_dicts(draw):
         config["host"] = draw(hosts)
     if "port" in included:
         config["port"] = draw(ports)
-    if "image_store_path" in included:
-        config["image_store_path"] = draw(path_strings)
-    if "db_path" in included:
-        config["db_path"] = draw(path_strings)
+    if "event_data_path" in included:
+        config["event_data_path"] = draw(path_strings)
     if "event_name" in included:
         config["event_name"] = draw(event_names)
     if "event_date_range" in included:
@@ -154,8 +151,9 @@ class TestConfigLoadingFidelity:
         assert isinstance(result, AppConfig)
         assert result.host == config_dict["host"]
         assert result.port == config_dict["port"]
-        assert result.image_store_path == Path(config_dict["image_store_path"])
-        assert result.db_path == Path(config_dict["db_path"])
+        assert result.event_data_path == Path(config_dict["event_data_path"])
+        assert result.image_store_path == result.event_data_path / "images"
+        assert result.db_path == result.event_data_path / "flight_cards.db"
         assert result.event_name == config_dict["event_name"]
         assert result.extraction_mode == config_dict["extraction_mode"]
 
@@ -197,15 +195,14 @@ class TestConfigLoadingFidelity:
         else:
             assert result.port == config_dict["port"]
 
-        if "image_store_path" not in config_dict:
-            assert result.image_store_path == Path("./images")
+        if "event_data_path" not in config_dict:
+            assert result.event_data_path == Path("./data")
+            assert result.image_store_path == Path("./data/images")
+            assert result.db_path == Path("./data/flight_cards.db")
         else:
-            assert result.image_store_path == Path(config_dict["image_store_path"])
-
-        if "db_path" not in config_dict:
-            assert result.db_path == Path("./flight_cards.db")
-        else:
-            assert result.db_path == Path(config_dict["db_path"])
+            assert result.event_data_path == Path(config_dict["event_data_path"])
+            assert result.image_store_path == result.event_data_path / "images"
+            assert result.db_path == result.event_data_path / "flight_cards.db"
 
         if "event_name" not in config_dict:
             assert result.event_name == "Flight Card Scanner"
