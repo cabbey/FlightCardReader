@@ -23,6 +23,7 @@ from .database import create_all, init_engine
 from .exceptions import ConfigError
 from .routers import admin, reports, review, scan
 from .services.extraction_service import ExtractionMode, ExtractionService
+from .services.flier_match_service import FlierMatchService
 from .services.thrustcurve_service import ThrustCurveService
 
 logger = logging.getLogger(__name__)
@@ -163,10 +164,20 @@ async def lifespan(app: FastAPI):
     thrustcurve_service = ThrustCurveService(cache_dir=config.thrustcurve_cache_path)
     await thrustcurve_service.startup()
 
+    # 5b. Initialize FlierMatchService if configured
+    flier_match_service = None
+    if config.known_fliers_path:
+        flier_match_service = FlierMatchService(
+            known_fliers_path=config.known_fliers_path,
+            flier_match_model=config.flier_match_model,
+        )
+        flier_match_service.load()
+
     extraction_service = ExtractionService(
         config=config,
         session_factory=session_factory,
         thrustcurve_service=thrustcurve_service,
+        flier_match_service=flier_match_service,
     )
 
     # Roll back any records stuck in "processing" from a previous unclean shutdown
@@ -210,6 +221,7 @@ async def lifespan(app: FastAPI):
     app.state.config = config
     app.state.extraction_service = extraction_service
     app.state.thrustcurve_service = thrustcurve_service
+    app.state.flier_match_service = flier_match_service
 
     yield
 

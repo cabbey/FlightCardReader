@@ -272,6 +272,7 @@ class ExtractionService:
         config: AppConfig,
         session_factory,
         thrustcurve_service=None,
+        flier_match_service=None,
     ) -> None:
         """Initialise the extraction service.
 
@@ -279,6 +280,7 @@ class ExtractionService:
             config: The application configuration (endpoints, mode, date range).
             session_factory: An async_sessionmaker for creating DB sessions.
             thrustcurve_service: Optional ThrustCurveService for motor lookups.
+            flier_match_service: Optional FlierMatchService for known flier matching.
         """
         self._config = config
         self._mode = ExtractionMode(config.extraction_mode)
@@ -287,6 +289,7 @@ class ExtractionService:
         self._endpoints = config.extraction_endpoints
         self._workers: list[asyncio.Task] = []
         self._thrustcurve = thrustcurve_service
+        self._flier_match_service = flier_match_service
         # One semaphore per endpoint, keyed by URL
         self._endpoint_semaphores: dict[str, asyncio.Semaphore] = {
             ep.url: asyncio.Semaphore(ep.concurrency) for ep in self._endpoints
@@ -488,6 +491,77 @@ class ExtractionService:
                     record_id,
                     exc,
                 )
+
+        # Post-extraction: flier verification via known fliers list
+        if self._flier_match_service and self._flier_match_service.enabled:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record:
+                        # Extract membership info from overflow
+                        membership = (record.overflow or {}).get("membership", {})
+                        result = await self._flier_match_service.match_flier(
+                            client,
+                            flier_name=record.flier_name,
+                            club=membership.get("club"),
+                            member_number=membership.get("member_number"),
+                            cert_level=membership.get("cert_level"),
+                        )
+                        await self._apply_flier_match(db, record_id, result)
+            except Exception as exc:
+                logger.warning(
+                    "Flier verification failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
+
+    async def _apply_flier_match(
+        self,
+        db,
+        record_id: int,
+        result,
+    ) -> None:
+        """Apply flier match result to the database record."""
+        from flight_card_scanner.services import record_service
+        from flight_card_scanner.services.flier_match_service import FlierMatchResult
+
+        record = await record_service.get(db, record_id)
+        if record is None:
+            return
+
+        if result.error:
+            record.extraction_status = "flier_match_failed"
+            await db.commit()
+            return
+
+        if not result.matched:
+            record.extraction_status = "flier_not_found"
+            await db.commit()
+            return
+
+        # Successful match — update record with authoritative data
+        row = result.row_data
+        record.flier_name = row.get("Name") or record.flier_name
+        record.flier_verified = True
+
+        # Update membership in overflow
+        overflow = dict(record.overflow or {})
+        membership = overflow.get("membership", {})
+        if row.get("NAR"):
+            membership["club"] = "NAR"
+            membership["member_number"] = row["NAR"]
+        elif row.get("TRA"):
+            membership["club"] = "TRA"
+            membership["member_number"] = row["TRA"]
+        if row.get("Level"):
+            try:
+                membership["cert_level"] = int(row["Level"])
+            except (ValueError, TypeError):
+                pass
+        overflow["membership"] = membership
+        record.overflow = overflow
+
+        await db.commit()
 
     async def _call_ollama(
         self, client: httpx.AsyncClient, image_path: str

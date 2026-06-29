@@ -58,6 +58,11 @@ class FlightRecord(Base):
     # --- Recovery plan ---
     recovery_plan: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
+    # --- Flier verification ---
+    flier_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     # --- JSON overflow for remaining fields ---
     overflow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

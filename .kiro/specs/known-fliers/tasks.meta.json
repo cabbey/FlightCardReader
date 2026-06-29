@@ -1,0 +1,237 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.3 Add `flier_verified` column to `FlightRecord` model": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254793
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745267511
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745422639
+      }
+    ],
+    "2.1 Create `flight_card_scanner/services/flier_match_service.py` with class skeleton and TSV loading": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254836
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745268695
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745423578
+      }
+    ],
+    "2.3 Implement `build_prompt()` and `build_payload()` methods": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254868
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745430756
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745589674
+      }
+    ],
+    "2.6 Implement `parse_response()` and `get_row_by_line_number()` methods": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254895
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745431611
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745590589
+      }
+    ],
+    "2.8 Implement `match_flier()` async method": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254920
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746028775
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746189778
+      }
+    ],
+    "3. Checkpoint": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254958
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746203509
+      }
+    ],
+    "4.1 Initialize `FlierMatchService` in application lifespan (`main.py`)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254977
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746204330
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746548923
+      }
+    ],
+    "4.2 Add `flier_match_service` parameter to `ExtractionService` and call in `_process()`": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745254995
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746205211
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746549777
+      }
+    ],
+    "5. Final checkpoint": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745255019
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746568430
+      },
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746603575
+      }
+    ],
+    "1.1 Add `known_fliers_path` and `flier_match_model` fields to `AppConfig` and `load_config()`": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745996439
+      }
+    ],
+    "1. Configuration and database schema": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782745996478
+      }
+    ],
+    "1.2 Write property test for config field round-trip (Property 1)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746021194
+      }
+    ],
+    "2.2 Write property test for TSV parsing (Property 2)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746021955
+      }
+    ],
+    "2. Implement FlierMatchService core": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746189815
+      }
+    ],
+    "2.4 Write property test for prompt contents (Property 3)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746194395
+      }
+    ],
+    "2.5 Write property test for payload structure (Property 7)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746195317
+      }
+    ],
+    "2.7 Write property test for response parsing (Property 4)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746196147
+      }
+    ],
+    "4. Integration into extraction pipeline": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746549802
+      }
+    ],
+    "4.3 Write property test for successful match application (Property 5)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746563155
+      }
+    ],
+    "4.4 Write property test for no-match preservation (Property 6)": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746563841
+      }
+    ],
+    "4.5 Write unit tests for FlierMatchService integration": [
+      {
+        "executionId": "41587d38-085f-49e7-9e98-c64fd557dc57",
+        "chatSessionId": "sess_afe81634-ff12-4ea0-89e4-4c335900f212",
+        "timestamp": 1782746564646
+      }
+    ]
+  }
+}
