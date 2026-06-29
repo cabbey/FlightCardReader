@@ -1634,25 +1634,55 @@
       });
     }
 
-    // Keyboard accelerators for the confirmation/review screen
-    // Space = Accept, Escape = Retake
+    // Keyboard accelerators
+    // Confirmation screen: A = Accept, R = Retake
+    // Global toggles: M = Mirror, D = Debug, L = Loosen tolerances
     document.addEventListener('keydown', function (e) {
-      // Only active when confirmation screen is visible
-      if (!confirmationStateEl || confirmationStateEl.style.display !== 'block') {
+      // Ignore if user is typing in an input/textarea
+      var tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') {
         return;
       }
 
-      if (e.code === 'Space' || e.key === ' ') {
-        e.preventDefault();
-        if (acceptBtn && !acceptBtn.disabled && capturedDataUrl) {
-          getFinalDataUrl().then(function(finalUrl) {
-            submitCard(finalUrl);
-          });
+      var key = e.key.toLowerCase();
+
+      // --- Confirmation screen shortcuts (only when visible) ---
+      if (confirmationStateEl && confirmationStateEl.style.display === 'block') {
+        if (key === 'a') {
+          e.preventDefault();
+          if (acceptBtn && !acceptBtn.disabled && capturedDataUrl) {
+            getFinalDataUrl().then(function(finalUrl) {
+              submitCard(finalUrl);
+            });
+          }
+          return;
+        } else if (key === 'r') {
+          e.preventDefault();
+          if (rejectBtn && !rejectBtn.disabled) {
+            transitionToLivePreview();
+          }
+          return;
         }
-      } else if (e.code === 'Escape' || e.key === 'Escape') {
-        e.preventDefault();
-        if (rejectBtn && !rejectBtn.disabled) {
-          transitionToLivePreview();
+      }
+
+      // --- Global toggle shortcuts ---
+      if (key === 'm') {
+        var mirrorEl = document.getElementById('mirrorToggle');
+        if (mirrorEl) {
+          mirrorEl.checked = !mirrorEl.checked;
+          mirrorEl.dispatchEvent(new Event('change'));
+        }
+      } else if (key === 'd') {
+        var debugEl = document.getElementById('debugToggle');
+        if (debugEl) {
+          debugEl.checked = !debugEl.checked;
+          debugEl.dispatchEvent(new Event('change'));
+        }
+      } else if (key === 'l') {
+        var loosenEl = document.getElementById('relaxedToggle');
+        if (loosenEl) {
+          loosenEl.checked = !loosenEl.checked;
+          loosenEl.dispatchEvent(new Event('change'));
         }
       }
     });
