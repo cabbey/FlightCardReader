@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import AppConfig
 from ..database import get_db
 from ..schemas import (
     FlightRecordUpdate,
@@ -25,6 +26,7 @@ from ..schemas import (
 )
 from ..services import record_service
 from ..services.extraction_service import ExtractionMode, ExtractionService
+from ..services.flier_match_service import FlierMatchService
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +35,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _extraction_service: ExtractionService | None = None
+_flier_match_service: FlierMatchService | None = None
+_config: AppConfig | None = None
 
 
-def configure(extraction_service: ExtractionService) -> None:
+def configure(
+    extraction_service: ExtractionService,
+    flier_match_service: FlierMatchService | None = None,
+    config: AppConfig | None = None,
+) -> None:
     """Set module-level dependencies. Called once during app startup."""
-    global _extraction_service
+    global _extraction_service, _flier_match_service, _config
     _extraction_service = extraction_service
+    _flier_match_service = flier_match_service
+    _config = config
 
 
 def get_extraction_service() -> ExtractionService:
@@ -165,7 +175,68 @@ async def update_record(
         raise HTTPException(status_code=422, detail="No fields to update")
 
     updated_record = await record_service.update_fields(db, record_id, updates)
+
+    # Re-run flier verification if flier_name was changed
+    if "flier_name" in updates and _flier_match_service and _flier_match_service.enabled:
+        await _run_flier_verification(db, updated_record)
+
     return {"message": "Record updated", "id": updated_record.id}
+
+
+async def _run_flier_verification(db: AsyncSession, record) -> None:
+    """Run flier match verification and store result in overflow."""
+    import httpx
+
+    endpoint_url = _config.extraction_endpoints[0].url if _config else "http://localhost:11434"
+    membership = (record.overflow or {}).get("membership", {})
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=endpoint_url, timeout=120.0
+        ) as client:
+            result = await _flier_match_service.match_flier(
+                client,
+                flier_name=record.flier_name,
+                club=membership.get("club"),
+                member_number=membership.get("member_number"),
+                cert_level=membership.get("cert_level"),
+            )
+    except Exception as exc:
+        logger.warning("Flier verification failed for record %d: %s", record.id, exc)
+        return
+
+    overflow = dict(record.overflow or {})
+
+    if result.error:
+        overflow["flier_match_status"] = "error"
+        overflow["flier_match_error"] = str(result.error)
+        record.flier_verified = False
+    elif not result.matched:
+        overflow["flier_match_status"] = "not_found"
+        overflow.pop("flier_match_error", None)
+        record.flier_verified = False
+    else:
+        overflow["flier_match_status"] = "verified"
+        overflow.pop("flier_match_error", None)
+        record.flier_verified = True
+        # Update membership from matched row
+        row = result.row_data
+        mem = overflow.get("membership", {})
+        if row.get("NAR"):
+            mem["club"] = "NAR"
+            mem["member_number"] = row["NAR"]
+        elif row.get("TRA"):
+            mem["club"] = "TRA"
+            mem["member_number"] = row["TRA"]
+        if row.get("Level"):
+            try:
+                mem["cert_level"] = int(row["Level"])
+            except (ValueError, TypeError):
+                pass
+        overflow["membership"] = mem
+
+    record.overflow = overflow
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
