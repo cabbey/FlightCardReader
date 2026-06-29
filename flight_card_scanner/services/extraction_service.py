@@ -529,23 +529,28 @@ class ExtractionService:
         if record is None:
             return
 
+        overflow = dict(record.overflow or {})
+
         if result.error:
-            record.extraction_status = "flier_match_failed"
+            overflow["flier_match_status"] = "error"
+            overflow["flier_match_error"] = str(result.error)
+            record.overflow = overflow
             await db.commit()
             return
 
         if not result.matched:
-            record.extraction_status = "flier_not_found"
+            overflow["flier_match_status"] = "not_found"
+            record.overflow = overflow
             await db.commit()
             return
 
         # Successful match — update record with authoritative data
+        overflow["flier_match_status"] = "verified"
         row = result.row_data
         record.flier_name = row.get("Name") or record.flier_name
         record.flier_verified = True
 
         # Update membership in overflow
-        overflow = dict(record.overflow or {})
         membership = overflow.get("membership", {})
         if row.get("NAR"):
             membership["club"] = "NAR"

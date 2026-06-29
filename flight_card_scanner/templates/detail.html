@@ -507,6 +507,31 @@
     color: #6b7280;
   }
 
+  /* Flier verification status badges */
+  .flier-status {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  .flier-verified {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .flier-not-found {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .flier-error {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
   .tc-select-wrapper {
     display: block;
     margin-top: 0.3rem;
@@ -739,6 +764,14 @@
             <div class="editable-field" data-field="flier_name" data-type="text" data-value="{{ record.flier_name or '' }}">
               <span class="field-display">{{ record.flier_name or "—" }}</span>
             </div>
+            {% set flier_status = record.overflow.flier_match_status if record.overflow and record.overflow.flier_match_status else None %}
+            {% if flier_status == "verified" %}
+            <span class="flier-status flier-verified" title="Verified against known fliers roster">&#x2713; verified</span>
+            {% elif flier_status == "not_found" %}
+            <span class="flier-status flier-not-found" title="Not found in known fliers roster">? not found</span>
+            {% elif flier_status == "error" %}
+            <span class="flier-status flier-error" title="{{ record.overflow.flier_match_error or 'Verification failed' }}">&#x2717; error</span>
+            {% endif %}
           </dd>
 
           {% if record.overflow and record.overflow.membership or show_all_fields %}
