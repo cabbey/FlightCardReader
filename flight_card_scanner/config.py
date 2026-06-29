@@ -37,7 +37,6 @@ class AppConfig:
     host: str = "0.0.0.0"
     port: int = 8000
     event_data_path: Path = field(default_factory=lambda: Path("./data"))
-    thrustcurve_cache_path: Path = field(default_factory=lambda: Path("./thrustcurve_cache"))
     event_name: str = "Flight Card Scanner"
     event_date_range: DateRange = field(
         default_factory=lambda: DateRange(start=date.today(), end=date.today())
@@ -150,9 +149,6 @@ def load_config(path: Path) -> AppConfig:
     # --- event_data_path ---
     event_data_path = Path(get_with_default("event_data_path", "./data"))
 
-    # --- thrustcurve_cache_path ---
-    thrustcurve_cache_path = Path(get_with_default("thrustcurve_cache_path", "./thrustcurve_cache"))
-
     # --- event_name ---
     event_name = get_with_default("event_name", "Flight Card Scanner")
 
@@ -240,7 +236,6 @@ def load_config(path: Path) -> AppConfig:
         host=host,
         port=port,
         event_data_path=event_data_path,
-        thrustcurve_cache_path=thrustcurve_cache_path,
         event_name=event_name,
         event_date_range=event_date_range,
         extraction_mode=extraction_mode,

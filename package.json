@@ -4,7 +4,8 @@
   "description": "Client-side assets for the Flight Card Scanner, including OpenCV.js",
   "private": true,
   "dependencies": {
-    "opencv.js": "^1.2.1"
+    "opencv.js": "^1.2.1",
+    "thrustcurve-db": "^2.0.0"
   },
   "pnpm": {
     "moduleDirectory": "flight_card_scanner/static/js/node_modules"

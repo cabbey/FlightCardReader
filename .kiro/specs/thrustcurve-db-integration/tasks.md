@@ -6,14 +6,14 @@ Replace the HTTP-based `ThrustCurveService` with a local `MotorLookupService` th
 
 ## Tasks
 
-- [ ] 1. Install thrustcurve-db package and create MotorLookupService
-  - [ ] 1.1 Add thrustcurve-db to package.json and install via pnpm
+- [x] 1. Install thrustcurve-db package and create MotorLookupService
+  - [x] 1.1 Add thrustcurve-db to package.json and install via pnpm
     - Add `"thrustcurve-db": "^2.0.0"` to the `dependencies` in the root `package.json`
     - Run `pnpm install` to install the package into `flight_card_scanner/static/js/node_modules/thrustcurve-db/`
     - Verify the JSON file exists at the expected path
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 1.2 Create MotorLookupService module
+  - [x] 1.2 Create MotorLookupService module
     - Create `flight_card_scanner/services/motor_lookup_service.py`
     - Implement the `MotorLookupService` class with `__init__`, `startup`, `_load_database`, `_build_indexes` methods
     - Include the `_MANUFACTURER_ALIASES` dict as defined in the design
@@ -46,11 +46,11 @@ Replace the HTTP-based `ThrustCurveService` with a local `MotorLookupService` th
     - For any motor with a valid `thrustcurve_id`, `enrich_motors_for_display` produces a `thrustcurve_data` dict containing all required fields
     - **Validates: Requirements 5.1, 8.2**
 
-- [ ] 2. Checkpoint - Verify MotorLookupService works standalone
+- [x] 2. Checkpoint - Verify MotorLookupService works standalone
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 3. Update configuration and remove old service
-  - [ ] 3.1 Remove thrustcurve_cache_path from AppConfig and load_config
+- [x] 3. Update configuration and remove old service
+  - [x] 3.1 Remove thrustcurve_cache_path from AppConfig and load_config
     - Remove the `thrustcurve_cache_path` field from the `AppConfig` dataclass in `flight_card_scanner/config.py`
     - Remove the `thrustcurve_cache_path` parsing block from `load_config()` (the key will be naturally ignored since it is no longer read)
     - Remove `thrustcurve_cache_path` from the `return AppConfig(...)` call
@@ -62,12 +62,12 @@ Replace the HTTP-based `ThrustCurveService` with a local `MotorLookupService` th
     - For any valid config JSON that includes a `thrustcurve_cache_path` key, `load_config` succeeds without error and the resulting `AppConfig` has no `thrustcurve_cache_path` attribute
     - **Validates: Requirements 6.2**
 
-  - [ ] 3.3 Delete ThrustCurveService module
+  - [x] 3.3 Delete ThrustCurveService module
     - Remove `flight_card_scanner/services/thrustcurve_service.py`
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 4. Wire MotorLookupService into the application
-  - [ ] 4.1 Update main.py lifespan to use MotorLookupService
+- [x] 4. Wire MotorLookupService into the application
+  - [x] 4.1 Update main.py lifespan to use MotorLookupService
     - Replace `from .services.thrustcurve_service import ThrustCurveService` with `from .services.motor_lookup_service import MotorLookupService`
     - Replace `ThrustCurveService(cache_dir=config.thrustcurve_cache_path)` instantiation with `MotorLookupService()`
     - Keep the `await ...startup()` call
@@ -76,17 +76,17 @@ Replace the HTTP-based `ThrustCurveService` with a local `MotorLookupService` th
     - Remove the `config.thrustcurve_cache_path` reference from `_log_config_summary`
     - _Requirements: 8.3, 8.4, 6.3_
 
-  - [ ] 4.2 Verify admin router compatibility
+  - [x] 4.2 Verify admin router compatibility
     - The admin router accesses `request.app.state.thrustcurve_service` — confirm the new service is stored on `app.state` with the same attribute name
     - Verify `lookup_motors` and `enrich_motors_for_display` are called the same way by the admin router
     - No code change should be needed since the interface is preserved
     - _Requirements: 8.1, 8.2_
 
-- [ ] 5. Checkpoint - Full integration verification
+- [x] 5. Checkpoint - Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Frontend accessibility and cleanup
-  - [ ] 6.1 Verify frontend access to thrustcurve-db JSON
+- [x] 6. Frontend accessibility and cleanup
+  - [x] 6.1 Verify frontend access to thrustcurve-db JSON
     - Confirm the static file mount at `/static` serves `js/node_modules/thrustcurve-db/thrustcurve-db.json`
     - The existing `StaticFiles` mount in `main.py` already covers this path, so no code change is needed — just verify the file is accessible
     - _Requirements: 9.1, 9.2_
@@ -98,7 +98,7 @@ Replace the HTTP-based `ThrustCurveService` with a local `MotorLookupService` th
     - Test that a config.json with `thrustcurve_cache_path` key loads without error
     - _Requirements: 2.1, 3.1, 5.1, 6.2_
 
-- [ ] 7. Final checkpoint - Ensure all tests pass
+- [x] 7. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

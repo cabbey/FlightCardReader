@@ -11,12 +11,20 @@ importers:
       opencv.js:
         specifier: ^1.2.1
         version: 1.2.1
+      thrustcurve-db:
+        specifier: ^2.0.0
+        version: 2.0.3
 
 packages:
 
   opencv.js@1.2.1:
     resolution: {integrity: sha512-+ji5Pk3eyz+RRSeZr2kLZNJpjsKoGyPJOjFWng7+Cuq9ylHakBqJMxDGlBW1+qdju3k8DadWOiHJ6JaF28UpKA==}
 
+  thrustcurve-db@2.0.3:
+    resolution: {integrity: sha512-BqUxq52kQcA3RMI13XsMZjZNeaisF812V+8u0748VQA1JSho9ZY2NZ+ubrektH/IBuZUzD65ZSaUK+gQov97RA==}
+
 snapshots:
 
   opencv.js@1.2.1: {}
+
+  thrustcurve-db@2.0.3: {}
