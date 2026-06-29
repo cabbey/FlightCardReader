@@ -50,14 +50,15 @@ class TestKnownFliersConfig:
         assert result.known_fliers_path == tsv_path
         assert result.flier_match_model == "qwen2.5:7b"
 
-    def test_path_present_model_absent_raises_config_error(self):
-        """When known_fliers_path is set but flier_match_model is missing, raises ConfigError."""
+    def test_path_present_model_absent_loads_successfully(self):
+        """When known_fliers_path is set but flier_match_model is missing, config loads (no longer required)."""
         tsv_path = _write_tsv("Name\tNAR\tTRA\tLevel\n")
         config_path = _write_config({
             "known_fliers_path": str(tsv_path),
         })
-        with pytest.raises(ConfigError, match="flier_match_model.*required"):
-            load_config(config_path)
+        result = load_config(config_path)
+        assert result.known_fliers_path == tsv_path
+        assert result.flier_match_model is None
 
     def test_path_present_file_not_found_raises_config_error(self):
         """When known_fliers_path points to a non-existent file, raises ConfigError."""

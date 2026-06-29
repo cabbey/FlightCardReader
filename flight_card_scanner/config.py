@@ -49,6 +49,7 @@ class AppConfig:
     ssl_keyfile: Path | None = None
     known_fliers_path: Path | None = None
     flier_match_model: str | None = None
+    auto_accept_threshold: float = 0.95
 
     @property
     def image_store_path(self) -> Path:
@@ -213,7 +214,7 @@ def load_config(path: Path) -> AppConfig:
     if "ssl_keyfile" in data:
         ssl_keyfile = Path(data["ssl_keyfile"])
 
-    # --- known_fliers_path / flier_match_model (optional, must be paired) ---
+    # --- known_fliers_path / flier_match_model (optional) ---
     known_fliers_path: Path | None = None
     flier_match_model: str | None = None
     if "known_fliers_path" in data:
@@ -221,16 +222,15 @@ def load_config(path: Path) -> AppConfig:
     if "flier_match_model" in data:
         flier_match_model = data["flier_match_model"]
 
-    if known_fliers_path is not None and not flier_match_model:
-        raise ConfigError(
-            "Config key 'flier_match_model' is required when 'known_fliers_path' is set."
-        )
     if known_fliers_path is not None and not known_fliers_path.exists():
         raise ConfigError(
             f"Known fliers file not found: {known_fliers_path}"
         )
     if known_fliers_path is None and flier_match_model is None:
         logger.info("Flier verification is disabled (no 'known_fliers_path' configured).")
+
+    # --- auto_accept_threshold (optional, default 0.95) ---
+    auto_accept_threshold = get_with_default("auto_accept_threshold", 0.95)
 
     return AppConfig(
         host=host,
@@ -244,4 +244,5 @@ def load_config(path: Path) -> AppConfig:
         ssl_keyfile=ssl_keyfile,
         known_fliers_path=known_fliers_path,
         flier_match_model=flier_match_model,
+        auto_accept_threshold=auto_accept_threshold,
     )

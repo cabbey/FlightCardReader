@@ -1,0 +1,186 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Modify `flight_card_scanner/config.py` to add `auto_accept_threshold` field and relax validation": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316707
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760332875
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782761041704
+      }
+    ],
+    "2.1 Rewrite `flight_card_scanner/services/flier_match_service.py` with rapidfuzz matching": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316728
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782761049680
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766108018
+      }
+    ],
+    "3. Checkpoint - Ensure FlierMatchService tests pass": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316742
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766125474
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766156032
+      }
+    ],
+    "4.1 Update `flight_card_scanner/main.py` to remove `flier_match_model` from FlierMatchService construction": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316758
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766165877
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766298841
+      }
+    ],
+    "4.2 Update `flight_card_scanner/services/extraction_service.py` with new call site and tiered auto-accept logic": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316779
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766166833
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766299735
+      }
+    ],
+    "5.1 Rewrite `tests/test_flier_match_flow.py` for new rapidfuzz-based FlierMatchService": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316810
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766304602
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766419869
+      }
+    ],
+    "5.2 Rewrite `tests/test_flier_match_parse.py` to test rapidfuzz-specific behavior": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316825
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766305759
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766420762
+      }
+    ],
+    "5.3 Write integration tests for ExtractionService `_apply_flier_match()` tiered logic": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316839
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766425250
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766747694
+      }
+    ],
+    "6. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782760316854
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766751867
+      },
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766779007
+      }
+    ],
+    "1. Update configuration and add `auto_accept_threshold`": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782761041716
+      }
+    ],
+    "2. Rewrite `FlierMatchService` with rapidfuzz": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766108031
+      }
+    ],
+    "4. Update ExtractionService caller and main.py": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766299756
+      }
+    ],
+    "5. Rewrite test files for new interface": [
+      {
+        "executionId": "49173cc0-9ac6-4b7d-907e-d43f2c2d8564",
+        "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
+        "timestamp": 1782766747724
+      }
+    ]
+  }
+}

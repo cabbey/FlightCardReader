@@ -2,7 +2,7 @@
 
 Provides:
 - TSV file loading and parsing of known flier data
-- LLM-based fuzzy matching of extracted flier information against the roster
+- Rapidfuzz-based fuzzy matching of extracted flier information against the roster
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
+from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +25,35 @@ class FlierMatchResult:
     line_number: int  # 0 if no match
     row_data: dict[str, str] | None  # The matched row, or None
     error: str | None  # Error message if match failed
+    confidence: float  # 0.0–1.0
 
 
 class FlierMatchService:
-    """Manages known flier list loading and LLM-based matching."""
+    """Manages known flier list loading and rapidfuzz-based matching."""
+
+    DEFAULT_NAME_ONLY_THRESHOLD: float = 80.0
+    DEFAULT_MEMBER_CONFIRMED_THRESHOLD: float = 60.0
 
     def __init__(
         self,
         known_fliers_path: Path,
-        flier_match_model: str,
+        *,
+        name_only_threshold: float | None = None,
+        member_confirmed_threshold: float | None = None,
     ) -> None:
         self._path = known_fliers_path
-        self._model = flier_match_model
+        self._name_only_threshold = (
+            name_only_threshold
+            if name_only_threshold is not None
+            else self.DEFAULT_NAME_ONLY_THRESHOLD
+        )
+        self._member_confirmed_threshold = (
+            member_confirmed_threshold
+            if member_confirmed_threshold is not None
+            else self.DEFAULT_MEMBER_CONFIRMED_THRESHOLD
+        )
         self._headers: list[str] = []
         self._rows: list[dict[str, str]] = []
-        self._raw_lines: list[str] = []
         self._enabled: bool = False
 
     @property
@@ -82,10 +96,7 @@ class FlierMatchService:
             self._enabled = False
             return
 
-        self._rows = [
-            dict(zip(self._headers, row)) for row in data_rows
-        ]
-        self._raw_lines = ["\t".join(row) for row in rows]
+        self._rows = [dict(zip(self._headers, row)) for row in data_rows]
         self._enabled = True
         logger.info(
             "Loaded %d known fliers from %s",
@@ -93,174 +104,150 @@ class FlierMatchService:
             self._path,
         )
 
-    def build_prompt(
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        """Lowercase and strip whitespace for comparison."""
+        return name.strip().lower()
+
+    def _compute_name_similarity(self, extracted_name: str, roster_name: str) -> float:
+        """Compute similarity score (0–100) using rapidfuzz.fuzz.WRatio."""
+        a = self._normalize_name(extracted_name)
+        b = self._normalize_name(roster_name)
+        return fuzz.WRatio(a, b)
+
+    def _find_rows_by_member_number(
         self,
-        flier_name: str | None,
+        member_number: str,
         club: str | None,
-        member_number: str | None,
-        cert_level: int | None,
-    ) -> str:
-        """Build the matching prompt with numbered flier lines and extracted data.
+    ) -> list[tuple[int, dict[str, str]]]:
+        """Find roster rows matching the given member number.
 
-        The prompt has three sections:
-        1. Instructions explaining the matching task
-        2. Numbered known fliers list (1-indexed, header at line 1)
-        3. Extracted data from the flight card
+        Search order:
+        1. If club is specified, search that column first, then the other.
+        2. If no club specified (common pattern — many flight cards contain
+           only a bare number), search BOTH NAR and TRA columns simultaneously.
+
+        Returns list of (row_index, row_dict) tuples.
         """
-        # Section 1: Instructions
-        instructions = (
-            "You are matching a flier extracted from a handwritten flight card "
-            "against a list of known club members.\n"
-            "\n"
-            "Instructions:\n"
-            "- Compare the extracted flier information below against the numbered "
-            "list of known fliers.\n"
-            "- Return ONLY the line number of the best match. Line 1 is the header "
-            "row; data starts at line 2.\n"
-            "- If no sufficiently close match exists, return 0.\n"
-            "- Account for common OCR errors: O/0, I/1, similar-sounding names, "
-            "abbreviations."
-        )
+        results: list[tuple[int, dict[str, str]]] = []
+        normalized_number = member_number.strip()
 
-        # Section 2: Numbered known fliers list
-        numbered_lines = "\n".join(
-            f"{i + 1}\t{line}" for i, line in enumerate(self._raw_lines)
-        )
-        flier_list_section = f"Known Fliers List:\n{numbered_lines}"
+        if club:
+            # Search indicated column first
+            primary_col = club.upper()  # "NAR" or "TRA"
+            other_col = "TRA" if primary_col == "NAR" else "NAR"
 
-        # Section 3: Extracted data
-        extracted_section = (
-            "Extracted flier information:\n"
-            f"- Name: {flier_name or ''}\n"
-            f"- Club: {club or ''}\n"
-            f"- Member number: {member_number or ''}\n"
-            f"- Certification level: {cert_level if cert_level is not None else ''}"
-        )
+            for idx, row in enumerate(self._rows):
+                if row.get(primary_col, "").strip() == normalized_number:
+                    results.append((idx, row))
 
-        # Final instruction
-        closing = "Respond with ONLY the line number (an integer), nothing else."
+            # Fall back to other column if nothing found
+            if not results:
+                for idx, row in enumerate(self._rows):
+                    if row.get(other_col, "").strip() == normalized_number:
+                        results.append((idx, row))
+        else:
+            # No club specified — search both columns (primary use case)
+            for idx, row in enumerate(self._rows):
+                if (
+                    row.get("NAR", "").strip() == normalized_number
+                    or row.get("TRA", "").strip() == normalized_number
+                ):
+                    results.append((idx, row))
 
-        return f"{instructions}\n\n{flier_list_section}\n\n{extracted_section}\n\n{closing}"
+        return results
 
-    def build_payload(self, prompt: str) -> dict:
-        """Build the Ollama /api/chat payload (text-only, no images).
+    def _score_candidate(
+        self,
+        flier_name: str,
+        row: dict[str, str],
+        member_confirmed: bool,
+    ) -> tuple[float, float]:
+        """Score a single candidate row.
 
-        Returns a dict suitable for POSTing to the Ollama /api/chat endpoint.
-        Uses the configured flier_match_model, temperature 0 for deterministic
-        output, a large context window for big rosters, and minimal prediction
-        length since only an integer is expected.
+        Returns (composite_score, confidence) where:
+        - composite_score is used for ranking (internal)
+        - confidence is the 0.0–1.0 value stored in the result
         """
-        return {
-            "model": self._model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            "stream": False,
-            "options": {
-                "temperature": 0,
-                "num_ctx": 32768,
-                "num_predict": 16,
-            },
-        }
+        name_similarity = self._compute_name_similarity(flier_name, row.get("Name", ""))
+        member_bonus = 20.0 if member_confirmed else 0.0
+        composite_score = name_similarity + member_bonus
 
-    def parse_response(self, raw_content: str) -> int:
-        """Parse LLM response as an integer line number.
+        if member_confirmed:
+            confidence = min((name_similarity + 20.0) / 100.0, 1.0)
+        else:
+            confidence = name_similarity / 100.0
 
-        Returns:
-            The parsed line number (0 means no match).
-
-        Raises:
-            ValueError: If the response cannot be parsed as an integer.
-        """
-        stripped = raw_content.strip()
-        return int(stripped)
-
-    def get_row_by_line_number(self, line_number: int) -> dict[str, str] | None:
-        """Get a data row by its 1-indexed line number (line 1 = header).
-
-        Returns None if line_number is out of bounds.
-        Data row 1 is at line_number 2 (since line 1 is the header).
-        """
-        # Line 1 is the header, so data rows start at line 2.
-        # line_number 2 → index 0, line_number 3 → index 1, etc.
-        row_index = line_number - 2
-        if row_index < 0 or row_index >= len(self._rows):
-            return None
-        return self._rows[row_index]
+        return composite_score, confidence
 
     async def match_flier(
         self,
-        client: httpx.AsyncClient,
         flier_name: str | None,
         club: str | None,
         member_number: str | None,
         cert_level: int | None,
     ) -> FlierMatchResult:
-        """Execute the full match flow: build prompt, call LLM, parse result.
+        """Execute the full match flow against the loaded roster.
 
-        Returns a FlierMatchResult with status and optional matched data.
+        Scores all roster rows using rapidfuzz name similarity, applies
+        thresholds, and returns the best match.
         """
-        prompt = self.build_prompt(flier_name, club, member_number, cert_level)
-        payload = self.build_payload(prompt)
-
-        # POST to Ollama /api/chat
-        try:
-            response = await client.post("/api/chat", json=payload)
-            response.raise_for_status()
-        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            return FlierMatchResult(
-                matched=False,
-                line_number=0,
-                row_data=None,
-                error=str(exc),
-            )
-
-        # Extract content from response
-        data = response.json()
-        raw_content = data["message"]["content"]
-
-        # Parse the integer line number
-        try:
-            line_number = self.parse_response(raw_content)
-        except ValueError:
-            return FlierMatchResult(
-                matched=False,
-                line_number=0,
-                row_data=None,
-                error=f"Failed to parse LLM response: {raw_content}",
-            )
-
-        # Line number 0 means no match
-        if line_number == 0:
+        if not self._enabled or not flier_name:
             return FlierMatchResult(
                 matched=False,
                 line_number=0,
                 row_data=None,
                 error=None,
+                confidence=0.0,
             )
 
-        # Validate line number is in bounds
-        row = self.get_row_by_line_number(line_number)
-        if row is None:
-            logger.warning(
-                "LLM returned line number %d which is out of bounds (row_count=%d)",
-                line_number,
-                self.row_count,
+        # Phase 1: Member number lookup (if provided)
+        member_confirmed_rows: set[int] = set()
+        if member_number:
+            rows_by_number = self._find_rows_by_member_number(member_number, club)
+            member_confirmed_rows = {idx for idx, _ in rows_by_number}
+
+        # Phase 2: Score ALL roster rows
+        best_score: float = -1.0
+        best_row: dict[str, str] | None = None
+        best_line: int = 0
+        best_confidence: float = 0.0
+
+        for idx, row in enumerate(self._rows):
+            is_confirmed = idx in member_confirmed_rows
+            name_sim = self._compute_name_similarity(flier_name, row.get("Name", ""))
+
+            # Apply applicable threshold
+            threshold = (
+                self._member_confirmed_threshold
+                if is_confirmed
+                else self._name_only_threshold
             )
+            if name_sim < threshold:
+                continue
+
+            # Compute composite score for ranking
+            composite, confidence = self._score_candidate(flier_name, row, is_confirmed)
+
+            if composite > best_score:
+                best_score = composite
+                best_row = row
+                best_line = idx + 2  # 1-indexed, header is line 1
+                best_confidence = confidence
+
+        if best_row is None:
             return FlierMatchResult(
                 matched=False,
-                line_number=line_number,
+                line_number=0,
                 row_data=None,
                 error=None,
+                confidence=0.0,
             )
 
-        # Successful match
         return FlierMatchResult(
             matched=True,
-            line_number=line_number,
-            row_data=row,
+            line_number=best_line,
+            row_data=best_row,
             error=None,
+            confidence=best_confidence,
         )

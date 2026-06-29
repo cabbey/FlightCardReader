@@ -168,7 +168,6 @@ async def lifespan(app: FastAPI):
     if config.known_fliers_path:
         flier_match_service = FlierMatchService(
             known_fliers_path=config.known_fliers_path,
-            flier_match_model=config.flier_match_model,
         )
         flier_match_service.load()
 

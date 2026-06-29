@@ -290,6 +290,7 @@ class ExtractionService:
         self._workers: list[asyncio.Task] = []
         self._thrustcurve = thrustcurve_service
         self._flier_match_service = flier_match_service
+        self._auto_accept_threshold = config.auto_accept_threshold
         # One semaphore per endpoint, keyed by URL
         self._endpoint_semaphores: dict[str, asyncio.Semaphore] = {
             ep.url: asyncio.Semaphore(ep.concurrency) for ep in self._endpoints
@@ -501,7 +502,6 @@ class ExtractionService:
                         # Extract membership info from overflow
                         membership = (record.overflow or {}).get("membership", {})
                         result = await self._flier_match_service.match_flier(
-                            client,
                             flier_name=record.flier_name,
                             club=membership.get("club"),
                             member_number=membership.get("member_number"),
@@ -521,7 +521,16 @@ class ExtractionService:
         record_id: int,
         result,
     ) -> None:
-        """Apply flier match result to the database record."""
+        """Apply flier match result to the database record.
+
+        Three cases:
+        1. Error or no match → store status only
+        2. High confidence (> auto_accept_threshold) → auto-accept,
+           set flier_verified=True, apply row data to record
+        3. Lower confidence (matched but <= auto_accept_threshold) → flag for
+           review, set flier_verified=False, store candidate in overflow
+           WITHOUT overwriting existing fields
+        """
         from flight_card_scanner.services import record_service
         from flight_card_scanner.services.flier_match_service import FlierMatchResult
 
@@ -544,28 +553,56 @@ class ExtractionService:
             await db.commit()
             return
 
-        # Successful match — update record with authoritative data
-        overflow["flier_match_status"] = "verified"
-        row = result.row_data
-        record.flier_name = row.get("Name") or record.flier_name
-        record.flier_verified = True
+        # Store confidence regardless of tier
+        overflow["flier_match_confidence"] = result.confidence
 
-        # Update membership in overflow
-        membership = overflow.get("membership", {})
-        if row.get("NAR"):
-            membership["club"] = "NAR"
-            membership["member_number"] = row["NAR"]
-        elif row.get("TRA"):
-            membership["club"] = "TRA"
-            membership["member_number"] = row["TRA"]
-        if row.get("Level"):
-            try:
-                membership["cert_level"] = int(row["Level"])
-            except (ValueError, TypeError):
-                pass
-        overflow["membership"] = membership
+        if result.confidence > self._auto_accept_threshold:
+            # HIGH CONFIDENCE — auto-accept
+            overflow["flier_match_status"] = "verified"
+            record.flier_verified = True
+
+            # Apply matched row data to the record
+            row = result.row_data
+            record.flier_name = row.get("Name") or record.flier_name
+
+            # Update membership in overflow from authoritative roster data
+            membership = overflow.get("membership", {})
+            if row.get("NAR"):
+                membership["club"] = "NAR"
+                membership["member_number"] = row["NAR"]
+            elif row.get("TRA"):
+                membership["club"] = "TRA"
+                membership["member_number"] = row["TRA"]
+            if row.get("Level"):
+                try:
+                    membership["cert_level"] = int(row["Level"])
+                except (ValueError, TypeError):
+                    pass
+            overflow["membership"] = membership
+
+        else:
+            # LOWER CONFIDENCE — flag for review, do NOT overwrite existing fields
+            overflow["flier_match_status"] = "review"
+            record.flier_verified = False
+
+            # Store candidate data separately so reviewers can see it
+            row = result.row_data
+            candidate = {
+                "name": row.get("Name"),
+                "line_number": result.line_number,
+            }
+            if row.get("NAR"):
+                candidate["club"] = "NAR"
+                candidate["member_number"] = row["NAR"]
+            elif row.get("TRA"):
+                candidate["club"] = "TRA"
+                candidate["member_number"] = row["TRA"]
+            if row.get("Level"):
+                candidate["cert_level"] = row["Level"]
+            candidate["confidence"] = result.confidence
+            overflow["flier_match_candidate"] = candidate
+
         record.overflow = overflow
-
         await db.commit()
 
     async def _call_ollama(
