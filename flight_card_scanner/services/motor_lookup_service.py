@@ -238,10 +238,20 @@ class MotorLookupService:
             results = self.search_motors(common_name, manufacturer)
 
             if len(results) == 1:
-                motor["thrustcurve_id"] = str(results[0].get("motorId"))
+                match = results[0]
+                motor["thrustcurve_id"] = str(match.get("motorId"))
+                motor["thrustcurve_data"] = {
+                    "commonName": match.get("commonName"),
+                    "manufacturerAbbrev": match.get("manufacturerAbbrev"),
+                    "designation": match.get("designation"),
+                    "propInfo": match.get("propInfo"),
+                    "totImpulseNs": match.get("totImpulseNs"),
+                    "avgThrustN": match.get("avgThrustN"),
+                    "diameter": match.get("diameter"),
+                    "impulseClass": match.get("impulseClass"),
+                }
                 motor.pop("thrustcurve_candidates", None)
                 motor.pop("thrustcurve_error", None)
-                motor.pop("thrustcurve_data", None)
             elif len(results) > 1:
                 motor["thrustcurve_candidates"] = [
                     {
