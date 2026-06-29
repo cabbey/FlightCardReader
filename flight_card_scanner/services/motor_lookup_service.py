@@ -114,6 +114,40 @@ class MotorLookupService:
             "Motor database loaded: %d motors indexed", len(self._motors)
         )
 
+    @property
+    def _metadata(self) -> dict[str, Any]:
+        """Derive metadata (impulse classes and manufacturers) from loaded motors."""
+        impulse_classes: set[str] = set()
+        manufacturers: dict[str, str] = {}  # abbrev -> abbrev
+
+        for motor in self._motors:
+            # Extract impulse class letter from commonName (first char)
+            cn = motor.get("commonName", "")
+            if cn:
+                letter = cn.strip()[0].upper()
+                if letter.isalpha():
+                    impulse_classes.add(letter)
+
+            # Collect unique manufacturers
+            abbrev = motor.get("manufacturerAbbrev", "")
+            if abbrev and abbrev not in manufacturers:
+                manufacturers[abbrev] = abbrev
+
+        # Sort impulse classes in standard order
+        standard_order = "ABCDEFGHIJKLMNOP"
+        sorted_classes = sorted(
+            impulse_classes, key=lambda c: standard_order.index(c) if c in standard_order else 99
+        )
+
+        sorted_manufacturers = [
+            {"abbrev": a} for a in sorted(manufacturers.keys())
+        ]
+
+        return {
+            "impulseClasses": sorted_classes,
+            "manufacturers": sorted_manufacturers,
+        }
+
     def _build_indexes(self) -> None:
         """Build lookup indexes from the motor list."""
         for motor in self._motors:
