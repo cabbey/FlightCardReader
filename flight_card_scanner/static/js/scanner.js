@@ -30,6 +30,37 @@
   var OUTPUT_H = 1300;
 
   // =========================================================================
+  // Relaxed Tolerance Overrides (used when "Relaxed" checkbox is checked)
+  // =========================================================================
+
+  /** Relaxed: lower minimum fill ratio (accept smaller cards in frame) */
+  var RELAXED_MIN_FILL = 0.08;
+
+  /** Relaxed: higher epsilon multiplier for approxPolyDP (tolerate imperfect cuts) */
+  var RELAXED_EPSILON_MULT = 0.04;
+
+  /** Normal epsilon multiplier for approxPolyDP */
+  var NORMAL_EPSILON_MULT = 0.02;
+
+  /** Relaxed: lower minimum output width */
+  var RELAXED_OUTPUT_W = 600;
+
+  /** Relaxed: lower minimum output height */
+  var RELAXED_OUTPUT_H = 780;
+
+  /** Relaxed: fewer consecutive stable frames required */
+  var RELAXED_STABILITY_FRAMES = 3;
+
+  /**
+   * Check if the "Relaxed" tolerance checkbox is currently checked.
+   * @returns {boolean}
+   */
+  function isRelaxedMode() {
+    var el = document.getElementById('relaxedToggle');
+    return el ? el.checked : false;
+  }
+
+  // =========================================================================
   // Module-level State
   // =========================================================================
 
@@ -480,8 +511,9 @@
         var perimeter = cv.arcLength(contour, true);
         var approx = new cv.Mat();
 
-        // approxPolyDP with epsilon = 0.02 * perimeter
-        cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
+        // approxPolyDP with epsilon tuned by tolerance mode
+        var epsMult = isRelaxedMode() ? RELAXED_EPSILON_MULT : NORMAL_EPSILON_MULT;
+        cv.approxPolyDP(contour, approx, epsMult * perimeter, true);
 
         if (approx.rows === 4) {
           var area = cv.contourArea(approx);
@@ -499,8 +531,9 @@
         }
       }
 
-      // Area check: contour area / frame area ≥ MIN_FILL
-      if (bestContour && (bestArea / frameArea) >= MIN_FILL) {
+      // Area check: contour area / frame area ≥ MIN_FILL (relaxed or normal)
+      var minFill = isRelaxedMode() ? RELAXED_MIN_FILL : MIN_FILL;
+      if (bestContour && (bestArea / frameArea) >= minFill) {
         // Extract corner points and scale back to full resolution
         var invScale = 1.0 / scale;
         var corners = [];
@@ -565,7 +598,7 @@
       stableFrameCount = 1;
     }
 
-    return stableFrameCount >= STABILITY_FRAMES;
+    return stableFrameCount >= (isRelaxedMode() ? RELAXED_STABILITY_FRAMES : STABILITY_FRAMES);
   }
 
   /**
@@ -645,7 +678,9 @@
     var heightRight = distance(tr, br);
     var computedHeight = Math.max(heightLeft, heightRight);
 
-    return computedWidth >= OUTPUT_W && computedHeight >= OUTPUT_H;
+    var minW = isRelaxedMode() ? RELAXED_OUTPUT_W : OUTPUT_W;
+    var minH = isRelaxedMode() ? RELAXED_OUTPUT_H : OUTPUT_H;
+    return computedWidth >= minW && computedHeight >= minH;
   }
 
   /** Circled number characters for countdown display (index 0 = ❺, index 4 = ❶) */
@@ -1004,7 +1039,9 @@
     // Enforce minimum output dimensions — reject if too small (never upscale)
     var outW = Math.round(computedWidth);
     var outH = Math.round(computedHeight);
-    if (outW < OUTPUT_W || outH < OUTPUT_H) {
+    var minW = isRelaxedMode() ? RELAXED_OUTPUT_W : OUTPUT_W;
+    var minH = isRelaxedMode() ? RELAXED_OUTPUT_H : OUTPUT_H;
+    if (outW < minW || outH < minH) {
       // Card region is too small — caller should show "get closer" feedback
       return null;
     }
@@ -1596,6 +1633,29 @@
         applyRotation(90);
       });
     }
+
+    // Keyboard accelerators for the confirmation/review screen
+    // Space = Accept, Escape = Retake
+    document.addEventListener('keydown', function (e) {
+      // Only active when confirmation screen is visible
+      if (!confirmationStateEl || confirmationStateEl.style.display !== 'block') {
+        return;
+      }
+
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        if (acceptBtn && !acceptBtn.disabled && capturedDataUrl) {
+          getFinalDataUrl().then(function(finalUrl) {
+            submitCard(finalUrl);
+          });
+        }
+      } else if (e.code === 'Escape' || e.key === 'Escape') {
+        e.preventDefault();
+        if (rejectBtn && !rejectBtn.disabled) {
+          transitionToLivePreview();
+        }
+      }
+    });
 
     // Initialize OpenCV.js detection pipeline
     initOpenCV();
