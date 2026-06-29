@@ -2,9 +2,12 @@
 
 Tests the three-way branching:
 1. Error/not_found → store status in overflow only
-2. High confidence (> 0.95) → auto-accept, set flier_verified=True, apply row data
-3. Lower confidence (≤ 0.95) → review, set flier_verified=False, store candidate
-   WITHOUT overwriting existing fields
+2. High confidence (> 0.95) → auto-accept, set flier_verified=True, import roster data
+3. Lower confidence (≤ 0.95) → review, set flier_verified=False, import roster data
+
+Both matched tiers apply the SAME data import: roster name replaces flier_name,
+both NAR/TRA numbers are stored, cert_level is stored, and confidence is recorded.
+The only difference is flier_verified and flier_match_status.
 """
 
 from __future__ import annotations
@@ -133,9 +136,9 @@ class TestHighConfidenceAutoAccept:
 
         # Name is overwritten with matched row data
         assert record.flier_name == "John Smith"
-        # Membership is updated from roster
-        assert record.overflow["membership"]["club"] == "NAR"
-        assert record.overflow["membership"]["member_number"] == "12345"
+        # Membership uses unified format with both club numbers
+        assert record.overflow["membership"]["nar_number"] == "12345"
+        assert record.overflow["membership"]["tra_number"] is None
         assert record.overflow["membership"]["cert_level"] == 2
 
     @pytest.mark.anyio
@@ -199,8 +202,10 @@ class TestHighConfidenceAutoAccept:
         with patch(_PATCH_RS_GET, new=AsyncMock(return_value=record)):
             await extraction_service._apply_flier_match(db, 1, result)
 
-        assert record.overflow["membership"]["club"] == "TRA"
-        assert record.overflow["membership"]["member_number"] == "54321"
+        # Unified format stores both club numbers
+        assert record.overflow["membership"]["nar_number"] is None
+        assert record.overflow["membership"]["tra_number"] == "54321"
+        assert record.overflow["membership"]["cert_level"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -254,10 +259,10 @@ class TestLowerConfidenceReview:
         assert record.overflow["flier_match_status"] == "review"
 
     @pytest.mark.anyio
-    async def test_stores_candidate_in_overflow(
+    async def test_applies_roster_data_same_as_high_confidence(
         self, extraction_service: ExtractionService
     ) -> None:
-        """Review path stores candidate data in overflow['flier_match_candidate']."""
+        """Review path applies the same roster data import as high-confidence tier."""
         record = _make_record(flier_name="Original Name", overflow={})
         db = AsyncMock()
 
@@ -272,19 +277,22 @@ class TestLowerConfidenceReview:
         with patch(_PATCH_RS_GET, new=AsyncMock(return_value=record)):
             await extraction_service._apply_flier_match(db, 1, result)
 
-        candidate = record.overflow["flier_match_candidate"]
-        assert candidate["name"] == "John Smith"
-        assert candidate["line_number"] == 7
-        assert candidate["club"] == "NAR"
-        assert candidate["member_number"] == "12345"
-        assert candidate["cert_level"] == "3"
-        assert candidate["confidence"] == 0.82
+        # Roster name applied to record
+        assert record.flier_name == "John Smith"
+        # Membership uses unified format
+        assert record.overflow["membership"]["nar_number"] == "12345"
+        assert record.overflow["membership"]["tra_number"] is None
+        assert record.overflow["membership"]["cert_level"] == 3
+        # Confidence stored
+        assert record.overflow["flier_match_confidence"] == 0.82
+        # No flier_match_candidate key (removed)
+        assert "flier_match_candidate" not in record.overflow
 
     @pytest.mark.anyio
-    async def test_does_not_overwrite_existing_flier_name(
+    async def test_overwrites_flier_name_with_roster_name(
         self, extraction_service: ExtractionService
     ) -> None:
-        """Review path does NOT overwrite existing flier_name on the record."""
+        """Review path DOES overwrite flier_name with the roster name (unified behavior)."""
         record = _make_record(flier_name="Original Name", overflow={})
         db = AsyncMock()
 
@@ -299,14 +307,14 @@ class TestLowerConfidenceReview:
         with patch(_PATCH_RS_GET, new=AsyncMock(return_value=record)):
             await extraction_service._apply_flier_match(db, 1, result)
 
-        # flier_name must remain unchanged
-        assert record.flier_name == "Original Name"
+        # Both tiers now apply the roster name
+        assert record.flier_name == "Different Name"
 
     @pytest.mark.anyio
-    async def test_does_not_overwrite_existing_membership(
+    async def test_overwrites_existing_membership_with_roster_data(
         self, extraction_service: ExtractionService
     ) -> None:
-        """Review path does NOT overwrite existing membership fields in overflow."""
+        """Review path DOES overwrite membership with roster data (unified behavior)."""
         existing_membership = {"club": "TRA", "member_number": "99999"}
         record = _make_record(
             flier_name="Original Name",
@@ -325,8 +333,12 @@ class TestLowerConfidenceReview:
         with patch(_PATCH_RS_GET, new=AsyncMock(return_value=record)):
             await extraction_service._apply_flier_match(db, 1, result)
 
-        # Existing membership should be preserved
-        assert record.overflow["membership"] == existing_membership
+        # Both tiers now overwrite membership with unified roster data
+        assert record.overflow["membership"] == {
+            "nar_number": "12345",
+            "tra_number": None,
+            "cert_level": 3,
+        }
 
     @pytest.mark.anyio
     async def test_stores_confidence_in_overflow(
@@ -371,7 +383,8 @@ class TestLowerConfidenceReview:
         # 0.95 is NOT > 0.95, so review path
         assert record.overflow["flier_match_status"] == "review"
         assert record.flier_verified is False
-        assert record.flier_name == "Original Name"
+        # But both tiers apply roster name (unified behavior)
+        assert record.flier_name == "John Smith"
 
 
 # ---------------------------------------------------------------------------

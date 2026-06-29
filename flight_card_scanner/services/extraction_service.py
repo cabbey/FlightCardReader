@@ -526,10 +526,14 @@ class ExtractionService:
         Three cases:
         1. Error or no match → store status only
         2. High confidence (> auto_accept_threshold) → auto-accept,
-           set flier_verified=True, apply row data to record
+           set flier_verified=True, import roster data
         3. Lower confidence (matched but <= auto_accept_threshold) → flag for
-           review, set flier_verified=False, store candidate in overflow
-           WITHOUT overwriting existing fields
+           review, set flier_verified=False, import roster data identically
+
+        Both matched tiers apply the SAME data import: roster name replaces
+        flier_name, both NAR/TRA numbers are stored, cert_level is stored,
+        and confidence is recorded. The only difference is flier_verified
+        and flier_match_status.
         """
         from flight_card_scanner.services import record_service
         from flight_card_scanner.services.flier_match_service import FlierMatchResult
@@ -553,54 +557,31 @@ class ExtractionService:
             await db.commit()
             return
 
-        # Store confidence regardless of tier
+        # --- Match found: apply roster data (same for both tiers) ---
+
+        row = result.row_data
+
+        # Apply roster name to the record
+        record.flier_name = row.get("Name") or record.flier_name
+
+        # Store BOTH club numbers from the roster row
+        membership = {
+            "nar_number": row.get("NAR") or None,
+            "tra_number": row.get("TRA") or None,
+            "cert_level": int(row["Level"]) if row.get("Level") else None,
+        }
+        overflow["membership"] = membership
+
+        # Store confidence
         overflow["flier_match_confidence"] = result.confidence
 
+        # Tier-specific: only flier_verified and status differ
         if result.confidence > self._auto_accept_threshold:
-            # HIGH CONFIDENCE — auto-accept
             overflow["flier_match_status"] = "verified"
             record.flier_verified = True
-
-            # Apply matched row data to the record
-            row = result.row_data
-            record.flier_name = row.get("Name") or record.flier_name
-
-            # Update membership in overflow from authoritative roster data
-            membership = overflow.get("membership", {})
-            if row.get("NAR"):
-                membership["club"] = "NAR"
-                membership["member_number"] = row["NAR"]
-            elif row.get("TRA"):
-                membership["club"] = "TRA"
-                membership["member_number"] = row["TRA"]
-            if row.get("Level"):
-                try:
-                    membership["cert_level"] = int(row["Level"])
-                except (ValueError, TypeError):
-                    pass
-            overflow["membership"] = membership
-
         else:
-            # LOWER CONFIDENCE — flag for review, do NOT overwrite existing fields
             overflow["flier_match_status"] = "review"
             record.flier_verified = False
-
-            # Store candidate data separately so reviewers can see it
-            row = result.row_data
-            candidate = {
-                "name": row.get("Name"),
-                "line_number": result.line_number,
-            }
-            if row.get("NAR"):
-                candidate["club"] = "NAR"
-                candidate["member_number"] = row["NAR"]
-            elif row.get("TRA"):
-                candidate["club"] = "TRA"
-                candidate["member_number"] = row["TRA"]
-            if row.get("Level"):
-                candidate["cert_level"] = row["Level"]
-            candidate["confidence"] = result.confidence
-            overflow["flier_match_candidate"] = candidate
 
         record.overflow = overflow
         await db.commit()

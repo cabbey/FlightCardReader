@@ -108,17 +108,19 @@ Replace the LLM-based flier name matching in `FlierMatchService` with a local `r
 
 1. WHEN the ExtractionService calls `match_flier()`, THE ExtractionService SHALL NOT pass an `httpx.AsyncClient` argument.
 2. THE ExtractionService SHALL pass `flier_name`, `club`, `member_number`, and `cert_level` as keyword arguments to `match_flier()`.
-3. WHEN `match_flier()` returns a FlierMatchResult with a `confidence` field, THE ExtractionService SHALL store the confidence value in the record overflow data.
+3. WHEN `match_flier()` returns a FlierMatchResult with `matched=True`, THE ExtractionService SHALL store the Confidence_Score in the record overflow field `flier_match_confidence` alongside the full roster data import described in Requirement 9.
 
 ### Requirement 9: Auto-Accept High-Confidence Matches
 
-**User Story:** As a flight card scanner operator, I want high-confidence matches to be automatically accepted so that only ambiguous matches require manual review.
+**User Story:** As a flight card scanner operator, I want high-confidence matches to be automatically accepted so that only ambiguous matches require manual review, while all matches import roster data into the record.
 
 #### Acceptance Criteria
 
 1. THE ExtractionService SHALL define an Auto_Accept_Threshold as a configurable constant with a default value of 0.95.
-2. WHEN `match_flier()` returns a FlierMatchResult with `matched=True` and `confidence` greater than the Auto_Accept_Threshold, THE ExtractionService SHALL automatically accept the match by setting `flier_verified=True` on the record and setting `flier_match_status` to "verified" in overflow.
+2. WHEN `match_flier()` returns a FlierMatchResult with `matched=True` and `confidence` greater than the Auto_Accept_Threshold, THE ExtractionService SHALL set `flier_verified=True` on the record and set `flier_match_status` to "verified" in overflow.
 3. WHEN `match_flier()` returns a FlierMatchResult with `matched=True` and `confidence` less than or equal to the Auto_Accept_Threshold, THE ExtractionService SHALL set `flier_verified=False` on the record and set `flier_match_status` to "review" in overflow to flag the match for manual review.
-4. WHEN a match is auto-accepted (confidence greater than Auto_Accept_Threshold), THE ExtractionService SHALL apply the matched row data to the record (updating `flier_name` and membership details from the roster row).
-5. WHEN a match requires review (confidence less than or equal to Auto_Accept_Threshold), THE ExtractionService SHALL store the matched row data in overflow under `flier_match_candidate` without overwriting the record's existing `flier_name` or membership fields.
-6. THE Auto_Accept_Threshold SHALL be configurable via the AppConfig alongside the other matching thresholds.
+4. WHEN a match is found (regardless of confidence tier), THE ExtractionService SHALL apply the matched roster row's Name to the record's `flier_name` field, replacing whatever value was extracted.
+5. WHEN a match is found (regardless of confidence tier), THE ExtractionService SHALL store BOTH the NAR number and the TRA number from the matched roster row in the record's membership overflow data, replacing previously extracted values. Both values SHALL be stored even if only one was used for the match.
+6. WHEN a match is found (regardless of confidence tier), THE ExtractionService SHALL apply the matched roster row's Level to the record's `cert_level` membership field, replacing whatever certification level was extracted.
+7. THE Auto_Accept_Threshold SHALL be configurable via the AppConfig alongside the other matching thresholds.
+8. THE ExtractionService SHALL NOT store a `flier_match_candidate` object in overflow. The only difference between auto-accepted and review-tier matches is the value of `flier_verified` and `flier_match_status`.

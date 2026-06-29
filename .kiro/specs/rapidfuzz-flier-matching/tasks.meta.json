@@ -181,6 +181,47 @@
         "chatSessionId": "sess_ececab84-3cf7-4f9e-9d0e-55ed25b9511a",
         "timestamp": 1782766747724
       }
+    ],
+    "5.1 Rewrite `_apply_flier_match()` to use unified roster data import": [
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770628276
+      },
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770649459
+      },
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770927775
+      }
+    ],
+    "6. Final checkpoint": [
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770628295
+      },
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770947145
+      },
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770983069
+      }
+    ],
+    "5. Rewrite ExtractionService `_apply_flier_match()` logic": [
+      {
+        "executionId": "8c148423-998c-4352-9678-0b4fbb20b3ed",
+        "chatSessionId": "sess_f7d65017-ef40-49e4-9d7b-a95fb0e142ca",
+        "timestamp": 1782770927792
+      }
     ]
   }
 }

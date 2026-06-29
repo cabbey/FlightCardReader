@@ -4,7 +4,7 @@
 
 Replace the LLM-based flier name matching in `FlierMatchService` with local fuzzy string comparison using the `rapidfuzz` library. The new implementation scores every roster row against extracted flier data using a composite of name similarity and member number confirmation, then returns the single best match if it exceeds the applicable threshold.
 
-The ExtractionService applies a tiered auto-accept policy: high-confidence matches are automatically accepted and applied to the record, while lower-confidence matches are flagged for manual review without overwriting existing data.
+The ExtractionService applies a tiered auto-accept policy: high-confidence matches are automatically accepted while lower-confidence matches are flagged for manual review. In both cases, the matched roster data (name, both club numbers, certification level) is imported into the record — the only difference between tiers is the `flier_verified` flag and `flier_match_status` value.
 
 ## Architecture
 
@@ -316,7 +316,7 @@ result = await self._flier_match_service.match_flier(
 
 #### Tiered `_apply_flier_match()` Logic
 
-The `_apply_flier_match()` method implements a three-way branch based on match result:
+The `_apply_flier_match()` method implements a three-way branch based on match result. When a match is found, both tiers apply the same data import from the roster row — the only difference is the `flier_verified` flag and `flier_match_status` value:
 
 ```python
 async def _apply_flier_match(
@@ -330,10 +330,14 @@ async def _apply_flier_match(
     Three cases:
     1. Error or no match → store status only
     2. High confidence (> auto_accept_threshold) → auto-accept,
-       set flier_verified=True, apply row data to record
+       set flier_verified=True, import roster data
     3. Lower confidence (matched but <= auto_accept_threshold) → flag for
-       review, set flier_verified=False, store candidate in overflow
-       WITHOUT overwriting existing fields
+       review, set flier_verified=False, import roster data identically
+
+    Both matched tiers apply the SAME data import: roster name replaces
+    flier_name, both NAR/TRA numbers are stored, cert_level is stored,
+    and confidence is recorded. The only difference is flier_verified
+    and flier_match_status.
     """
     from flight_card_scanner.services import record_service
     from flight_card_scanner.services.flier_match_service import FlierMatchResult
@@ -357,54 +361,31 @@ async def _apply_flier_match(
         await db.commit()
         return
 
-    # Store confidence regardless of tier
+    # --- Match found: apply roster data (same for both tiers) ---
+
+    row = result.row_data
+
+    # Apply roster name to the record
+    record.flier_name = row.get("Name") or record.flier_name
+
+    # Store BOTH club numbers from the roster row
+    membership = {
+        "nar_number": row.get("NAR") or None,
+        "tra_number": row.get("TRA") or None,
+        "cert_level": int(row["Level"]) if row.get("Level") else None,
+    }
+    overflow["membership"] = membership
+
+    # Store confidence
     overflow["flier_match_confidence"] = result.confidence
 
+    # Tier-specific: only flier_verified and status differ
     if result.confidence > self._auto_accept_threshold:
-        # HIGH CONFIDENCE — auto-accept
         overflow["flier_match_status"] = "verified"
         record.flier_verified = True
-
-        # Apply matched row data to the record
-        row = result.row_data
-        record.flier_name = row.get("Name") or record.flier_name
-
-        # Update membership in overflow from authoritative roster data
-        membership = overflow.get("membership", {})
-        if row.get("NAR"):
-            membership["club"] = "NAR"
-            membership["member_number"] = row["NAR"]
-        elif row.get("TRA"):
-            membership["club"] = "TRA"
-            membership["member_number"] = row["TRA"]
-        if row.get("Level"):
-            try:
-                membership["cert_level"] = int(row["Level"])
-            except (ValueError, TypeError):
-                pass
-        overflow["membership"] = membership
-
     else:
-        # LOWER CONFIDENCE — flag for review, do NOT overwrite existing fields
         overflow["flier_match_status"] = "review"
         record.flier_verified = False
-
-        # Store candidate data separately so reviewers can see it
-        row = result.row_data
-        candidate = {
-            "name": row.get("Name"),
-            "line_number": result.line_number,
-        }
-        if row.get("NAR"):
-            candidate["club"] = "NAR"
-            candidate["member_number"] = row["NAR"]
-        elif row.get("TRA"):
-            candidate["club"] = "TRA"
-            candidate["member_number"] = row["TRA"]
-        if row.get("Level"):
-            candidate["cert_level"] = row["Level"]
-        candidate["confidence"] = result.confidence
-        overflow["flier_match_candidate"] = candidate
 
     record.overflow = overflow
     await db.commit()
@@ -452,7 +433,9 @@ flier_match_service = FlierMatchService(
 |-------|-----------|-------------|
 | `flier_match_status` | Always set | One of: `"verified"`, `"review"`, `"not_found"`, `"error"` |
 | `flier_match_confidence` | When matched | Float 0.0–1.0 |
-| `flier_match_candidate` | When status="review" | Dict with candidate name, club, member_number, cert_level, confidence |
+| `membership.nar_number` | When matched | NAR member number from roster row, or `null` if not present |
+| `membership.tra_number` | When matched | TRA member number from roster row, or `null` if not present |
+| `membership.cert_level` | When matched | Integer certification level from roster row, or `null` |
 | `flier_match_error` | When status="error" | Error message string |
 
 ## Error Handling
@@ -528,6 +511,6 @@ flier_match_service = FlierMatchService(
 
 ### Property 10: Auto-Accept Tiered Behavior
 
-*For any* `FlierMatchResult` with `matched=True` and `confidence > Auto_Accept_Threshold`, `_apply_flier_match()` SHALL set `flier_verified=True`, set `flier_match_status` to `"verified"`, and apply the matched row's name and membership data to the record. Conversely, *for any* result with `matched=True` and `confidence <= Auto_Accept_Threshold`, `_apply_flier_match()` SHALL set `flier_verified=False`, set `flier_match_status` to `"review"`, store candidate data under `flier_match_candidate` in overflow, and SHALL NOT overwrite the record's existing `flier_name` or membership fields.
+*For any* `FlierMatchResult` with `matched=True`, `_apply_flier_match()` SHALL apply the matched roster row's Name to the record's `flier_name`, store both the NAR number and TRA number from the roster row in the membership overflow (as `nar_number` and `tra_number`), store the roster row's Level as `cert_level`, and store the confidence score in overflow. When `confidence > Auto_Accept_Threshold`, `flier_verified` SHALL be `True` and `flier_match_status` SHALL be `"verified"`. When `confidence <= Auto_Accept_Threshold`, `flier_verified` SHALL be `False` and `flier_match_status` SHALL be `"review"`. No `flier_match_candidate` object SHALL be stored in overflow for either tier.
 
-**Validates: Requirements 9.2, 9.3, 9.4, 9.5**
+**Validates: Requirements 9.2, 9.3, 9.4, 9.5, 9.6, 9.8**
