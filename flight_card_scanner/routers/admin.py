@@ -185,22 +185,15 @@ async def update_record(
 
 async def _run_flier_verification(db: AsyncSession, record) -> None:
     """Run flier match verification and store result in overflow."""
-    import httpx
-
-    endpoint_url = _config.extraction_endpoints[0].url if _config else "http://localhost:11434"
     membership = (record.overflow or {}).get("membership", {})
 
     try:
-        async with httpx.AsyncClient(
-            base_url=endpoint_url, timeout=120.0
-        ) as client:
-            result = await _flier_match_service.match_flier(
-                client,
-                flier_name=record.flier_name,
-                club=membership.get("club"),
-                member_number=membership.get("member_number"),
-                cert_level=membership.get("cert_level"),
-            )
+        result = await _flier_match_service.match_flier(
+            flier_name=record.flier_name,
+            club=membership.get("club"),
+            member_number=membership.get("member_number"),
+            cert_level=membership.get("cert_level"),
+        )
     except Exception as exc:
         logger.warning("Flier verification failed for record %d: %s", record.id, exc)
         return
@@ -216,24 +209,43 @@ async def _run_flier_verification(db: AsyncSession, record) -> None:
         overflow.pop("flier_match_error", None)
         record.flier_verified = False
     else:
-        overflow["flier_match_status"] = "verified"
         overflow.pop("flier_match_error", None)
-        record.flier_verified = True
-        # Update membership from matched row
         row = result.row_data
-        mem = overflow.get("membership", {})
-        if row.get("NAR"):
+
+        # Apply roster name to the record
+        record.flier_name = row.get("Name") or record.flier_name
+
+        # Store roster membership data in the format the system expects
+        # (compatible with MembershipInfo schema and detail template)
+        mem = {}
+        nar_num = row.get("NAR") or None
+        tra_num = row.get("TRA") or None
+        mem["nar_number"] = nar_num
+        mem["tra_number"] = tra_num
+        if nar_num:
             mem["club"] = "NAR"
-            mem["member_number"] = row["NAR"]
-        elif row.get("TRA"):
+            mem["member_number"] = nar_num
+        elif tra_num:
             mem["club"] = "TRA"
-            mem["member_number"] = row["TRA"]
+            mem["member_number"] = tra_num
         if row.get("Level"):
             try:
                 mem["cert_level"] = int(row["Level"])
             except (ValueError, TypeError):
                 pass
         overflow["membership"] = mem
+
+        # Store confidence
+        overflow["flier_match_confidence"] = result.confidence
+
+        # Tier-specific: determine auto-accept threshold
+        auto_accept_threshold = _config.auto_accept_threshold if _config else 0.95
+        if result.confidence > auto_accept_threshold:
+            overflow["flier_match_status"] = "verified"
+            record.flier_verified = True
+        else:
+            overflow["flier_match_status"] = "review"
+            record.flier_verified = False
 
     record.overflow = overflow
     await db.commit()

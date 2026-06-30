@@ -564,12 +564,28 @@ class ExtractionService:
         # Apply roster name to the record
         record.flier_name = row.get("Name") or record.flier_name
 
-        # Store BOTH club numbers from the roster row
-        membership = {
-            "nar_number": row.get("NAR") or None,
-            "tra_number": row.get("TRA") or None,
-            "cert_level": int(row["Level"]) if row.get("Level") else None,
-        }
+        # Store roster membership data in the format the system expects
+        # (compatible with MembershipInfo schema and detail template)
+        membership = {}
+        # Store both club numbers from the roster
+        nar_num = row.get("NAR") or None
+        tra_num = row.get("TRA") or None
+        membership["nar_number"] = nar_num
+        membership["tra_number"] = tra_num
+        # Set the primary club/member_number for the standard fields
+        # (what templates and the rest of the system read)
+        if nar_num:
+            membership["club"] = "NAR"
+            membership["member_number"] = nar_num
+        elif tra_num:
+            membership["club"] = "TRA"
+            membership["member_number"] = tra_num
+        # Cert level
+        if row.get("Level"):
+            try:
+                membership["cert_level"] = int(row["Level"])
+            except (ValueError, TypeError):
+                pass
         overflow["membership"] = membership
 
         # Store confidence

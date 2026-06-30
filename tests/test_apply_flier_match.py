@@ -334,9 +334,12 @@ class TestLowerConfidenceReview:
             await extraction_service._apply_flier_match(db, 1, result)
 
         # Both tiers now overwrite membership with unified roster data
+        # Includes standard fields (club, member_number) for template compatibility
         assert record.overflow["membership"] == {
             "nar_number": "12345",
             "tra_number": None,
+            "club": "NAR",
+            "member_number": "12345",
             "cert_level": 3,
         }
 
