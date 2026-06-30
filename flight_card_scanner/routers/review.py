@@ -373,7 +373,7 @@ async def detail_record(
         for motor in enriched_motors:
             raw_mfr = motor.get("manufacturer")
             if raw_mfr:
-                resolved = _thrustcurve_service.resolve_manufacturer_for_display(raw_mfr)
+                resolved = _thrustcurve_service.resolve_manufacturer(raw_mfr)
                 if resolved:
                     motor["_resolved_manufacturer"] = resolved
 
