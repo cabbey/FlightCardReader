@@ -60,6 +60,15 @@
     return el ? el.checked : false;
   }
 
+  /**
+   * Check if the "Debug" visualization checkbox is currently checked.
+   * @returns {boolean}
+   */
+  function isDebugMode() {
+    var el = document.getElementById('debugToggle');
+    return el ? el.checked : false;
+  }
+
   // =========================================================================
   // Module-level State
   // =========================================================================
@@ -491,12 +500,24 @@
       cv.GaussianBlur(gray, blurred, ksize, 0);
 
       // Canny edge detection (tuned for downsampled frame)
-      cv.Canny(blurred, edges, 50, 150);
+      // In relaxed mode, lower thresholds help detect weaker card edges
+      var cannyLow = isRelaxedMode() ? 30 : 50;
+      var cannyHigh = isRelaxedMode() ? 100 : 150;
+      cv.Canny(blurred, edges, cannyLow, cannyHigh);
 
-      // Dilate edges slightly to close gaps
-      var dilateKernel = cv.Mat.ones(3, 3, cv.CV_8U);
+      // Dilate edges to close small gaps
+      var dilateSize = isRelaxedMode() ? 5 : 3;
+      var dilateKernel = cv.Mat.ones(dilateSize, dilateSize, cv.CV_8U);
       cv.dilate(edges, edges, dilateKernel);
       dilateKernel.delete();
+
+      // In relaxed mode, apply morphological close to bridge larger gaps
+      // caused by card lines running off the edge and breaking the boundary
+      if (isRelaxedMode()) {
+        var closeKernel = cv.Mat.ones(9, 9, cv.CV_8U);
+        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, closeKernel);
+        closeKernel.delete();
+      }
 
       // Find external contours
       cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
@@ -528,6 +549,94 @@
           }
         } else {
           approx.delete();
+        }
+      }
+
+      // --- Debug visualization: draw edges and contours on overlay ---
+      if (isDebugMode() && overlayEl) {
+        var dbgCtx = overlayEl.getContext('2d');
+        var dispW = overlayEl.clientWidth;
+        var dispH = overlayEl.clientHeight;
+
+        // Ensure overlay resolution matches display
+        if (overlayEl.width !== dispW || overlayEl.height !== dispH) {
+          overlayEl.width = dispW;
+          overlayEl.height = dispH;
+        }
+
+        // Clear for fresh debug frame
+        dbgCtx.clearRect(0, 0, dispW, dispH);
+
+        // Draw edge map as a semi-transparent cyan overlay
+        var edgeRgba = new cv.Mat();
+        cv.cvtColor(edges, edgeRgba, cv.COLOR_GRAY2RGBA);
+        var edgeCanvas = document.createElement('canvas');
+        edgeCanvas.width = dw;
+        edgeCanvas.height = dh;
+        cv.imshow(edgeCanvas, edgeRgba);
+        edgeRgba.delete();
+
+        dbgCtx.save();
+        dbgCtx.globalAlpha = 0.4;
+        dbgCtx.globalCompositeOperation = 'screen';
+        dbgCtx.drawImage(edgeCanvas, 0, 0, dispW, dispH);
+        dbgCtx.restore();
+
+        // Draw all contours in yellow, and all 4-vertex approximations in magenta
+        var dbgScaleX = dispW / dw;
+        var dbgScaleY = dispH / dh;
+
+        for (var ci = 0; ci < contours.size(); ci++) {
+          var cnt = contours.get(ci);
+          var peri = cv.arcLength(cnt, true);
+          var apx = new cv.Mat();
+          var em = isRelaxedMode() ? RELAXED_EPSILON_MULT : NORMAL_EPSILON_MULT;
+          cv.approxPolyDP(cnt, apx, em * peri, true);
+
+          // Draw raw contour in dim yellow
+          dbgCtx.beginPath();
+          for (var pi = 0; pi < cnt.rows; pi++) {
+            var px = cnt.data32S[pi * 2] * dbgScaleX;
+            var py = cnt.data32S[pi * 2 + 1] * dbgScaleY;
+            if (pi === 0) { dbgCtx.moveTo(px, py); }
+            else { dbgCtx.lineTo(px, py); }
+          }
+          dbgCtx.closePath();
+          dbgCtx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+          dbgCtx.lineWidth = 1;
+          dbgCtx.stroke();
+
+          // Draw 4-vertex approximations in magenta
+          if (apx.rows === 4) {
+            dbgCtx.beginPath();
+            for (var qi = 0; qi < 4; qi++) {
+              var qx = apx.data32S[qi * 2] * dbgScaleX;
+              var qy = apx.data32S[qi * 2 + 1] * dbgScaleY;
+              if (qi === 0) { dbgCtx.moveTo(qx, qy); }
+              else { dbgCtx.lineTo(qx, qy); }
+            }
+            dbgCtx.closePath();
+            dbgCtx.strokeStyle = 'rgba(255, 0, 255, 0.6)';
+            dbgCtx.lineWidth = 2;
+            dbgCtx.stroke();
+          }
+
+          apx.delete();
+        }
+
+        // Draw the winning contour in bright green with thick line
+        if (bestContour) {
+          dbgCtx.beginPath();
+          for (var bi = 0; bi < 4; bi++) {
+            var bx = bestContour.data32S[bi * 2] * dbgScaleX;
+            var by = bestContour.data32S[bi * 2 + 1] * dbgScaleY;
+            if (bi === 0) { dbgCtx.moveTo(bx, by); }
+            else { dbgCtx.lineTo(bx, by); }
+          }
+          dbgCtx.closePath();
+          dbgCtx.strokeStyle = '#00ff00';
+          dbgCtx.lineWidth = 3;
+          dbgCtx.stroke();
         }
       }
 
@@ -711,8 +820,10 @@
       overlayEl.height = displayHeight;
     }
 
-    // Clear previous frame
-    ctx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    // Clear previous frame (skip if debug mode — debug viz already drawn by captureFrame)
+    if (!isDebugMode()) {
+      ctx.clearRect(0, 0, overlayEl.width, overlayEl.height);
+    }
 
     if (!corners || corners.length !== 4) {
       return;

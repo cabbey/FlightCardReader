@@ -36,23 +36,21 @@
     pointer-events: none;
   }
 
-  /* Debug overlay */
+  /* Debug text (below video) */
   .debug-overlay {
     display: none;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     padding: 0.3rem 0.5rem;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.85);
     color: #0f0;
     font-family: monospace;
     font-size: 0.7rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    pointer-events: none;
-    z-index: 20;
+    text-align: center;
+    border-radius: 0 0 4px 4px;
+    max-width: 640px;
+    margin: 0 auto;
   }
 
   .debug-overlay.active {
@@ -360,7 +358,6 @@
     <div class="preview-wrapper">
       <video id="preview" autoplay playsinline webkit-playsinline muted></video>
       <canvas id="overlay"></canvas>
-      <div class="debug-overlay" id="debugOverlay"></div>
 
       <!-- Error: Camera permission denied -->
       <div id="errorPermission" class="error-overlay" role="alert">
@@ -383,6 +380,8 @@
         </div>
       </div>
     </div>
+
+    <div class="debug-overlay" id="debugOverlay"></div>
 
     <div class="controls">
       <button id="switchCamera" type="button" aria-label="Switch camera">&#x1F504; Switch Camera</button>
