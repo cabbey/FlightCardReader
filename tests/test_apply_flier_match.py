@@ -41,9 +41,33 @@ def minimal_config() -> AppConfig:
 def extraction_service(minimal_config: AppConfig) -> ExtractionService:
     """Create an ExtractionService with mocked dependencies."""
     session_factory = AsyncMock()
+    # Provide a mock FlierMatchService with extract_roster_data
+    mock_flier_service = MagicMock()
+
+    def _extract_roster_data(row: dict) -> dict:
+        """Mimic FlierMatchService.extract_roster_data with default column names."""
+        import re
+
+        nar = (row.get("NAR", "") or "").strip() or None
+        tra = (row.get("TRA", "") or "").strip() or None
+        level_str = (row.get("Level", "") or "").strip()
+        cert_level = None
+        if level_str:
+            digits = re.search(r"\d+", level_str)
+            if digits:
+                cert_level = int(digits.group())
+        return {
+            "name": (row.get("Name", "") or "").strip() or None,
+            "nar_number": nar,
+            "tra_number": tra,
+            "cert_level": cert_level,
+        }
+
+    mock_flier_service.extract_roster_data = _extract_roster_data
     return ExtractionService(
         config=minimal_config,
         session_factory=session_factory,
+        flier_match_service=mock_flier_service,
     )
 
 

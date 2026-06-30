@@ -559,17 +559,18 @@ class ExtractionService:
 
         # --- Match found: apply roster data (same for both tiers) ---
 
-        row = result.row_data
+        # Use the service to extract data using detected column names
+        roster_data = self._flier_match_service.extract_roster_data(result.row_data)
 
         # Apply roster name to the record
-        record.flier_name = row.get("Name") or record.flier_name
+        record.flier_name = roster_data["name"] or record.flier_name
 
         # Store roster membership data in the format the system expects
         # (compatible with MembershipInfo schema and detail template)
         membership = {}
         # Store both club numbers from the roster
-        nar_num = row.get("NAR") or None
-        tra_num = row.get("TRA") or None
+        nar_num = roster_data["nar_number"]
+        tra_num = roster_data["tra_number"]
         membership["nar_number"] = nar_num
         membership["tra_number"] = tra_num
         # Set the primary club/member_number for the standard fields
@@ -581,11 +582,8 @@ class ExtractionService:
             membership["club"] = "TRA"
             membership["member_number"] = tra_num
         # Cert level
-        if row.get("Level"):
-            try:
-                membership["cert_level"] = int(row["Level"])
-            except (ValueError, TypeError):
-                pass
+        if roster_data["cert_level"] is not None:
+            membership["cert_level"] = roster_data["cert_level"]
         overflow["membership"] = membership
 
         # Store confidence

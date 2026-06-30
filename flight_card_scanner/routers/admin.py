@@ -212,14 +212,17 @@ async def _run_flier_verification(db: AsyncSession, record) -> None:
         overflow.pop("flier_match_error", None)
         row = result.row_data
 
+        # Use the service to extract data using detected column names
+        roster_data = _flier_match_service.extract_roster_data(row)
+
         # Apply roster name to the record
-        record.flier_name = row.get("Name") or record.flier_name
+        record.flier_name = roster_data["name"] or record.flier_name
 
         # Store roster membership data in the format the system expects
         # (compatible with MembershipInfo schema and detail template)
         mem = {}
-        nar_num = row.get("NAR") or None
-        tra_num = row.get("TRA") or None
+        nar_num = roster_data["nar_number"]
+        tra_num = roster_data["tra_number"]
         mem["nar_number"] = nar_num
         mem["tra_number"] = tra_num
         if nar_num:
@@ -228,11 +231,8 @@ async def _run_flier_verification(db: AsyncSession, record) -> None:
         elif tra_num:
             mem["club"] = "TRA"
             mem["member_number"] = tra_num
-        if row.get("Level"):
-            try:
-                mem["cert_level"] = int(row["Level"])
-            except (ValueError, TypeError):
-                pass
+        if roster_data["cert_level"] is not None:
+            mem["cert_level"] = roster_data["cert_level"]
         overflow["membership"] = mem
 
         # Store confidence
@@ -345,4 +345,58 @@ async def select_motor(
         "message": "Motor validated",
         "motorId": body.motor_id,
         "motorData": motor_data,
+    }
+
+
+@router.get("/debug/record/{record_id}")
+async def debug_record(
+    record_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Debug endpoint: dump the raw database record as JSON.
+
+    Returns all columns including the full overflow JSON structure.
+    """
+    record = await record_service.get(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    return {
+        "id": record.id,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "image_path": record.image_path,
+        "extraction_status": record.extraction_status,
+        "flight_date": record.flight_date.isoformat() if record.flight_date else None,
+        "flier_name": record.flier_name,
+        "total_impulse_value": record.total_impulse_value,
+        "total_impulse_unit": record.total_impulse_unit,
+        "flag_heads_up": record.flag_heads_up,
+        "flag_first_flight": record.flag_first_flight,
+        "flag_complex": record.flag_complex,
+        "rack": record.rack,
+        "pad": record.pad,
+        "fso_rso_initials": record.fso_rso_initials,
+        "evaluation_outcome": record.evaluation_outcome,
+        "evaluation_comments": record.evaluation_comments,
+        "recovery_plan": record.recovery_plan,
+        "flier_verified": record.flier_verified,
+        "overflow": record.overflow,
+    }
+
+
+@router.get("/debug/flier-service")
+async def debug_flier_service() -> dict:
+    """Debug endpoint: dump the FlierMatchService state.
+
+    Shows TSV headers, row count, enabled status, and the first 5 rows
+    so we can verify column names match what the code expects.
+    """
+    if _flier_match_service is None:
+        return {"enabled": False, "reason": "FlierMatchService not configured"}
+
+    return {
+        "enabled": _flier_match_service.enabled,
+        "row_count": _flier_match_service.row_count,
+        "headers": _flier_match_service._headers,
+        "sample_rows": _flier_match_service._rows[:5],
     }

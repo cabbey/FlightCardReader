@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +57,12 @@ class FlierMatchService:
         self._rows: list[dict[str, str]] = []
         self._enabled: bool = False
 
+        # Detected column names (set by _detect_columns after load)
+        self._col_name: str = "Name"
+        self._col_nar: str = "NAR"
+        self._col_tra: str = "TRA"
+        self._col_level: str = "Level"
+
     @property
     def enabled(self) -> bool:
         """Whether flier matching is active (file loaded with data rows)."""
@@ -98,10 +105,34 @@ class FlierMatchService:
 
         self._rows = [dict(zip(self._headers, row)) for row in data_rows]
         self._enabled = True
+        self._detect_columns()
         logger.info(
             "Loaded %d known fliers from %s",
             len(self._rows),
             self._path,
+        )
+
+    def _detect_columns(self) -> None:
+        """Detect actual column names from headers using fuzzy matching.
+
+        Maps logical fields (name, NAR number, TRA number, cert level) to
+        whatever the actual header strings are. Supports variations like
+        "NAR Number", "TRA #", "Certification Level", etc.
+        """
+        for header in self._headers:
+            h_lower = header.lower().strip()
+            if "nar" in h_lower:
+                self._col_nar = header
+            elif "tra" in h_lower:
+                self._col_tra = header
+            elif "level" in h_lower or "cert" in h_lower:
+                self._col_level = header
+            elif "name" in h_lower:
+                self._col_name = header
+
+        logger.info(
+            "Detected columns: name=%r, nar=%r, tra=%r, level=%r",
+            self._col_name, self._col_nar, self._col_tra, self._col_level,
         )
 
     @staticmethod
@@ -134,8 +165,8 @@ class FlierMatchService:
 
         if club:
             # Search indicated column first
-            primary_col = club.upper()  # "NAR" or "TRA"
-            other_col = "TRA" if primary_col == "NAR" else "NAR"
+            primary_col = self._col_nar if club.upper() == "NAR" else self._col_tra
+            other_col = self._col_tra if club.upper() == "NAR" else self._col_nar
 
             for idx, row in enumerate(self._rows):
                 if row.get(primary_col, "").strip() == normalized_number:
@@ -150,8 +181,8 @@ class FlierMatchService:
             # No club specified — search both columns (primary use case)
             for idx, row in enumerate(self._rows):
                 if (
-                    row.get("NAR", "").strip() == normalized_number
-                    or row.get("TRA", "").strip() == normalized_number
+                    row.get(self._col_nar, "").strip() == normalized_number
+                    or row.get(self._col_tra, "").strip() == normalized_number
                 ):
                     results.append((idx, row))
 
@@ -169,7 +200,7 @@ class FlierMatchService:
         - composite_score is used for ranking (internal)
         - confidence is the 0.0–1.0 value stored in the result
         """
-        name_similarity = self._compute_name_similarity(flier_name, row.get("Name", ""))
+        name_similarity = self._compute_name_similarity(flier_name, row.get(self._col_name, ""))
         member_bonus = 20.0 if member_confirmed else 0.0
         composite_score = name_similarity + member_bonus
 
@@ -215,7 +246,7 @@ class FlierMatchService:
 
         for idx, row in enumerate(self._rows):
             is_confirmed = idx in member_confirmed_rows
-            name_sim = self._compute_name_similarity(flier_name, row.get("Name", ""))
+            name_sim = self._compute_name_similarity(flier_name, row.get(self._col_name, ""))
 
             # Apply applicable threshold
             threshold = (
@@ -251,3 +282,24 @@ class FlierMatchService:
             error=None,
             confidence=best_confidence,
         )
+
+    def extract_roster_data(self, row: dict[str, str]) -> dict:
+        """Extract structured roster data from a matched row using detected column names.
+
+        Returns a dict with standardized keys: name, nar_number, tra_number, cert_level.
+        """
+        nar = row.get(self._col_nar, "").strip() or None
+        tra = row.get(self._col_tra, "").strip() or None
+        level_str = row.get(self._col_level, "").strip()
+        # Parse cert level - handle values like "L2", "2", "Level 2"
+        cert_level = None
+        if level_str:
+            digits = re.search(r"\d+", level_str)
+            if digits:
+                cert_level = int(digits.group())
+        return {
+            "name": row.get(self._col_name, "").strip() or None,
+            "nar_number": nar,
+            "tra_number": tra,
+            "cert_level": cert_level,
+        }
