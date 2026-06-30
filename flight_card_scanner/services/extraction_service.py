@@ -437,13 +437,13 @@ class ExtractionService:
             extracted = await self._call_ollama(client, record.image_path)
         except OllamaUnavailableError as exc:
             logger.error(
-                "Endpoint %s unreachable for record %d: %s",
+                "Endpoint %s unreachable for record %d: %s — returning to pending",
                 endpoint_url,
                 record_id,
                 exc,
             )
             async with self._session_factory() as db:
-                await record_service.set_status(db, record_id, "extraction_failed")
+                await record_service.set_status(db, record_id, "pending")
             return
         except ExtractionParseError as exc:
             logger.error(
@@ -678,8 +678,16 @@ class ExtractionService:
                 image_path,
                 client.base_url,
             )
+            import time as _time
+            _t0 = _time.monotonic()
             response = await client.post("/api/chat", json=payload)
             response.raise_for_status()
+            _elapsed = _time.monotonic() - _t0
+            logger.info(
+                "Ollama responded for %s in %.1fs",
+                image_path,
+                _elapsed,
+            )
         except httpx.HTTPStatusError as exc:
             raise OllamaUnavailableError(
                 f"Ollama returned HTTP {exc.response.status_code}"
