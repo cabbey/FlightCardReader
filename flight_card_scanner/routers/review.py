@@ -86,6 +86,7 @@ class RecordRow:
     flight_date: Any
     extraction_status: str
     created_at: Any
+    human_verified: bool = False
 
 
 def _matches_search(record: FlightRecord, q_lower: str) -> bool:
@@ -132,12 +133,14 @@ async def list_records(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     q: str | None = Query(default=None),
+    unverified: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Render the paginated list view of flight records.
 
     Supports optional search (q parameter) that filters on flier_name (SQL),
     rocket_name and motor designation (Python-side overflow scan).
+    Supports ?unverified=1 to show only records where human_verified is False.
     """
     templates = _get_templates()
     config = _get_config()
@@ -162,6 +165,22 @@ async def list_records(
         if status in status_counts:
             status_counts[status] = count
 
+    # --- Compute human_verified counts ---
+    verified_count_stmt = select(func.count(FlightRecord.id)).where(
+        FlightRecord.human_verified == True  # noqa: E712
+    )
+    verified_count_result = await db.execute(verified_count_stmt)
+    verified_count = verified_count_result.scalar() or 0
+
+    total_all_stmt = select(func.count(FlightRecord.id))
+    total_all_result = await db.execute(total_all_stmt)
+    total_all = total_all_result.scalar() or 0
+
+    verified_percent = round((verified_count / total_all * 100) if total_all > 0 else 0, 1)
+
+    # Determine if we're filtering to unverified only
+    filter_unverified = unverified == "1"
+
     # --- Build query for records ---
     q_stripped = q.strip() if q else None
     search_term = q_stripped if q_stripped else None
@@ -175,6 +194,8 @@ async def list_records(
             .where(FlightRecord.flier_name.ilike(like_pattern))
             .order_by(FlightRecord.created_at.desc())
         )
+        if filter_unverified:
+            sql_stmt = sql_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
         sql_result = await db.execute(sql_stmt)
         sql_matches = list(sql_result.scalars().all())
         sql_match_ids = {r.id for r in sql_matches}
@@ -184,6 +205,8 @@ async def list_records(
             select(FlightRecord)
             .order_by(FlightRecord.created_at.desc())
         )
+        if filter_unverified:
+            all_stmt = all_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
         all_result = await db.execute(all_stmt)
         all_records = list(all_result.scalars().all())
 
@@ -202,6 +225,8 @@ async def list_records(
     else:
         # No search — straight SQL pagination
         count_all_stmt = select(func.count(FlightRecord.id))
+        if filter_unverified:
+            count_all_stmt = count_all_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
         count_all_result = await db.execute(count_all_stmt)
         total_records = count_all_result.scalar() or 0
         total_pages = max(1, math.ceil(total_records / effective_page_size))
@@ -213,6 +238,8 @@ async def list_records(
             .offset(offset)
             .limit(effective_page_size)
         )
+        if filter_unverified:
+            records_stmt = records_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
         records_result = await db.execute(records_stmt)
         page_records = list(records_result.scalars().all())
 
@@ -230,6 +257,7 @@ async def list_records(
                 flight_date=r.flight_date,
                 extraction_status=r.extraction_status,
                 created_at=r.created_at,
+                human_verified=r.human_verified,
             )
         )
 
@@ -246,6 +274,10 @@ async def list_records(
             "q": search_term,
             "page": page,
             "total_pages": total_pages,
+            "verified_count": verified_count,
+            "total_all": total_all,
+            "verified_percent": verified_percent,
+            "filter_unverified": filter_unverified,
         },
     )
 

@@ -32,7 +32,7 @@ class FlierMatchResult:
 class FlierMatchService:
     """Manages known flier list loading and rapidfuzz-based matching."""
 
-    DEFAULT_NAME_ONLY_THRESHOLD: float = 80.0
+    DEFAULT_NAME_ONLY_THRESHOLD: float = 90.0
     DEFAULT_MEMBER_CONFIRMED_THRESHOLD: float = 60.0
 
     def __init__(

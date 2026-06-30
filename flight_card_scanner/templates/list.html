@@ -263,6 +263,12 @@
     <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
     <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
     <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
+    <span class="count-item" style="margin-left:0.75rem; font-weight:600;">Verified: {{ verified_count }}/{{ total_all }} ({{ verified_percent }}%)</span>
+    {% if filter_unverified %}
+    <a href="/?{% if q %}q={{ q }}&{% endif %}page=1" style="margin-left:0.5rem; font-size:0.8rem;">Show All</a>
+    {% else %}
+    <a href="/?unverified=1{% if q %}&q={{ q }}{% endif %}&page=1" style="margin-left:0.5rem; font-size:0.8rem;">Show Unverified Only</a>
+    {% endif %}
   </div>
 </div>
 
@@ -275,6 +281,7 @@
   <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
   {% endif %}
   <form class="search-form" method="get" action="/">
+    {% if filter_unverified %}<input type="hidden" name="unverified" value="1">{% endif %}
     <input type="search" name="q" placeholder="Search…" value="{{ q or '' }}" aria-label="Search records">
     <button type="submit">Search</button>
   </form>
@@ -297,9 +304,9 @@
     </thead>
     <tbody>
       {% for record in records %}
-      <tr>
+      <tr{% if record.human_verified %} style="opacity:0.7"{% endif %}>
         <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
-        <td>{{ record.flier_name or "—" }}</td>
+        <td>{{ record.flier_name or "—" }}{% if record.human_verified %} <span title="Human verified" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
         <td>{{ record.rocket_name or "—" }}</td>
         <td>{{ record.motor_designation or "—" }}</td>
         <td>{{ record.flight_date or "—" }}</td>
@@ -314,7 +321,7 @@
 <!-- Pagination -->
 <nav class="pagination" aria-label="Page navigation">
   {% if page > 1 %}
-  <a href="/?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}">Prev</a>
+  <a href="/?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}{% if filter_unverified %}&unverified=1{% endif %}">Prev</a>
   {% else %}
   <span class="disabled">Prev</span>
   {% endif %}
@@ -322,7 +329,7 @@
   <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
 
   {% if page < total_pages %}
-  <a href="/?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}">Next</a>
+  <a href="/?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}{% if filter_unverified %}&unverified=1{% endif %}">Next</a>
   {% else %}
   <span class="disabled">Next</span>
   {% endif %}

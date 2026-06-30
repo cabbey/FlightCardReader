@@ -380,6 +380,7 @@ async def debug_record(
         "evaluation_comments": record.evaluation_comments,
         "recovery_plan": record.recovery_plan,
         "flier_verified": record.flier_verified,
+        "human_verified": record.human_verified,
         "overflow": record.overflow,
     }
 

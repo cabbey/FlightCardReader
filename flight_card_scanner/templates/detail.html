@@ -731,6 +731,11 @@
   <div class="header-actions">
     <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
     <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
+    {% if record.human_verified %}
+    <button type="button" class="btn-verify" id="btnVerify" disabled style="background:#d1fae5; color:#065f46; border:1px solid #065f46; cursor:default;">&#x2713; Verified</button>
+    {% else %}
+    <button type="button" class="btn-verify" id="btnVerify" style="background:#16a34a; color:#fff; border:none; border-radius:4px; padding:0.4rem 0.75rem; font-size:0.85rem; cursor:pointer;">Verify</button>
+    {% endif %}
     <span class="save-feedback" id="saveFeedback"></span>
     {% if record.extraction_status == "extraction_failed" %}
     <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
@@ -1274,6 +1279,11 @@
     document.getElementById('btnSave').disabled = !hasChanges;
     document.getElementById('btnCancel').style.display = hasChanges ? '' : 'none';
     document.getElementById('btnExtract').disabled = hasChanges;
+    // Toggle verify button text based on pending changes
+    var btnVerify = document.getElementById('btnVerify');
+    if (btnVerify && !btnVerify.disabled) {
+      btnVerify.textContent = hasChanges ? 'Save & Verify' : 'Verify';
+    }
   }
 
   // --- Save button ---
@@ -1406,6 +1416,104 @@
     });
     location.reload();
   });
+
+  // --- Verify button ---
+  (function() {
+    var btnVerify = document.getElementById('btnVerify');
+    if (!btnVerify || btnVerify.disabled) return;
+
+    btnVerify.addEventListener('click', function() {
+      var btn = btnVerify;
+      var hasChanges = Object.keys(pendingChanges).length > 0;
+      btn.disabled = true;
+      btn.textContent = hasChanges ? 'Saving & Verifying…' : 'Verifying…';
+
+      // Build body: include human_verified=true, plus any pending changes
+      var body = { human_verified: true };
+      var overflowUpdates = {};
+      var hasOverflowChanges = false;
+
+      if (hasChanges) {
+        Object.keys(pendingChanges).forEach(function(field) {
+          if (field.startsWith('_motor_')) {
+            hasOverflowChanges = true;
+          } else if (field.startsWith('overflow.')) {
+            hasOverflowChanges = true;
+            var path = field.substring('overflow.'.length);
+            setNestedValue(overflowUpdates, path, pendingChanges[field]);
+          } else {
+            body[field] = pendingChanges[field];
+          }
+        });
+
+        if (hasOverflowChanges) {
+          var merged = JSON.parse(JSON.stringify(originalOverflow || {}));
+          deepMerge(merged, overflowUpdates);
+          var motors = merged.motors || [];
+          if (Object.keys(pendingMotorChanges).length > 0) {
+            Object.keys(pendingMotorChanges).forEach(function(idx) {
+              var i = parseInt(idx, 10);
+              if (i >= 0 && i < motors.length) {
+                var changes = pendingMotorChanges[idx];
+                if (changes.thrustcurve_id) {
+                  motors[i].thrustcurve_id = changes.thrustcurve_id;
+                  delete motors[i].thrustcurve_candidates;
+                  delete motors[i].thrustcurve_error;
+                  delete motors[i].thrustcurve_data;
+                }
+                if (changes.letter) motors[i].letter = changes.letter;
+                if (changes.number) motors[i].number = changes.number;
+                if (changes.manufacturer !== undefined) motors[i].manufacturer = changes.manufacturer;
+                if (changes.suffix !== undefined) motors[i].suffix = changes.suffix;
+                if (changes.quantity !== undefined) motors[i].quantity = changes.quantity;
+              }
+            });
+          }
+          if (deletedMotors.length > 0) {
+            var sortedDeletes = deletedMotors.slice().sort(function(a, b) { return b - a; });
+            sortedDeletes.forEach(function(i) {
+              if (i >= 0 && i < motors.length) motors.splice(i, 1);
+            });
+          }
+          if (addedMotors.length > 0) {
+            addedMotors.forEach(function(m) {
+              if (m === null) return;
+              var newMotor = { letter: m.letter, number: m.number, manufacturer: m.manufacturer, suffix: m.suffix, quantity: m.quantity || 1 };
+              if (m.thrustcurve_id) newMotor.thrustcurve_id = m.thrustcurve_id;
+              if (m.thrustcurve_candidates) newMotor.thrustcurve_candidates = m.thrustcurve_candidates;
+              motors.push(newMotor);
+            });
+          }
+          merged.motors = motors;
+          body['overflow'] = merged;
+        }
+      }
+
+      fetch('/api/admin/record/' + recordId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(function(res) {
+        if (res.ok) {
+          showFeedback('Verified!', false);
+          // Reload to reflect the new verified state
+          setTimeout(function() { location.reload(); }, 500);
+        } else {
+          return res.json().then(function(data) {
+            showFeedback('Error: ' + (data.detail || 'Verify failed'), true);
+            btn.disabled = false;
+            btn.textContent = hasChanges ? 'Save & Verify' : 'Verify';
+          });
+        }
+      })
+      .catch(function() {
+        showFeedback('Network error', true);
+        btn.disabled = false;
+        btn.textContent = hasChanges ? 'Save & Verify' : 'Verify';
+      });
+    });
+  })();
 
   // --- Helper functions ---
 

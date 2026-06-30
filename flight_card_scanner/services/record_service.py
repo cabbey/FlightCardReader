@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import FlightRecord
 from ..schemas import FlightCardExtraction
@@ -173,6 +174,7 @@ async def apply_extraction(
         overflow["raw_flight_date"] = extracted.flight_date_raw
 
     record.overflow = overflow if overflow else None
+    flag_modified(record, "overflow")
 
     # --- Mark as extracted ---
     record.extraction_status = "extracted"
@@ -217,11 +219,15 @@ async def update_fields(
         "evaluation_comments",
         "recovery_plan",
         "overflow",
+        "human_verified",
     }
 
     for field, value in updates.items():
         if field in editable_fields:
             setattr(record, field, value)
+            # JSON columns need explicit dirty marking for SQLAlchemy change detection
+            if field == "overflow":
+                flag_modified(record, "overflow")
 
     await db.commit()
     await db.refresh(record)

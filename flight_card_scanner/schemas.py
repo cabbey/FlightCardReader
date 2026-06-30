@@ -198,3 +198,4 @@ class FlightRecordUpdate(BaseModel):
     evaluation_comments: Optional[str] = None
     recovery_plan: Optional[str] = None
     overflow: Optional[dict] = None
+    human_verified: Optional[bool] = None

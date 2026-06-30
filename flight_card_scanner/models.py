@@ -63,6 +63,11 @@ class FlightRecord(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
 
+    # --- Human review verification ---
+    human_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     # --- JSON overflow for remaining fields ---
     overflow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

@@ -479,9 +479,10 @@ class ExtractionService:
                 async with self._session_factory() as db:
                     record = await record_service.get(db, record_id)
                     if record and record.overflow and record.overflow.get("motors"):
-                        motors = record.overflow["motors"]
+                        import copy
+                        motors = copy.deepcopy(record.overflow["motors"])
                         annotated = await self._thrustcurve.lookup_motors(motors)
-                        overflow = dict(record.overflow)
+                        overflow = copy.deepcopy(record.overflow)
                         overflow["motors"] = annotated
                         await record_service.update_fields(
                             db, record_id, {"overflow": overflow}
