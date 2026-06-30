@@ -11,10 +11,11 @@ from __future__ import annotations
 import base64
 import io
 import logging
+from datetime import date, timedelta
 from pathlib import Path
 
 import segno
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +95,25 @@ def _resolve_extension(upload: UploadFile) -> str | None:
             return "jpg" if suffix in {".jpg", ".jpeg"} else "png"
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_event_dates(config: AppConfig) -> list[dict[str, str]]:
+    """Build a list of {value, label} dicts for every date in the event range."""
+    dates: list[dict[str, str]] = []
+    current = config.event_date_range.start
+    end = config.event_date_range.end
+    while current <= end:
+        dates.append({
+            "value": current.isoformat(),
+            "label": current.strftime("%A %-m/%-d"),
+        })
+        current += timedelta(days=1)
+    return dates
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +257,7 @@ async def scan_page(
             "request": request,
             "event_name": config.event_name,
             "qr_entries": qr_entries,
+            "event_dates": _build_event_dates(config),
         },
     )
 
@@ -244,6 +265,7 @@ async def scan_page(
 @router.post("/api/scan", status_code=201, response_model=ScanResponse)
 async def submit_card(
     card_image: UploadFile = File(...),
+    flight_date: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     config: AppConfig = Depends(get_config),
     extraction_service: ExtractionService = Depends(get_extraction_service),
@@ -280,8 +302,18 @@ async def submit_card(
         ) from exc
 
     # --- 3. Create DB record ---
+    # Parse the optional flight_date override from the form
+    parsed_flight_date: date | None = None
+    if flight_date:
+        try:
+            parsed_flight_date = date.fromisoformat(flight_date)
+        except ValueError:
+            logger.warning("Invalid flight_date value: %r — ignoring", flight_date)
+
     try:
-        record = await record_service.create(db, image_path=filename)
+        record = await record_service.create(
+            db, image_path=filename, flight_date=parsed_flight_date
+        )
     except Exception as exc:
         # Rollback: delete the saved image since the record wasn't created
         logger.error("Failed to create flight record: %s", exc)

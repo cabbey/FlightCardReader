@@ -399,6 +399,17 @@
         <input type="checkbox" id="debugToggle"> Debug
       </label>
     </div>
+
+    <div class="video-options">
+      <label class="option-toggle">
+        Flight Date:
+        <select id="flightDateSelect">
+          {% for d in event_dates %}
+          <option value="{{ d.value }}">{{ d.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
   </div>
 
   <!-- State 2: Confirmation Screen -->
@@ -479,6 +490,20 @@ if (qrSelect) {
     });
   });
 }
+
+// Default flight date select to today if available
+(function() {
+  var sel = document.getElementById('flightDateSelect');
+  if (sel) {
+    var today = new Date().toISOString().slice(0, 10);
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === today) {
+        sel.selectedIndex = i;
+        break;
+      }
+    }
+  }
+})();
 </script>
 <script src="/static/js/scanner.js"></script>
 {% endblock %}

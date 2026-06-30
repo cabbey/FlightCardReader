@@ -1344,6 +1344,12 @@
     var formData = new FormData();
     formData.append('card_image', blob, 'card.jpg');
 
+    // Include the selected flight date override
+    var flightDateEl = document.getElementById('flightDateSelect');
+    if (flightDateEl && flightDateEl.value) {
+      formData.append('flight_date', flightDateEl.value);
+    }
+
     // Set up AbortController with 30-second timeout
     var controller = new AbortController();
     var timeoutId = setTimeout(function () {

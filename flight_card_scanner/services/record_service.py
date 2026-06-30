@@ -17,17 +17,26 @@ from ..models import FlightRecord
 from ..schemas import FlightCardExtraction
 
 
-async def create(db: AsyncSession, image_path: str) -> FlightRecord:
+async def create(
+    db: AsyncSession,
+    image_path: str,
+    flight_date: date | None = None,
+) -> FlightRecord:
     """Create a new FlightRecord with status 'pending'.
 
     Args:
         db: Active async database session.
         image_path: Relative path to the saved card image in the Image Store.
+        flight_date: Optional flight date override from the scan UI.
 
     Returns:
         The newly created FlightRecord instance.
     """
-    record = FlightRecord(image_path=image_path, extraction_status="pending")
+    record = FlightRecord(
+        image_path=image_path,
+        extraction_status="pending",
+        flight_date=flight_date,
+    )
     db.add(record)
     await db.commit()
     await db.refresh(record)
@@ -108,7 +117,9 @@ async def apply_extraction(
     # (handled by _call_ollama, not here)
 
     # --- Dedicated columns ---
-    record.flight_date = resolved_date
+    # Only override flight_date if not already set (scan UI date takes precedence)
+    if record.flight_date is None:
+        record.flight_date = resolved_date
     record.flier_name = extracted.flier_name
     record.total_impulse_value = extracted.total_impulse_value
     record.total_impulse_unit = extracted.total_impulse_unit
