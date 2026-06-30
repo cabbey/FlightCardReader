@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -401,3 +401,33 @@ async def debug_flier_service() -> dict:
         "headers": _flier_match_service._headers,
         "sample_rows": _flier_match_service._rows[:5],
     }
+
+
+@router.get("/next-unverified")
+async def next_unverified(
+    after: int = Query(default=0),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return the ID of the next record where human_verified is False.
+
+    Searches for the next unverified record by created_at descending order.
+    The optional `after` parameter excludes that record ID from the result
+    (useful after just verifying a record).
+
+    Returns {"id": <int>} if found, or {"id": null} if all are verified.
+    """
+    from sqlalchemy import select as sa_select
+    from ..models import FlightRecord
+
+    stmt = (
+        sa_select(FlightRecord.id)
+        .where(FlightRecord.human_verified == False)  # noqa: E712
+        .order_by(FlightRecord.created_at.desc())
+        .limit(1)
+    )
+    if after:
+        stmt = stmt.where(FlightRecord.id != after)
+
+    result = await db.execute(stmt)
+    row = result.scalar_one_or_none()
+    return {"id": row}

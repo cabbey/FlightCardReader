@@ -1497,8 +1497,19 @@
       .then(function(res) {
         if (res.ok) {
           showFeedback('Verified!', false);
-          // Reload to reflect the new verified state
-          setTimeout(function() { location.reload(); }, 500);
+          // Navigate to next unverified card, or back to list
+          fetch('/api/admin/next-unverified?after=' + recordId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.id) {
+                window.location.href = '/record/' + data.id;
+              } else {
+                window.location.href = '/';
+              }
+            })
+            .catch(function() {
+              window.location.href = '/';
+            });
         } else {
           return res.json().then(function(data) {
             showFeedback('Error: ' + (data.detail || 'Verify failed'), true);
