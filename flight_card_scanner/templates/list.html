@@ -482,43 +482,6 @@
   // On page load: save current state (refreshes the TTL)
   savePrefs(currentPrefs);
 
-  // On page load: if the URL has NO filter/sort params, check localStorage
-  // and redirect to apply saved preferences
-  (function() {
-    var url = new URL(window.location.href);
-    var hasFilterParams = url.searchParams.has('sort') ||
-                          url.searchParams.has('verified') ||
-                          url.searchParams.has('status') ||
-                          url.searchParams.has('flight_day');
-    if (!hasFilterParams) {
-      var saved = loadPrefs();
-      if (saved) {
-        // Check if saved prefs differ from defaults
-        var hasNonDefault = (saved.sort && saved.sort !== 'id_desc') ||
-                            (saved.verified && saved.verified !== 'all') ||
-                            (saved.status && saved.status !== '') ||
-                            (saved.flight_day && saved.flight_day !== '');
-        if (hasNonDefault) {
-          // Rebuild URL with saved prefs, preserving page and q
-          var page = url.searchParams.get('page') || '1';
-          var q = url.searchParams.get('q') || '';
-          var parts = ['/?page=' + encodeURIComponent(page)];
-          if (saved.sort && saved.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(saved.sort));
-          if (saved.verified && saved.verified !== 'all') parts.push('verified=' + encodeURIComponent(saved.verified));
-          if (saved.status) parts.push('status=' + encodeURIComponent(saved.status));
-          if (saved.flight_day) parts.push('flight_day=' + encodeURIComponent(saved.flight_day));
-          if (q) parts.push('q=' + encodeURIComponent(q));
-          var newUrl = parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
-          // Only redirect if URL would actually change
-          if (newUrl !== url.pathname + url.search) {
-            window.location.replace(newUrl);
-            return;
-          }
-        }
-      }
-    }
-  })();
-
   // --- Helper: build URL from current filter/sort state ---
   function buildListUrl(overrides) {
     var params = {
