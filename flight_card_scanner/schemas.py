@@ -62,6 +62,8 @@ class MotorEntry(BaseModel):
 class FlightCardExtraction(BaseModel):
     """Structured output schema for Qwen3-VL extraction."""
 
+    model_config = {"coerce_numbers_to_str": True}
+
     flight_date_raw: Optional[str] = Field(
         None,
         description=(
