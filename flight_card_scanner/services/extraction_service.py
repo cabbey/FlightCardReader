@@ -286,6 +286,7 @@ class ExtractionService:
         self._mode = ExtractionMode(config.extraction_mode)
         self._queue: asyncio.Queue[int] = asyncio.Queue()
         self._queued_ids: set[int] = set()
+        self._processing: dict[int, dict] = {}  # record_id -> {endpoint, started_at}
         self._session_factory = session_factory
         self._endpoints = config.extraction_endpoints
         self._workers: list[asyncio.Task] = []
@@ -306,6 +307,11 @@ class ExtractionService:
     def queued_ids(self) -> set[int]:
         """Return the set of record IDs currently in the extraction queue."""
         return self._queued_ids
+
+    @property
+    def processing_info(self) -> dict[int, dict]:
+        """Return dict of record IDs currently being processed with their details."""
+        return dict(self._processing)
 
     async def start(self) -> None:
         """Start extraction workers. Called during app lifespan startup.
@@ -411,7 +417,15 @@ class ExtractionService:
                 self._queued_ids.discard(record_id)
                 try:
                     async with sem:
-                        await self._process(record_id, client, endpoint.url)
+                        import datetime as _dt
+                        self._processing[record_id] = {
+                            "endpoint": endpoint.url,
+                            "started_at": _dt.datetime.now(_dt.timezone.utc),
+                        }
+                        try:
+                            await self._process(record_id, client, endpoint.url)
+                        finally:
+                            self._processing.pop(record_id, None)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
