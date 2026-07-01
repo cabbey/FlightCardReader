@@ -1616,7 +1616,35 @@
   // --- Extract button ---
   var btnExtract = document.getElementById('btnExtract');
   if (btnExtract) {
+    // Determine if the record has data beyond just flight_date
+    var recordStatus = {{ record.extraction_status | tojson }};
+    var hasFilledFields = (function() {
+      // Check if any meaningful fields are populated beyond flight_date
+      if ({{ (record.flier_name or '') | tojson }} !== '') return true;
+      if ({{ (record.total_impulse_value | string if record.total_impulse_value is not none else '') | tojson }} !== '') return true;
+      if ({{ (record.rack or '') | tojson }} !== '') return true;
+      if ({{ (record.fso_rso_initials or '') | tojson }} !== '') return true;
+      if ({{ (record.evaluation_outcome or '') | tojson }} !== '') return true;
+      var overflow = originalOverflow || {};
+      if (overflow.rocket_name) return true;
+      if (overflow.motors && overflow.motors.length > 0) return true;
+      if (overflow.recovery_plan) return true;
+      if (overflow.notes) return true;
+      return false;
+    })();
+
     btnExtract.addEventListener('click', function() {
+      // Ask for confirmation if record has data or status is not pending
+      var needsConfirm = hasFilledFields || recordStatus !== 'pending';
+      if (needsConfirm) {
+        var msg = 'This will re-run extraction and may overwrite existing data.';
+        if (recordStatus !== 'pending') {
+          msg += '\n\nCurrent status: ' + recordStatus.replace('_', ' ') + '.';
+        }
+        msg += '\n\nAre you sure you want to continue?';
+        if (!confirm(msg)) return;
+      }
+
       btnExtract.disabled = true;
       btnExtract.textContent = 'Extracting…';
       fetch('/api/admin/extract/' + recordId, { method: 'POST' })

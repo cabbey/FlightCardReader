@@ -189,6 +189,25 @@ async def lifespan(app: FastAPI):
                 len(stale_records),
             )
 
+    # Upgrade pending records that already have verified data to "extracted"
+    async with session_factory() as db:
+        pending_records = await record_service.get_by_status(db, "pending")
+        upgraded_count = 0
+        for record in pending_records:
+            has_verified_flier = record.flier_verified
+            motors = (record.overflow or {}).get("motors", [])
+            has_verified_motors = bool(motors) and all(
+                m.get("thrustcurve_id") for m in motors
+            )
+            if has_verified_flier or has_verified_motors:
+                await record_service.set_status(db, record.id, "extracted")
+                upgraded_count += 1
+        if upgraded_count:
+            logger.info(
+                "Upgraded %d pending records with verified data to 'extracted'",
+                upgraded_count,
+            )
+
     await extraction_service.start()
     logger.info("Extraction service started.")
 
