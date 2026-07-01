@@ -285,6 +285,7 @@ class ExtractionService:
         self._config = config
         self._mode = ExtractionMode(config.extraction_mode)
         self._queue: asyncio.Queue[int] = asyncio.Queue()
+        self._queued_ids: set[int] = set()
         self._session_factory = session_factory
         self._endpoints = config.extraction_endpoints
         self._workers: list[asyncio.Task] = []
@@ -300,6 +301,11 @@ class ExtractionService:
     def mode(self) -> ExtractionMode:
         """Return the current extraction mode."""
         return self._mode
+
+    @property
+    def queued_ids(self) -> set[int]:
+        """Return the set of record IDs currently in the extraction queue."""
+        return self._queued_ids
 
     async def start(self) -> None:
         """Start extraction workers. Called during app lifespan startup.
@@ -350,10 +356,12 @@ class ExtractionService:
         """
         if self._mode == ExtractionMode.IMMEDIATE:
             await self._queue.put(record_id)
+            self._queued_ids.add(record_id)
 
     async def force_enqueue(self, record_id: int) -> None:
         """Enqueue a record for extraction regardless of mode."""
         await self._queue.put(record_id)
+        self._queued_ids.add(record_id)
 
     async def set_mode(self, mode: ExtractionMode) -> None:
         """Switch the extraction operating mode.
@@ -380,6 +388,7 @@ class ExtractionService:
             records = await record_service.get_by_status(db, "pending")
             for record in records:
                 await self._queue.put(record.id)
+                self._queued_ids.add(record.id)
             count = len(records)
 
         if count > 0:
@@ -399,6 +408,7 @@ class ExtractionService:
         ) as client:
             while True:
                 record_id = await self._queue.get()
+                self._queued_ids.discard(record_id)
                 try:
                     async with sem:
                         await self._process(record_id, client, endpoint.url)
