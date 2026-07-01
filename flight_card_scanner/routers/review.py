@@ -336,36 +336,57 @@ async def queue_status(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """Render a page showing all records currently in the extraction queue."""
+    """Render a page showing all records currently in the extraction queue and processing."""
     templates = _get_templates()
     config = _get_config()
     extraction_service = _get_extraction_service()
 
     queued_ids = sorted(extraction_service.queued_ids)
+    processing_info = extraction_service.processing_info
 
     # Fetch record details for queued IDs
-    records = []
+    queued_records = []
     if queued_ids:
         result = await db.execute(
             select(FlightRecord).where(FlightRecord.id.in_(queued_ids))
         )
         for r in result.scalars().all():
-            records.append({
+            queued_records.append({
                 "id": r.id,
                 "flier_name": r.flier_name,
                 "extraction_status": r.extraction_status,
                 "created_at": r.created_at,
             })
-        # Sort by ID to match queued_ids order
-        records.sort(key=lambda x: x["id"])
+        queued_records.sort(key=lambda x: x["id"])
+
+    # Fetch record details for processing IDs
+    processing_records = []
+    if processing_info:
+        proc_ids = list(processing_info.keys())
+        result = await db.execute(
+            select(FlightRecord).where(FlightRecord.id.in_(proc_ids))
+        )
+        for r in result.scalars().all():
+            info = processing_info.get(r.id, {})
+            processing_records.append({
+                "id": r.id,
+                "flier_name": r.flier_name,
+                "extraction_status": r.extraction_status,
+                "created_at": r.created_at,
+                "endpoint": info.get("endpoint", "unknown"),
+                "started_at": info.get("started_at"),
+            })
+        processing_records.sort(key=lambda x: x["id"])
 
     return templates.TemplateResponse(
         "queue.html",
         {
             "request": request,
             "event_name": config.event_name,
-            "records": records,
+            "queued_records": queued_records,
+            "processing_records": processing_records,
             "queue_size": len(queued_ids),
+            "processing_size": len(processing_records),
         },
     )
 

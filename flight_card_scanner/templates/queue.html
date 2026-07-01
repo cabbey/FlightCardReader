@@ -31,10 +31,20 @@
     text-decoration: underline;
   }
 
+  .section-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 1.25rem 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
   .queue-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
+    margin-bottom: 1rem;
   }
 
   .queue-table th,
@@ -91,10 +101,22 @@
     color: #991b1b;
   }
 
+  .endpoint-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-family: monospace;
+  }
+
+  .duration-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+  }
+
   .empty-state {
     text-align: center;
-    padding: 2rem 1rem;
+    padding: 1.5rem 1rem;
     color: #6b7280;
+    font-size: 0.9rem;
   }
 
   .auto-refresh-note {
@@ -107,15 +129,48 @@
 {% endblock %}
 
 {% block content %}
-<a href="/" class="back-link">&larr; Back to list</a>
+<a href="/" class="back-link" id="backToList">&larr; Back to list</a>
 
 <div class="queue-header">
   <h2>Extraction Queue</h2>
-  <span class="queue-count">{{ queue_size }} record{{ 's' if queue_size != 1 else '' }} queued</span>
+  <span class="queue-count">{{ processing_size }} processing, {{ queue_size }} queued</span>
   <span class="auto-refresh-note">(auto-refreshes every 5s)</span>
 </div>
 
-{% if records %}
+<!-- Processing section -->
+<h3 class="section-label">Processing ({{ processing_size }})</h3>
+{% if processing_records %}
+<table class="queue-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Flier</th>
+      <th>Status</th>
+      <th>Endpoint</th>
+      <th>Started</th>
+      <th>Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for record in processing_records %}
+    <tr>
+      <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
+      <td>{{ record.flier_name or "—" }}</td>
+      <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
+      <td><span class="endpoint-label">{{ record.endpoint }}</span></td>
+      <td>{{ record.started_at.strftime("%H:%M:%S") if record.started_at else "—" }}</td>
+      <td class="duration-label" data-started="{{ record.started_at.isoformat() if record.started_at else '' }}">—</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">No records currently being processed.</div>
+{% endif %}
+
+<!-- Queued section -->
+<h3 class="section-label">Queued ({{ queue_size }})</h3>
+{% if queued_records %}
 <table class="queue-table">
   <thead>
     <tr>
@@ -126,7 +181,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for record in records %}
+    {% for record in queued_records %}
     <tr>
       <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
       <td>{{ record.flier_name or "—" }}</td>
@@ -137,8 +192,50 @@
   </tbody>
 </table>
 {% else %}
-<div class="empty-state">
-  <p>The extraction queue is empty.</p>
-</div>
+<div class="empty-state">No records waiting in queue.</div>
 {% endif %}
+
+<script>
+(function() {
+  // --- Update "Back to list" link with saved filter/sort prefs ---
+  var STORAGE_KEY = 'fcs_list_prefs';
+  var TTL_MS = 60 * 60 * 1000;
+  var link = document.getElementById('backToList');
+  if (link) {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (Date.now() - data.ts <= TTL_MS) {
+          var parts = ['/?page=1'];
+          if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
+          if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
+          if (data.status) parts.push('status=' + encodeURIComponent(data.status));
+          if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
+          if (parts.length > 1) link.href = parts[0] + '&' + parts.slice(1).join('&');
+        }
+      }
+    } catch(e) {}
+  }
+
+  // --- Live duration update for processing records ---
+  function updateDurations() {
+    document.querySelectorAll('[data-started]').forEach(function(cell) {
+      var started = cell.dataset.started;
+      if (!started) return;
+      var startTime = new Date(started).getTime();
+      var elapsed = Math.floor((Date.now() - startTime) / 1000);
+      if (elapsed < 60) {
+        cell.textContent = elapsed + 's';
+      } else if (elapsed < 3600) {
+        cell.textContent = Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 's';
+      } else {
+        cell.textContent = Math.floor(elapsed / 3600) + 'h ' + Math.floor((elapsed % 3600) / 60) + 'm';
+      }
+    });
+  }
+  updateDurations();
+  setInterval(updateDurations, 1000);
+})();
+</script>
 {% endblock %}
