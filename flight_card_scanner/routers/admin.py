@@ -408,26 +408,56 @@ async def next_unverified(
     after: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return the ID of the next record where human_verified is False.
+    """Return the ID of the next unverified record closest to *after*.
 
-    Searches for the next unverified record by created_at descending order.
-    The optional `after` parameter excludes that record ID from the result
-    (useful after just verifying a record).
+    Only considers records where extraction_status is 'extracted' (ready for
+    human review) and human_verified is False.
 
-    Returns {"id": <int>} if found, or {"id": null} if all are verified.
+    Finds the closest record by ID to the given `after` value, checking both
+    the next higher ID and the next lower ID and returning whichever is
+    numerically closer.
+
+    Returns {"id": <int>} if found, or {"id": null} if none remain.
     """
     from sqlalchemy import select as sa_select
     from ..models import FlightRecord
 
-    stmt = (
+    base_filters = [
+        FlightRecord.human_verified == False,  # noqa: E712
+        FlightRecord.extraction_status == "extracted",
+    ]
+    if after:
+        base_filters.append(FlightRecord.id != after)
+
+    # Find the closest candidate with a higher ID
+    stmt_next = (
         sa_select(FlightRecord.id)
-        .where(FlightRecord.human_verified == False)  # noqa: E712
-        .order_by(FlightRecord.created_at.desc())
+        .where(*base_filters, FlightRecord.id > after)
+        .order_by(FlightRecord.id.asc())
         .limit(1)
     )
-    if after:
-        stmt = stmt.where(FlightRecord.id != after)
+    # Find the closest candidate with a lower ID
+    stmt_prev = (
+        sa_select(FlightRecord.id)
+        .where(*base_filters, FlightRecord.id < after)
+        .order_by(FlightRecord.id.desc())
+        .limit(1)
+    )
 
-    result = await db.execute(stmt)
-    row = result.scalar_one_or_none()
-    return {"id": row}
+    next_result = await db.execute(stmt_next)
+    next_id = next_result.scalar_one_or_none()
+
+    prev_result = await db.execute(stmt_prev)
+    prev_id = prev_result.scalar_one_or_none()
+
+    # Pick whichever is closest to `after`
+    if next_id is not None and prev_id is not None:
+        chosen = next_id if (next_id - after) <= (after - prev_id) else prev_id
+    elif next_id is not None:
+        chosen = next_id
+    elif prev_id is not None:
+        chosen = prev_id
+    else:
+        chosen = None
+
+    return {"id": chosen}
