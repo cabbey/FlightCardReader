@@ -778,10 +778,118 @@ class ExtractionService:
                             try:
                                 measurements[dim] = float(val)
                             except ValueError:
-                                pass
+                                # Try compound measurement: "4 lbs 8 oz", "4 ft 2 in"
+                                parsed = _parse_compound_measurement(val)
+                                if parsed is not None:
+                                    measurements[dim] = parsed[0]
+                                    if not measurements.get(unit_key):
+                                        measurements[unit_key] = parsed[1]
+                                # else leave as-is (will fail validation)
             cleaned_content = json.dumps(parsed_json)
 
         return FlightCardExtraction.model_validate_json(cleaned_content)
+
+
+# ---------------------------------------------------------------------------
+# Compound measurement parsing
+# ---------------------------------------------------------------------------
+
+# Conversion factors: sub-unit per major unit
+_COMPOUND_UNITS: dict[str, tuple[str, float]] = {
+    # (major_unit_canonical, sub_units_per_major)
+    # Weight
+    "lbs": ("lbs", 16.0),    # 16 oz in a lb
+    "lb": ("lbs", 16.0),
+    "pounds": ("lbs", 16.0),
+    "pound": ("lbs", 16.0),
+    # Length
+    "ft": ("ft", 12.0),      # 12 in in a ft
+    "feet": ("ft", 12.0),
+    "foot": ("ft", 12.0),
+    # Metric weight
+    "kg": ("kg", 1000.0),    # 1000 g in a kg
+    "kilograms": ("kg", 1000.0),
+    "kilogram": ("kg", 1000.0),
+    # Metric length
+    "m": ("m", 100.0),       # 100 cm in a m
+    "meters": ("m", 100.0),
+    "meter": ("m", 100.0),
+}
+
+# Sub-unit names mapped to their major unit key (for validation)
+_SUB_UNITS: dict[str, str] = {
+    "oz": "lbs",
+    "ounces": "lbs",
+    "ounce": "lbs",
+    "in": "ft",
+    "inches": "ft",
+    "inch": "ft",
+    "\"": "ft",
+    "g": "kg",
+    "grams": "kg",
+    "gram": "kg",
+    "cm": "m",
+    "centimeters": "m",
+    "centimeter": "m",
+    "mm": "m",   # mm to m: 1000 mm per m
+}
+
+# Special: mm → m has ratio 1000, but cm → m has ratio 100
+_SUB_UNIT_RATIOS: dict[str, float] = {
+    "mm": 1000.0,
+    "cm": 100.0,
+}
+
+
+def _parse_compound_measurement(value: str) -> tuple[float, str] | None:
+    """Parse a compound measurement string into a single (value, unit) tuple.
+
+    Examples:
+        "4 lbs 8 oz"  -> (4.5, "lbs")
+        "4 ft 2 in"   -> (4.1667, "ft")
+        "1 kg 500 g"  -> (1.5, "kg")
+        "2 m 30 cm"   -> (2.3, "m")
+
+    Returns None if the string doesn't match the expected pattern.
+    """
+    # Pattern: <number> <major_unit> <number> <sub_unit>
+    pattern = re.compile(
+        r"^\s*([0-9]*\.?[0-9]+)\s*([a-zA-Z\"\']+)\s+"
+        r"([0-9]*\.?[0-9]+)\s*([a-zA-Z\"\']+)\s*$"
+    )
+    match = pattern.match(value)
+    if not match:
+        return None
+
+    major_val_str, major_unit_str, sub_val_str, sub_unit_str = match.groups()
+    major_unit_lower = major_unit_str.lower().strip(".")
+    sub_unit_lower = sub_unit_str.lower().strip(".")
+
+    # Look up the major unit
+    unit_info = _COMPOUND_UNITS.get(major_unit_lower)
+    if unit_info is None:
+        return None
+
+    canonical_major, default_ratio = unit_info
+
+    # Validate that the sub-unit belongs to this major unit
+    expected_major = _SUB_UNITS.get(sub_unit_lower)
+    if expected_major is None or expected_major != canonical_major:
+        return None
+
+    # Get the ratio (sub-units per major unit)
+    ratio = _SUB_UNIT_RATIOS.get(sub_unit_lower, default_ratio)
+
+    major_val = float(major_val_str)
+    sub_val = float(sub_val_str)
+
+    # Convert: major + sub/ratio
+    combined = major_val + (sub_val / ratio)
+    # Round to 4 decimal places to avoid floating point noise
+    combined = round(combined, 4)
+
+    return (combined, canonical_major)
+
 
 # Day-of-week name mapping (full and abbreviated, lowercase) to Python weekday int
 _DAY_NAMES: dict[str, int] = {
