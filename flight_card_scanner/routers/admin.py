@@ -176,8 +176,17 @@ async def update_record(
 
     updated_record = await record_service.update_fields(db, record_id, updates)
 
-    # Re-run flier verification if flier_name was changed
-    if "flier_name" in updates and _flier_match_service and _flier_match_service.enabled:
+    # Re-run flier verification if flier_name or membership fields changed
+    should_reverify = "flier_name" in updates
+    if not should_reverify and "overflow" in updates and updates["overflow"]:
+        new_membership = updates["overflow"].get("membership")
+        if new_membership:
+            old_membership = (record.overflow or {}).get("membership", {})
+            if (new_membership.get("club") != old_membership.get("club") or
+                    new_membership.get("member_number") != old_membership.get("member_number")):
+                should_reverify = True
+
+    if should_reverify and _flier_match_service and _flier_match_service.enabled:
         await _run_flier_verification(db, updated_record)
 
     return {"message": "Record updated", "id": updated_record.id}
