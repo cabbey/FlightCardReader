@@ -304,11 +304,11 @@
     </thead>
     <tbody>
       {% for record in records %}
-      <tr{% if record.human_verified %} style="opacity:0.7"{% endif %}>
-        <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
-        <td>{{ record.flier_name or "—" }}{% if record.human_verified %} <span title="Human verified" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
+      <tr>
+        <td><a href="/record/{{ record.id }}">{{ record.id }}</a>{% if record.human_verified %} <span title="Human verified" style="color:#2563eb;">&#x1F6E1;&#xFE0F;</span>{% endif %}</td>
+        <td>{{ record.flier_name or "—" }}{% if record.flier_verified %} <span title="Verified against known fliers" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
         <td>{{ record.rocket_name or "—" }}</td>
-        <td>{{ record.motor_designation or "—" }}</td>
+        <td>{{ record.motor_designation or "—" }}{% if record.motors_verified %} <span title="Motor verified via ThrustCurve" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
         <td>{{ record.flight_date or "—" }}</td>
         <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
         <td>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</td>

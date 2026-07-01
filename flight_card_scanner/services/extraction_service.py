@@ -395,7 +395,7 @@ class ExtractionService:
         processes the record, then releases and marks the task done.
         """
         async with httpx.AsyncClient(
-            base_url=endpoint.url, timeout=120.0
+            base_url=endpoint.url, timeout=600.0
         ) as client:
             while True:
                 record_id = await self._queue.get()
@@ -434,7 +434,7 @@ class ExtractionService:
             await record_service.set_status(db, record_id, "processing")
 
         try:
-            extracted = await self._call_ollama(client, record.image_path)
+            extracted = await self._call_ollama(client, record.image_path, record_id)
         except OllamaUnavailableError as exc:
             logger.error(
                 "Endpoint %s unreachable for record %d: %s — returning to pending",
@@ -602,7 +602,7 @@ class ExtractionService:
         await db.commit()
 
     async def _call_ollama(
-        self, client: httpx.AsyncClient, image_path: str
+        self, client: httpx.AsyncClient, image_path: str, record_id: int
     ) -> FlightCardExtraction:
         """Submit card image to Ollama and return parsed extraction.
 
@@ -655,7 +655,7 @@ class ExtractionService:
             "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
             "stream": False,
             "options": {"temperature": 0, "num_ctx": 32768, "num_predict": 8192},
-            "think": False,
+            "think": True,
         }
 
         # Save the request payload as a sidecar .request file (without the base64 image)
@@ -674,8 +674,8 @@ class ExtractionService:
         # Send request to Ollama
         try:
             logger.info(
-                "sending %s to Ollama at %s",
-                image_path,
+                "sending record %d to Ollama at %s",
+                record_id,
                 client.base_url,
             )
             import time as _time
@@ -684,8 +684,9 @@ class ExtractionService:
             response.raise_for_status()
             _elapsed = _time.monotonic() - _t0
             logger.info(
-                "Ollama responded for %s in %.1fs",
-                image_path,
+                "Ollama at %s responded for record %d in %.1fs",
+                client.base_url,
+                record_id,
                 _elapsed,
             )
         except httpx.HTTPStatusError as exc:
@@ -725,12 +726,16 @@ class ExtractionService:
             ).strip()
 
         # Also handle case where <think> is present but </think> is missing
-        # (model started thinking but didn't close the tag before JSON)
-        if cleaned_content.startswith("<think>"):
+        # (model started thinking but didn't close the tag before JSON) OR
+        # </think> is present but <think> is missing (trailing thinking is
+        # present, but not the start of it.)
+        if "think>" in cleaned_content:
             # Find the start of the JSON object
             json_start = cleaned_content.find("{")
             if json_start >= 0:
+                logger.warning("found junk, content was: %s", cleaned_content)
                 cleaned_content = cleaned_content[json_start:]
+                logger.warning("removed junk, content now is: %s", cleaned_content)
 
         if not cleaned_content:
             raise ExtractionParseError(
@@ -741,6 +746,19 @@ class ExtractionService:
         # Pre-process: fix measurements where model merged value+unit into one field
         try:
             parsed_json = json.loads(cleaned_content)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            # Fallback: strip junk before the first '{' and retry
+            brace_idx = cleaned_content.find("{")
+            if brace_idx > 0:
+                cleaned_content = cleaned_content[brace_idx:]
+                try:
+                    parsed_json = json.loads(cleaned_content)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    parsed_json = None
+            else:
+                parsed_json = None
+
+        if parsed_json is not None:
             measurements = parsed_json.get("measurements")
             if measurements and isinstance(measurements, dict):
                 for dim in ("diameter", "length", "weight"):
@@ -760,12 +778,18 @@ class ExtractionService:
                             except ValueError:
                                 pass
             cleaned_content = json.dumps(parsed_json)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass  # Let Pydantic handle the error
 
         try:
             return FlightCardExtraction.model_validate_json(cleaned_content)
         except ValidationError as exc:
+            # Fallback: try stripping everything before the first '{'
+            brace_idx = cleaned_content.find("{")
+            if brace_idx > 0:
+                trimmed = cleaned_content[brace_idx:]
+                try:
+                    return FlightCardExtraction.model_validate_json(trimmed)
+                except ValidationError:
+                    pass  # Fall through to raise original error
             raise ExtractionParseError(
                 message=f"Failed to parse LLM response: {exc}",
                 raw_response=raw_content,

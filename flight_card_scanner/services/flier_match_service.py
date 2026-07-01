@@ -161,7 +161,7 @@ class FlierMatchService:
         Returns list of (row_index, row_dict) tuples.
         """
         results: list[tuple[int, dict[str, str]]] = []
-        normalized_number = member_number.strip()
+        normalized_number = member_number.strip().lstrip("0") or "0"
 
         if club:
             # Search indicated column first

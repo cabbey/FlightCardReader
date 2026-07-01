@@ -138,7 +138,11 @@ async def apply_extraction(
     overflow: dict = {}
 
     if extracted.membership is not None:
-        overflow["membership"] = extracted.membership.model_dump()
+        mem_data = extracted.membership.model_dump()
+        # Strip leading zeros from member number (LLM sometimes includes them)
+        if mem_data.get("member_number"):
+            mem_data["member_number"] = mem_data["member_number"].lstrip("0") or "0"
+        overflow["membership"] = mem_data
 
     if extracted.rocket_name is not None:
         overflow["rocket_name"] = extracted.rocket_name

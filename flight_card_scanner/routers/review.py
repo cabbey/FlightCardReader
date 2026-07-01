@@ -87,6 +87,8 @@ class RecordRow:
     extraction_status: str
     created_at: Any
     human_verified: bool = False
+    flier_verified: bool = False
+    motors_verified: bool = False
 
 
 def _matches_search(record: FlightRecord, q_lower: str) -> bool:
@@ -248,6 +250,9 @@ async def list_records(
     for r in page_records:
         rocket_name = r.overflow.get("rocket_name") if r.overflow else None
         motor_desig = motor_designation_str(r.overflow)
+        # Motors are "verified" if all have a thrustcurve_id
+        motors = (r.overflow or {}).get("motors", [])
+        motors_verified = bool(motors) and all(m.get("thrustcurve_id") for m in motors)
         records.append(
             RecordRow(
                 id=r.id,
@@ -258,6 +263,8 @@ async def list_records(
                 extraction_status=r.extraction_status,
                 created_at=r.created_at,
                 human_verified=r.human_verified,
+                flier_verified=r.flier_verified,
+                motors_verified=motors_verified,
             )
         )
 

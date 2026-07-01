@@ -740,7 +740,9 @@
     {% if record.extraction_status == "extraction_failed" %}
     <button type="button" class="btn-requeue" id="btnRequeue">Re-queue</button>
     {% endif %}
+    {% if not record.human_verified %}
     <button type="button" class="btn-extract" id="btnExtract">Extract</button>
+    {% endif %}
   </div>
 </div>
 
@@ -1160,6 +1162,12 @@
     var display = wrapper.querySelector('.field-display');
     display.style.display = 'none';
 
+    // Hide the Extract button as soon as any edit control is opened
+    var btnExtract = document.getElementById('btnExtract');
+    if (btnExtract) {
+      btnExtract.style.display = 'none';
+    }
+
     var input;
     if (type === 'bool') {
       input = document.createElement('select');
@@ -1278,7 +1286,10 @@
     var hasChanges = Object.keys(pendingChanges).length > 0;
     document.getElementById('btnSave').disabled = !hasChanges;
     document.getElementById('btnCancel').style.display = hasChanges ? '' : 'none';
-    document.getElementById('btnExtract').disabled = hasChanges;
+    var btnExtract = document.getElementById('btnExtract');
+    if (btnExtract) {
+      btnExtract.style.display = hasChanges ? 'none' : '';
+    }
     // Toggle verify button text based on pending changes
     var btnVerify = document.getElementById('btnVerify');
     if (btnVerify && !btnVerify.disabled) {
