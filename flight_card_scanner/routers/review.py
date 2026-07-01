@@ -331,6 +331,45 @@ async def list_records(
     )
 
 
+@router.get("/queue", response_class=HTMLResponse)
+async def queue_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Render a page showing all records currently in the extraction queue."""
+    templates = _get_templates()
+    config = _get_config()
+    extraction_service = _get_extraction_service()
+
+    queued_ids = sorted(extraction_service.queued_ids)
+
+    # Fetch record details for queued IDs
+    records = []
+    if queued_ids:
+        result = await db.execute(
+            select(FlightRecord).where(FlightRecord.id.in_(queued_ids))
+        )
+        for r in result.scalars().all():
+            records.append({
+                "id": r.id,
+                "flier_name": r.flier_name,
+                "extraction_status": r.extraction_status,
+                "created_at": r.created_at,
+            })
+        # Sort by ID to match queued_ids order
+        records.sort(key=lambda x: x["id"])
+
+    return templates.TemplateResponse(
+        "queue.html",
+        {
+            "request": request,
+            "event_name": config.event_name,
+            "records": records,
+            "queue_size": len(queued_ids),
+        },
+    )
+
+
 @router.get("/record/{record_id}", response_class=HTMLResponse)
 async def detail_record(
     request: Request,

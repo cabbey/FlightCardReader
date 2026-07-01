@@ -472,3 +472,11 @@ async def next_unverified(
         chosen = None
 
     return {"id": chosen}
+
+
+@router.get("/queue")
+async def get_queue(request: Request) -> dict:
+    """Return the list of record IDs currently in the extraction queue."""
+    extraction_service = request.app.state.extraction_service
+    queued = sorted(extraction_service.queued_ids)
+    return {"queued_ids": queued, "count": len(queued)}
