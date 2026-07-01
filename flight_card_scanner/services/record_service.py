@@ -232,8 +232,9 @@ async def update_fields(
             if field == "overflow" and isinstance(value, dict):
                 colors = value.get("rocket_colors")
                 if isinstance(colors, str):
+                    import re as _re
                     value["rocket_colors"] = [
-                        c.strip() for c in colors.split(",") if c.strip()
+                        c.strip() for c in _re.split(r'[,/;&]|\band\b', colors) if c.strip()
                     ]
             setattr(record, field, value)
             # JSON columns need explicit dirty marking for SQLAlchemy change detection
