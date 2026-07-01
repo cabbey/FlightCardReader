@@ -802,6 +802,22 @@
 
           {% if record.overflow and record.overflow.membership or show_all_fields %}
           {% set membership = record.overflow.membership if record.overflow and record.overflow.membership else {} %}
+          {% if membership.nar_number or membership.tra_number %}
+          {# Show NAR/TRA numbers directly (read-only, populated by verification) #}
+          {% if membership.nar_number %}
+          <dt>NAR #</dt>
+          <dd><span>{{ membership.nar_number }}</span></dd>
+          {% endif %}
+          {% if membership.tra_number %}
+          <dt>TRA #</dt>
+          <dd><span>{{ membership.tra_number }}</span></dd>
+          {% endif %}
+          {% if membership.cert_level is not none %}
+          <dt>Cert Level</dt>
+          <dd><span>{{ membership.cert_level }}</span></dd>
+          {% endif %}
+          {% else %}
+          {# No roster data — show editable club/member fields #}
           <dt>Club</dt>
           <dd>
             <div class="editable-field" data-field="overflow.membership.club" data-type="select" data-value="{{ membership.club or '' }}" data-options="TRA,NAR,CAR">
@@ -820,6 +836,7 @@
               <span class="field-display">{{ membership.cert_level if membership.cert_level is not none else "—" }}</span>
             </div>
           </dd>
+          {% endif %}
           {% endif %}
         </dl>
       </div>
