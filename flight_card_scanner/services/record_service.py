@@ -241,6 +241,10 @@ async def update_fields(
             if field == "overflow":
                 flag_modified(record, "overflow")
 
+    # If marking as human_verified, ensure extraction_status is "extracted"
+    if updates.get("human_verified") is True and record.extraction_status != "extracted":
+        record.extraction_status = "extracted"
+
     await db.commit()
     await db.refresh(record)
     return record
