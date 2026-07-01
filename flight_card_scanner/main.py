@@ -210,6 +210,25 @@ async def lifespan(app: FastAPI):
                 upgraded_count,
             )
 
+    # Fix any human_verified records that aren't in "extracted" state
+    async with session_factory() as db:
+        from sqlalchemy import select as _select
+        from .models import FlightRecord
+        stmt = (
+            _select(FlightRecord)
+            .where(FlightRecord.human_verified == True)  # noqa: E712
+            .where(FlightRecord.extraction_status != "extracted")
+        )
+        result = await db.execute(stmt)
+        mismatched = list(result.scalars().all())
+        for record in mismatched:
+            await record_service.set_status(db, record.id, "extracted")
+        if mismatched:
+            logger.info(
+                "Fixed %d human-verified records with incorrect extraction_status",
+                len(mismatched),
+            )
+
     await extraction_service.start()
     logger.info("Extraction service started.")
 
