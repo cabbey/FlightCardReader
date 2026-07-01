@@ -228,6 +228,13 @@ async def update_fields(
 
     for field, value in updates.items():
         if field in editable_fields:
+            # Ensure rocket_colors is stored as a list, not a string
+            if field == "overflow" and isinstance(value, dict):
+                colors = value.get("rocket_colors")
+                if isinstance(colors, str):
+                    value["rocket_colors"] = [
+                        c.strip() for c in colors.split(",") if c.strip()
+                    ]
             setattr(record, field, value)
             # JSON columns need explicit dirty marking for SQLAlchemy change detection
             if field == "overflow":
