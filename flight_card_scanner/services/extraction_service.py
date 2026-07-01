@@ -479,6 +479,16 @@ class ExtractionService:
             async with self._session_factory() as db:
                 await record_service.set_status(db, record_id, "extraction_failed")
             return
+        except Exception as exc:
+            logger.error(
+                "Extraction failed for record %d: %s: %s",
+                record_id,
+                type(exc).__name__,
+                exc,
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "extraction_failed")
+            return
 
         # Resolve flight date — failure is non-fatal; just leave date as None
         try:
