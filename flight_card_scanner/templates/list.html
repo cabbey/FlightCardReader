@@ -442,6 +442,83 @@
 
 <script>
 (function() {
+  var STORAGE_KEY = 'fcs_list_prefs';
+  var TTL_MS = 60 * 60 * 1000; // 1 hour
+
+  // --- Persistence helpers ---
+  function savePrefs(prefs) {
+    var data = {
+      sort: prefs.sort,
+      verified: prefs.verified,
+      status: prefs.status,
+      flight_day: prefs.flight_day,
+      ts: Date.now()
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  }
+
+  function loadPrefs() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      // Check TTL
+      if (Date.now() - data.ts > TTL_MS) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      return data;
+    } catch(e) { return null; }
+  }
+
+  // Current state from server
+  var currentPrefs = {
+    sort: '{{ sort }}',
+    verified: '{{ verified_filter }}',
+    status: '{{ status_filter }}',
+    flight_day: '{{ flight_day_filter }}'
+  };
+
+  // On page load: save current state (refreshes the TTL)
+  savePrefs(currentPrefs);
+
+  // On page load: if the URL has NO filter/sort params, check localStorage
+  // and redirect to apply saved preferences
+  (function() {
+    var url = new URL(window.location.href);
+    var hasFilterParams = url.searchParams.has('sort') ||
+                          url.searchParams.has('verified') ||
+                          url.searchParams.has('status') ||
+                          url.searchParams.has('flight_day');
+    if (!hasFilterParams) {
+      var saved = loadPrefs();
+      if (saved) {
+        // Check if saved prefs differ from defaults
+        var hasNonDefault = (saved.sort && saved.sort !== 'id_desc') ||
+                            (saved.verified && saved.verified !== 'all') ||
+                            (saved.status && saved.status !== '') ||
+                            (saved.flight_day && saved.flight_day !== '');
+        if (hasNonDefault) {
+          // Rebuild URL with saved prefs, preserving page and q
+          var page = url.searchParams.get('page') || '1';
+          var q = url.searchParams.get('q') || '';
+          var parts = ['/?page=' + encodeURIComponent(page)];
+          if (saved.sort && saved.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(saved.sort));
+          if (saved.verified && saved.verified !== 'all') parts.push('verified=' + encodeURIComponent(saved.verified));
+          if (saved.status) parts.push('status=' + encodeURIComponent(saved.status));
+          if (saved.flight_day) parts.push('flight_day=' + encodeURIComponent(saved.flight_day));
+          if (q) parts.push('q=' + encodeURIComponent(q));
+          var newUrl = parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
+          // Only redirect if URL would actually change
+          if (newUrl !== url.pathname + url.search) {
+            window.location.replace(newUrl);
+            return;
+          }
+        }
+      }
+    }
+  })();
+
   // --- Helper: build URL from current filter/sort state ---
   function buildListUrl(overrides) {
     var params = {
@@ -465,20 +542,28 @@
     return parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
   }
 
-  // --- Filter/sort change handlers ---
+  // --- Filter/sort change handlers (save prefs before navigating) ---
   document.getElementById('sortSelect').addEventListener('change', function() {
+    var newPrefs = { sort: this.value, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
+    savePrefs(newPrefs);
     window.location.href = buildListUrl({ sort: this.value, page: '1' });
   });
 
   document.getElementById('verifiedFilter').addEventListener('change', function() {
+    var newPrefs = { sort: currentPrefs.sort, verified: this.value, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
+    savePrefs(newPrefs);
     window.location.href = buildListUrl({ verified: this.value, page: '1' });
   });
 
   document.getElementById('statusFilter').addEventListener('change', function() {
+    var newPrefs = { sort: currentPrefs.sort, verified: currentPrefs.verified, status: this.value, flight_day: currentPrefs.flight_day };
+    savePrefs(newPrefs);
     window.location.href = buildListUrl({ status: this.value, page: '1' });
   });
 
   document.getElementById('flightDayFilter').addEventListener('change', function() {
+    var newPrefs = { sort: currentPrefs.sort, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: this.value };
+    savePrefs(newPrefs);
     window.location.href = buildListUrl({ flight_day: this.value, page: '1' });
   });
 
