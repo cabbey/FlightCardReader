@@ -725,7 +725,7 @@
 
 {% block content %}
 <nav class="record-nav">
-  <a href="/" class="back-link">&larr; Back to list</a>
+  <a href="/" class="back-link" id="backToList">&larr; Back to list</a>
   <span class="prev-next">
     {% if prev_id %}
     <a href="/record/{{ prev_id }}">&larr; Prev</a>
@@ -1163,6 +1163,49 @@
 
 <script>
 (function() {
+  // --- Update "Back to list" link with saved filter/sort prefs ---
+  (function() {
+    var STORAGE_KEY = 'fcs_list_prefs';
+    var TTL_MS = 60 * 60 * 1000; // 1 hour
+    var link = document.getElementById('backToList');
+    if (!link) return;
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (Date.now() - data.ts > TTL_MS) {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+      var parts = ['/?page=1'];
+      if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
+      if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
+      if (data.status) parts.push('status=' + encodeURIComponent(data.status));
+      if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
+      if (parts.length > 1) {
+        link.href = parts[0] + '&' + parts.slice(1).join('&');
+      }
+    } catch(e) {}
+  })();
+
+  // Helper: get the list URL with saved filter prefs
+  function getListUrl() {
+    var STORAGE_KEY = 'fcs_list_prefs';
+    var TTL_MS = 60 * 60 * 1000;
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return '/';
+      var data = JSON.parse(raw);
+      if (Date.now() - data.ts > TTL_MS) return '/';
+      var parts = ['/?page=1'];
+      if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
+      if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
+      if (data.status) parts.push('status=' + encodeURIComponent(data.status));
+      if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
+      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : '/';
+    } catch(e) { return '/'; }
+  }
+
   var recordId = {{ record.id }};
   var pendingChanges = {};
   var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
@@ -1537,11 +1580,11 @@
               if (data.id) {
                 window.location.href = '/record/' + data.id;
               } else {
-                window.location.href = '/';
+                window.location.href = getListUrl();
               }
             })
             .catch(function() {
-              window.location.href = '/';
+              window.location.href = getListUrl();
             });
         } else {
           return res.json().then(function(data) {
