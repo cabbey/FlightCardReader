@@ -321,6 +321,11 @@
     font-style: italic;
   }
 
+  .field-display-placeholder {
+    color: #9ca3af;
+    font-style: italic;
+  }
+
   /* Save/cancel buttons */
   .btn-save {
     font-size: 0.85rem;
@@ -621,6 +626,20 @@
     background: #1d4ed8;
   }
 
+  .btn-tc-save-asis {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    background: #f59e0b;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .btn-tc-save-asis:hover {
+    background: #d97706;
+  }
+
   .tc-motor-link {
     color: #2563eb;
     text-decoration: none;
@@ -847,7 +866,7 @@
                 <span class="field-display">{{ m.diameter if m.diameter is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.diameter_unit" data-type="text" data-value="{{ m.diameter_unit or '' }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.diameter_unit or "" }}</span>
+                <span class="field-display{{ '' if m.diameter_unit else ' field-display-placeholder' }}">{{ m.diameter_unit or "units" }}</span>
               </div>
             </dd>
             {% endif %}
@@ -858,7 +877,7 @@
                 <span class="field-display">{{ m.length if m.length is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.length_unit" data-type="text" data-value="{{ m.length_unit or '' }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.length_unit or "" }}</span>
+                <span class="field-display{{ '' if m.length_unit else ' field-display-placeholder' }}">{{ m.length_unit or "units" }}</span>
               </div>
             </dd>
             {% endif %}
@@ -869,7 +888,7 @@
                 <span class="field-display">{{ m.weight if m.weight is not none else "—" }}</span>
               </div>
               <div class="editable-field" data-field="overflow.rocket_measurements.weight_unit" data-type="text" data-value="{{ m.weight_unit or '' }}" style="display: inline-flex;">
-                <span class="field-display">{{ m.weight_unit or "" }}</span>
+                <span class="field-display{{ '' if m.weight_unit else ' field-display-placeholder' }}">{{ m.weight_unit or "units" }}</span>
               </div>
             </dd>
             {% endif %}
@@ -923,13 +942,13 @@
                 {% endif %}
                 <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
                   <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Re-search ThrustCurve">🔍</button>
-                  {% if motor.thrustcurve_candidates %}
-                  <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}">Select</button>
-                  {% endif %}
+                  <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}" style="{{ '' if motor.thrustcurve_candidates else 'display:none;' }}">Select</button>
                   <div class="tc-search-fields" style="display:none;" data-motor-index="{{ loop.index0 }}">
                     <label class="tc-field-label">Class
                       <select class="field-select tc-field-letter">
                         <option value="">—</option>
+                        <option value="¼A"{{ ' selected' if motor.letter == '¼A' else '' }}>¼A</option>
+                        <option value="½A"{{ ' selected' if motor.letter == '½A' else '' }}>½A</option>
                         {% if tc_metadata and tc_metadata.impulseClasses %}
                           {% for cls in tc_metadata.impulseClasses %}
                         <option value="{{ cls }}"{{ ' selected' if cls == motor.letter else '' }}>{{ cls }}</option>
@@ -947,6 +966,8 @@
                     <label class="tc-field-label">Manufacturer
                       <select class="field-select tc-field-mfr">
                         <option value="">— Any —</option>
+                        <option value="Ex"{{ ' selected' if motor._resolved_manufacturer == 'Ex' else '' }}>Ex</option>
+                        <option value="Sugar"{{ ' selected' if motor._resolved_manufacturer == 'Sugar' else '' }}>Sugar</option>
                         {% if tc_metadata and tc_metadata.manufacturers %}
                           {% for mfr in tc_metadata.manufacturers %}
                         <option value="{{ mfr.abbrev }}"{{ ' selected' if mfr.abbrev == motor._resolved_manufacturer else '' }}>{{ mfr.abbrev }}</option>
@@ -958,6 +979,7 @@
                       <input type="text" class="field-input tc-field-suffix" value="{{ motor.suffix or '' }}" size="5">
                     </label>
                     <button type="button" class="btn-tc-query" data-motor-index="{{ loop.index0 }}">Search</button>
+                    <button type="button" class="btn-tc-save-asis" data-motor-index="{{ loop.index0 }}">Save as-is</button>
                   </div>
                 </div>
               </div>
@@ -1003,7 +1025,7 @@
               <span class="field-display">{{ record.total_impulse_value if record.total_impulse_value is not none else "—" }}</span>
             </div>
             <div class="editable-field" data-field="total_impulse_unit" data-type="select" data-value="{{ record.total_impulse_unit or '' }}" data-options="Ns,LbsFt" style="display: inline-flex;">
-              <span class="field-display">{{ record.total_impulse_unit or "" }}</span>
+              <span class="field-display{{ '' if record.total_impulse_unit else ' field-display-placeholder' }}">{{ record.total_impulse_unit or "units" }}</span>
             </div>
           </dd>
 
@@ -1748,6 +1770,8 @@
           fields.style.display = 'none';
           var selectWrapper = entry.querySelector('.tc-select-wrapper');
           if (selectWrapper) selectWrapper.style.display = 'none';
+          var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
+          if (selectBtn) selectBtn.style.display = 'none';
         } else if (data.candidates && data.candidates.length > 0) {
           // Multiple candidates — show dropdown
           var selectWrapper = entry.querySelector('.tc-select-wrapper');
@@ -1765,14 +1789,16 @@
             if (c.diameter) html += ' ' + c.diameter + 'mm';
             html += '</option>';
           });
-          html += '</select> <button type="button" class="btn-tc-select" data-motor-index="' + idx + '">Select</button>';
+          html += '</select>';
           selectWrapper.innerHTML = html;
           selectWrapper.style.display = '';
           // Store candidates data and motor details for the select handler
           selectWrapper._searchContext = { letter: letter, number: number, manufacturer: mfr, suffix: suffix };
           selectWrapper._candidateData = {};
           data.candidates.forEach(function(c) { selectWrapper._candidateData[c.motorId] = c; });
-          selectWrapper.querySelector('.btn-tc-select').addEventListener('click', handleMotorSelect);
+          // Show the always-present Select button
+          var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
+          if (selectBtn) selectBtn.style.display = '';
           // Update status
           var statusEl = entry.querySelector('.tc-status');
           if (statusEl) {
@@ -1826,6 +1852,7 @@
 
     // Use candidate data we already have, or fetch from select endpoint
     var candidateData = (selectWrapper && selectWrapper._candidateData && selectWrapper._candidateData[motorId]) || null;
+    var formSelectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
     if (candidateData) {
       // Build a motorData-like object from candidate info
       var motorData = {
@@ -1837,6 +1864,7 @@
       updateMotorDisplay(entry, motorId, motorData);
       entry.classList.add('field-dirty');
       if (selectWrapper) selectWrapper.style.display = 'none';
+      if (formSelectBtn) formSelectBtn.style.display = 'none';
     } else {
       // Fetch full motor data from select endpoint
       btn.disabled = true;
@@ -1851,12 +1879,14 @@
         updateMotorDisplay(entry, motorId, resp.motorData);
         entry.classList.add('field-dirty');
         if (selectWrapper) selectWrapper.style.display = 'none';
+        if (formSelectBtn) formSelectBtn.style.display = 'none';
       })
       .catch(function() {
         // Fallback: just show the ID
         updateMotorDisplay(entry, motorId, null);
         entry.classList.add('field-dirty');
         if (selectWrapper) selectWrapper.style.display = 'none';
+        if (formSelectBtn) formSelectBtn.style.display = 'none';
       })
       .finally(function() {
         btn.disabled = false;
@@ -1867,6 +1897,50 @@
 
   document.querySelectorAll('.btn-tc-select').forEach(function(btn) {
     btn.addEventListener('click', handleMotorSelect);
+  });
+
+  // --- Save as-is button: saves motor form values without ThrustCurve lookup ---
+  function handleSaveAsIs(btn) {
+    var idx = btn.dataset.motorIndex;
+    var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+    var fields = entry.querySelector('.tc-search-fields[data-motor-index="' + idx + '"]');
+    var letter = fields.querySelector('.tc-field-letter').value.trim();
+    var number = fields.querySelector('.tc-field-number').value.trim();
+    var mfr = fields.querySelector('.tc-field-mfr').value.trim();
+    var suffix = fields.querySelector('.tc-field-suffix').value.trim();
+
+    if (!letter || !number) {
+      alert('Impulse class and average thrust are required.');
+      return;
+    }
+
+    // Register motor change without a thrustcurve_id
+    registerMotorChange(idx, {
+      letter: letter,
+      number: number,
+      manufacturer: mfr || null,
+      suffix: suffix || null
+    });
+
+    // Update display
+    var desig = entry.querySelector('.motor-designation');
+    var label = (mfr ? mfr + ' ' : '') + letter + number + (suffix ? ' - ' + suffix : '');
+    if (desig) {
+      desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
+    }
+    // Update status to indicate manually saved
+    var statusEl = entry.querySelector('.tc-status');
+    if (statusEl) {
+      statusEl.className = 'tc-status tc-pending';
+      statusEl.textContent = '✎ manual';
+      statusEl.title = 'Saved without ThrustCurve lookup';
+    }
+    entry.classList.add('field-dirty');
+    fields.style.display = 'none';
+  }
+
+  document.querySelectorAll('.btn-tc-save-asis').forEach(function(btn) {
+    btn.addEventListener('click', function() { handleSaveAsIs(btn); });
   });
 
   function registerMotorChange(idx, changes) {
@@ -1978,16 +2052,21 @@
       row.innerHTML = '<div class="tc-search-fields" style="display:flex;" data-motor-index="' + newIdx + '">' +
         '<label class="tc-field-label">Class <select class="field-select tc-field-letter">' +
         '<option value="">—</option>' +
+        '<option value="\u00bcA">\u00bcA</option>' +
+        '<option value="\u00bdA">\u00bdA</option>' +
         '{% if tc_metadata and tc_metadata.impulseClasses %}{% for cls in tc_metadata.impulseClasses %}<option value="{{ cls }}">{{ cls }}</option>{% endfor %}{% else %}{% for cls in ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O"] %}<option value="{{ cls }}">{{ cls }}</option>{% endfor %}{% endif %}' +
         '</select></label>' +
         '<label class="tc-field-label">Avg Thrust <input type="text" class="field-input tc-field-number" size="5"></label>' +
         '<label class="tc-field-label">Manufacturer <select class="field-select tc-field-mfr">' +
         '<option value="">— Any —</option>' +
+        '<option value="Ex">Ex</option>' +
+        '<option value="Sugar">Sugar</option>' +
         '{% if tc_metadata and tc_metadata.manufacturers %}{% for mfr in tc_metadata.manufacturers %}<option value="{{ mfr.abbrev }}">{{ mfr.abbrev }}</option>{% endfor %}{% endif %}' +
         '</select></label>' +
         '<label class="tc-field-label">Suffix <input type="text" class="field-input tc-field-suffix" size="5"></label>' +
         '<label class="tc-field-label">Qty <input type="number" class="field-input motor-qty-input" value="1" min="1" max="99" step="1" style="width:3rem;"></label>' +
         '<button type="button" class="btn-tc-query" data-motor-index="' + newIdx + '">Search</button>' +
+        '<button type="button" class="btn-tc-save-asis" data-motor-index="' + newIdx + '">Save as-is</button>' +
         '<button type="button" class="btn-motor-delete" data-motor-index="' + newIdx + '" title="Remove">✕</button>' +
         '</div>';
 
@@ -2064,6 +2143,40 @@
           searchBtn.disabled = false;
           searchBtn.textContent = 'Search';
         });
+      });
+
+      // Bind save-as-is for new row
+      row.querySelector('.btn-tc-save-asis').addEventListener('click', function() {
+        var fields = row.querySelector('.tc-search-fields');
+        var letter = fields.querySelector('.tc-field-letter').value.trim();
+        var number = fields.querySelector('.tc-field-number').value.trim();
+        var mfr = fields.querySelector('.tc-field-mfr').value.trim();
+        var suffix = fields.querySelector('.tc-field-suffix').value.trim();
+        var qty = parseInt(fields.querySelector('.motor-qty-input').value, 10) || 1;
+
+        if (!letter || !number) {
+          alert('Impulse class and average thrust are required.');
+          return;
+        }
+
+        var addIdx = addedMotors.length - 1;
+        addedMotors[addIdx] = { letter: letter, number: number, manufacturer: mfr || null, suffix: suffix || null, quantity: qty };
+
+        // Show the designation inline
+        var desig = document.createElement('span');
+        desig.className = 'motor-designation';
+        var label = (mfr ? mfr + ' ' : '') + letter + number + (suffix ? ' - ' + suffix : '');
+        desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
+        fields.style.display = 'none';
+        row.insertBefore(desig, row.firstChild);
+        var badge = document.createElement('span');
+        badge.className = 'tc-status tc-pending';
+        badge.textContent = '✎ manual';
+        badge.title = 'Saved without ThrustCurve lookup';
+        desig.insertAdjacentElement('afterend', badge);
+
+        pendingChanges['_motor_add_' + addedMotors.length] = true;
+        updateSaveButton();
       });
 
       // Bind delete for new row
