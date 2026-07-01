@@ -89,6 +89,7 @@ class RecordRow:
     human_verified: bool = False
     flier_verified: bool = False
     motors_verified: bool = False
+    is_queued: bool = False
 
 
 def _matches_search(record: FlightRecord, q_lower: str) -> bool:
@@ -135,14 +136,20 @@ async def list_records(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     q: str | None = Query(default=None),
-    unverified: str | None = Query(default=None),
+    sort: str = Query(default="id_desc"),
+    verified: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    flight_day: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Render the paginated list view of flight records.
 
-    Supports optional search (q parameter) that filters on flier_name (SQL),
-    rocket_name and motor designation (Python-side overflow scan).
-    Supports ?unverified=1 to show only records where human_verified is False.
+    Supports:
+    - q: search filter on flier_name (SQL), rocket_name and motor (overflow)
+    - sort: id_desc (default), id_asc, flier_asc, flier_desc
+    - verified: all (default), verified, unverified
+    - status: extraction_status filter (pending, processing, extracted, extraction_failed)
+    - flight_day: ISO date string to filter by flight_date
     """
     templates = _get_templates()
     config = _get_config()
@@ -163,9 +170,9 @@ async def list_records(
         "extracted": 0,
         "extraction_failed": 0,
     }
-    for status, count in count_result.all():
-        if status in status_counts:
-            status_counts[status] = count
+    for st, count in count_result.all():
+        if st in status_counts:
+            status_counts[st] = count
 
     # --- Compute human_verified counts ---
     verified_count_stmt = select(func.count(FlightRecord.id)).where(
@@ -180,8 +187,39 @@ async def list_records(
 
     verified_percent = round((verified_count / total_all * 100) if total_all > 0 else 0, 1)
 
-    # Determine if we're filtering to unverified only
-    filter_unverified = unverified == "1"
+    # --- Determine sort order ---
+    sort_options = {
+        "id_desc": FlightRecord.id.desc(),
+        "id_asc": FlightRecord.id.asc(),
+        "flier_asc": FlightRecord.flier_name.asc(),
+        "flier_desc": FlightRecord.flier_name.desc(),
+    }
+    order_clause = sort_options.get(sort, FlightRecord.id.desc())
+
+    # --- Determine verified filter ---
+    filter_verified = verified  # "all", "verified", "unverified", or None
+
+    # --- Parse flight_day filter ---
+    flight_day_date = None
+    if flight_day:
+        try:
+            from datetime import date as _date
+            flight_day_date = _date.fromisoformat(flight_day)
+        except (ValueError, TypeError):
+            pass
+
+    # --- Build base filter conditions ---
+    def _apply_filters(stmt):
+        """Apply common filters to a statement."""
+        if filter_verified == "verified":
+            stmt = stmt.where(FlightRecord.human_verified == True)  # noqa: E712
+        elif filter_verified == "unverified":
+            stmt = stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        if status:
+            stmt = stmt.where(FlightRecord.extraction_status == status)
+        if flight_day_date:
+            stmt = stmt.where(FlightRecord.flight_date == flight_day_date)
+        return stmt
 
     # --- Build query for records ---
     q_stripped = q.strip() if q else None
@@ -194,10 +232,9 @@ async def list_records(
         sql_stmt = (
             select(FlightRecord)
             .where(FlightRecord.flier_name.ilike(like_pattern))
-            .order_by(FlightRecord.created_at.desc())
+            .order_by(order_clause)
         )
-        if filter_unverified:
-            sql_stmt = sql_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        sql_stmt = _apply_filters(sql_stmt)
         sql_result = await db.execute(sql_stmt)
         sql_matches = list(sql_result.scalars().all())
         sql_match_ids = {r.id for r in sql_matches}
@@ -205,10 +242,9 @@ async def list_records(
         # Python-side scan for overflow matches (rocket_name, motor designation)
         all_stmt = (
             select(FlightRecord)
-            .order_by(FlightRecord.created_at.desc())
+            .order_by(order_clause)
         )
-        if filter_unverified:
-            all_stmt = all_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        all_stmt = _apply_filters(all_stmt)
         all_result = await db.execute(all_stmt)
         all_records = list(all_result.scalars().all())
 
@@ -227,8 +263,7 @@ async def list_records(
     else:
         # No search — straight SQL pagination
         count_all_stmt = select(func.count(FlightRecord.id))
-        if filter_unverified:
-            count_all_stmt = count_all_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        count_all_stmt = _apply_filters(count_all_stmt)
         count_all_result = await db.execute(count_all_stmt)
         total_records = count_all_result.scalar() or 0
         total_pages = max(1, math.ceil(total_records / effective_page_size))
@@ -236,14 +271,16 @@ async def list_records(
         offset = (page - 1) * effective_page_size
         records_stmt = (
             select(FlightRecord)
-            .order_by(FlightRecord.created_at.desc())
+            .order_by(order_clause)
             .offset(offset)
             .limit(effective_page_size)
         )
-        if filter_unverified:
-            records_stmt = records_stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        records_stmt = _apply_filters(records_stmt)
         records_result = await db.execute(records_stmt)
         page_records = list(records_result.scalars().all())
+
+    # --- Get queued IDs for status indicator ---
+    queued_ids = extraction_service.queued_ids
 
     # --- Build template-friendly record rows ---
     records = []
@@ -265,6 +302,7 @@ async def list_records(
                 human_verified=r.human_verified,
                 flier_verified=r.flier_verified,
                 motors_verified=motors_verified,
+                is_queued=(r.id in queued_ids),
             )
         )
 
@@ -284,7 +322,11 @@ async def list_records(
             "verified_count": verified_count,
             "total_all": total_all,
             "verified_percent": verified_percent,
-            "filter_unverified": filter_unverified,
+            "sort": sort,
+            "verified_filter": filter_verified or "all",
+            "status_filter": status or "",
+            "flight_day_filter": flight_day or "",
+            "event_dates": _build_event_dates(config),
         },
     )
 

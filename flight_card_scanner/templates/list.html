@@ -47,6 +47,33 @@
     font-weight: 500;
   }
 
+  /* Filter/sort controls */
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.82rem;
+  }
+
+  .filter-row label {
+    font-weight: 600;
+    color: #4b5563;
+    white-space: nowrap;
+  }
+
+  .filter-row select {
+    font-size: 0.82rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
   /* Actions row */
   .actions-row {
     display: flex;
@@ -176,6 +203,13 @@
     color: #991b1b;
   }
 
+  .queued-label {
+    font-size: 0.7rem;
+    color: #6b7280;
+    font-style: italic;
+    margin-left: 0.25rem;
+  }
+
   /* Pagination */
   .pagination {
     display: flex;
@@ -214,6 +248,14 @@
     font-weight: 500;
   }
 
+  .pagination .page-jump-select {
+    font-size: 0.82rem;
+    padding: 0.2rem 0.3rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
   /* Empty state */
   .empty-state {
     text-align: center;
@@ -244,9 +286,19 @@
     .status-bar .mode-control {
       margin-right: 0;
     }
+
+    .filter-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>
 {% endblock %}
+
+{# --- Helper macro: build URL preserving current filter/sort params --- #}
+{% macro list_url(p=page, s=sort, v=verified_filter, st=status_filter, fd=flight_day_filter, search=q) -%}
+/?page={{ p }}{% if s and s != 'id_desc' %}&sort={{ s }}{% endif %}{% if v and v != 'all' %}&verified={{ v }}{% endif %}{% if st %}&status={{ st }}{% endif %}{% if fd %}&flight_day={{ fd }}{% endif %}{% if search %}&q={{ search }}{% endif %}
+{%- endmacro %}
 
 {% block content %}
 <!-- Status bar: mode control + status counts -->
@@ -264,12 +316,42 @@
     <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
     <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
     <span class="count-item" style="margin-left:0.75rem; font-weight:600;">Verified: {{ verified_count }}/{{ total_all }} ({{ verified_percent }}%)</span>
-    {% if filter_unverified %}
-    <a href="/?{% if q %}q={{ q }}&{% endif %}page=1" style="margin-left:0.5rem; font-size:0.8rem;">Show All</a>
-    {% else %}
-    <a href="/?unverified=1{% if q %}&q={{ q }}{% endif %}&page=1" style="margin-left:0.5rem; font-size:0.8rem;">Show Unverified Only</a>
-    {% endif %}
   </div>
+</div>
+
+<!-- Filter/sort controls -->
+<div class="filter-row">
+  <label for="sortSelect">Sort:</label>
+  <select id="sortSelect">
+    <option value="id_desc"{{ ' selected' if sort == 'id_desc' else '' }}># Descending</option>
+    <option value="id_asc"{{ ' selected' if sort == 'id_asc' else '' }}># Ascending</option>
+    <option value="flier_asc"{{ ' selected' if sort == 'flier_asc' else '' }}>Flier A→Z</option>
+    <option value="flier_desc"{{ ' selected' if sort == 'flier_desc' else '' }}>Flier Z→A</option>
+  </select>
+
+  <label for="verifiedFilter">Verified:</label>
+  <select id="verifiedFilter">
+    <option value="all"{{ ' selected' if verified_filter == 'all' else '' }}>All</option>
+    <option value="verified"{{ ' selected' if verified_filter == 'verified' else '' }}>Verified</option>
+    <option value="unverified"{{ ' selected' if verified_filter == 'unverified' else '' }}>Unverified</option>
+  </select>
+
+  <label for="statusFilter">Status:</label>
+  <select id="statusFilter">
+    <option value=""{{ ' selected' if not status_filter else '' }}>All</option>
+    <option value="pending"{{ ' selected' if status_filter == 'pending' else '' }}>Pending</option>
+    <option value="processing"{{ ' selected' if status_filter == 'processing' else '' }}>Processing</option>
+    <option value="extracted"{{ ' selected' if status_filter == 'extracted' else '' }}>Extracted</option>
+    <option value="extraction_failed"{{ ' selected' if status_filter == 'extraction_failed' else '' }}>Failed</option>
+  </select>
+
+  <label for="flightDayFilter">Flight Day:</label>
+  <select id="flightDayFilter">
+    <option value=""{{ ' selected' if not flight_day_filter else '' }}>All</option>
+    {% for d in event_dates %}
+    <option value="{{ d.value }}"{{ ' selected' if flight_day_filter == d.value else '' }}>{{ d.label }}</option>
+    {% endfor %}
+  </select>
 </div>
 
 <!-- Actions row: scan link, trigger, requeue, search -->
@@ -281,7 +363,10 @@
   <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
   {% endif %}
   <form class="search-form" method="get" action="/">
-    {% if filter_unverified %}<input type="hidden" name="unverified" value="1">{% endif %}
+    {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+    {% if verified_filter and verified_filter != 'all' %}<input type="hidden" name="verified" value="{{ verified_filter }}">{% endif %}
+    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+    {% if flight_day_filter %}<input type="hidden" name="flight_day" value="{{ flight_day_filter }}">{% endif %}
     <input type="search" name="q" placeholder="Search…" value="{{ q or '' }}" aria-label="Search records">
     <button type="submit">Search</button>
   </form>
@@ -310,7 +395,10 @@
         <td>{{ record.rocket_name or "—" }}</td>
         <td>{{ record.motor_designation or "—" }}{% if record.motors_verified %} <span title="Motor verified via ThrustCurve" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
         <td>{{ record.flight_date or "—" }}</td>
-        <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
+        <td>
+          <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
+          {%- if record.is_queued %}<span class="queued-label">(queued)</span>{% endif %}
+        </td>
         <td>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</td>
       </tr>
       {% endfor %}
@@ -321,15 +409,23 @@
 <!-- Pagination -->
 <nav class="pagination" aria-label="Page navigation">
   {% if page > 1 %}
-  <a href="/?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}{% if filter_unverified %}&unverified=1{% endif %}">Prev</a>
+  <a href="{{ list_url(p=page - 1) }}">Prev</a>
   {% else %}
   <span class="disabled">Prev</span>
   {% endif %}
 
-  <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+  <span class="page-info">
+    Page
+    <select class="page-jump-select" id="pageJump" aria-label="Jump to page">
+      {% for p in range(1, total_pages + 1) %}
+      <option value="{{ p }}"{{ ' selected' if p == page else '' }}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    of {{ total_pages }}
+  </span>
 
   {% if page < total_pages %}
-  <a href="/?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}{% if filter_unverified %}&unverified=1{% endif %}">Next</a>
+  <a href="{{ list_url(p=page + 1) }}">Next</a>
   {% else %}
   <span class="disabled">Next</span>
   {% endif %}
@@ -346,6 +442,54 @@
 
 <script>
 (function() {
+  // --- Helper: build URL from current filter/sort state ---
+  function buildListUrl(overrides) {
+    var params = {
+      page: '{{ page }}',
+      sort: '{{ sort }}',
+      verified: '{{ verified_filter }}',
+      status: '{{ status_filter }}',
+      flight_day: '{{ flight_day_filter }}',
+      q: '{{ q or "" }}'
+    };
+    // Apply overrides
+    if (overrides) {
+      Object.keys(overrides).forEach(function(k) { params[k] = overrides[k]; });
+    }
+    var parts = ['/?page=' + encodeURIComponent(params.page)];
+    if (params.sort && params.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(params.sort));
+    if (params.verified && params.verified !== 'all') parts.push('verified=' + encodeURIComponent(params.verified));
+    if (params.status) parts.push('status=' + encodeURIComponent(params.status));
+    if (params.flight_day) parts.push('flight_day=' + encodeURIComponent(params.flight_day));
+    if (params.q) parts.push('q=' + encodeURIComponent(params.q));
+    return parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
+  }
+
+  // --- Filter/sort change handlers ---
+  document.getElementById('sortSelect').addEventListener('change', function() {
+    window.location.href = buildListUrl({ sort: this.value, page: '1' });
+  });
+
+  document.getElementById('verifiedFilter').addEventListener('change', function() {
+    window.location.href = buildListUrl({ verified: this.value, page: '1' });
+  });
+
+  document.getElementById('statusFilter').addEventListener('change', function() {
+    window.location.href = buildListUrl({ status: this.value, page: '1' });
+  });
+
+  document.getElementById('flightDayFilter').addEventListener('change', function() {
+    window.location.href = buildListUrl({ flight_day: this.value, page: '1' });
+  });
+
+  // --- Page jump ---
+  var pageJump = document.getElementById('pageJump');
+  if (pageJump) {
+    pageJump.addEventListener('change', function() {
+      window.location.href = buildListUrl({ page: this.value });
+    });
+  }
+
   // Mode switch
   var modeSelect = document.getElementById('modeSelect');
   if (modeSelect) {
