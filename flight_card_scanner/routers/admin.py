@@ -213,10 +213,12 @@ async def _run_flier_verification(db: AsyncSession, record) -> None:
         overflow["flier_match_status"] = "error"
         overflow["flier_match_error"] = str(result.error)
         record.flier_verified = False
+        overflow.pop("membership", None)
     elif not result.matched:
         overflow["flier_match_status"] = "not_found"
         overflow.pop("flier_match_error", None)
         record.flier_verified = False
+        overflow.pop("membership", None)
     else:
         overflow.pop("flier_match_error", None)
         row = result.row_data
