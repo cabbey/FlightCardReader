@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .queue-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .queue-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .queue-count {
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+
+  .back-link {
+    display: inline-block;
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+  }
+
+  .queue-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .queue-table th,
+  .queue-table td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .queue-table th {
+    background: #f9fafb;
+    font-weight: 600;
+  }
+
+  .queue-table tbody tr:hover {
+    background: #f0f7ff;
+  }
+
+  .queue-table td a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .queue-table td a:hover {
+    text-decoration: underline;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .badge-pending {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .badge-processing {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .badge-extracted {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .badge-extraction_failed {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #6b7280;
+  }
+
+  .auto-refresh-note {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-style: italic;
+  }
+</style>
+<meta http-equiv="refresh" content="5">
+{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Back to list</a>
+
+<div class="queue-header">
+  <h2>Extraction Queue</h2>
+  <span class="queue-count">{{ queue_size }} record{{ 's' if queue_size != 1 else '' }} queued</span>
+  <span class="auto-refresh-note">(auto-refreshes every 5s)</span>
+</div>
+
+{% if records %}
+<table class="queue-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Flier</th>
+      <th>Status</th>
+      <th>Created</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for record in records %}
+    <tr>
+      <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
+      <td>{{ record.flier_name or "—" }}</td>
+      <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
+      <td>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <p>The extraction queue is empty.</p>
+</div>
+{% endif %}
+{% endblock %}
