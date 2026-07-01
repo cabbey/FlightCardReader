@@ -646,10 +646,6 @@ class ExtractionService:
                         event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
                     ),
                     "images": [b64_image],
-                },
-                {
-                    "role": "system",
-                    "content": "/no_think"
                 }
             ],
             "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
@@ -718,24 +714,18 @@ class ExtractionService:
             )
 
         # Strip any <think>...</think> block that the model may have embedded in content
-        cleaned_content = raw_content.strip()
-        if "<think>" in cleaned_content:
-            # Remove everything from <think> to </think>
-            cleaned_content = re.sub(
-                r"<think>.*?</think>", "", cleaned_content, flags=re.DOTALL
-            ).strip()
-
         # Also handle case where <think> is present but </think> is missing
         # (model started thinking but didn't close the tag before JSON) OR
         # </think> is present but <think> is missing (trailing thinking is
         # present, but not the start of it.)
+        cleaned_content = raw_content.strip()
         if "think>" in cleaned_content:
-            # Find the start of the JSON object
-            json_start = cleaned_content.find("{")
-            if json_start >= 0:
-                logger.warning("found junk, content was: %s", cleaned_content)
-                cleaned_content = cleaned_content[json_start:]
-                logger.warning("removed junk, content now is: %s", cleaned_content)
+            # Remove everything up to </think>
+            logger.warning("found junk, trimming content")
+            cleaned_content = re.sub(
+                r".*?</think>", "", cleaned_content, flags=re.DOTALL
+            ).strip()
+
 
         if not cleaned_content:
             raise ExtractionParseError(
@@ -744,19 +734,7 @@ class ExtractionService:
             )
 
         # Pre-process: fix measurements where model merged value+unit into one field
-        try:
-            parsed_json = json.loads(cleaned_content)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            # Fallback: strip junk before the first '{' and retry
-            brace_idx = cleaned_content.find("{")
-            if brace_idx > 0:
-                cleaned_content = cleaned_content[brace_idx:]
-                try:
-                    parsed_json = json.loads(cleaned_content)
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    parsed_json = None
-            else:
-                parsed_json = None
+        parsed_json = json.loads(cleaned_content)
 
         if parsed_json is not None:
             measurements = parsed_json.get("measurements")
@@ -779,21 +757,7 @@ class ExtractionService:
                                 pass
             cleaned_content = json.dumps(parsed_json)
 
-        try:
-            return FlightCardExtraction.model_validate_json(cleaned_content)
-        except ValidationError as exc:
-            # Fallback: try stripping everything before the first '{'
-            brace_idx = cleaned_content.find("{")
-            if brace_idx > 0:
-                trimmed = cleaned_content[brace_idx:]
-                try:
-                    return FlightCardExtraction.model_validate_json(trimmed)
-                except ValidationError:
-                    pass  # Fall through to raise original error
-            raise ExtractionParseError(
-                message=f"Failed to parse LLM response: {exc}",
-                raw_response=raw_content,
-            ) from exc
+        return FlightCardExtraction.model_validate_json(cleaned_content)
 
 # Day-of-week name mapping (full and abbreviated, lowercase) to Python weekday int
 _DAY_NAMES: dict[str, int] = {
