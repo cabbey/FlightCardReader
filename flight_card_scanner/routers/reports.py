@@ -90,6 +90,37 @@ def _motor_total_quantity(motors: list[dict[str, Any]]) -> int:
     return total
 
 
+def _compute_record_impulse(record: FlightRecord, motors: list[dict[str, Any]]) -> float:
+    """Compute the impulse for a single record.
+
+    Strategy:
+    - If ALL motors have thrustcurve_data with totImpulseNs, calculate
+      the sum of (quantity * totImpulseNs) for each motor.
+    - If ANY motor is manual (no thrustcurve_id), fall back to the
+      record's total_impulse_value (from the card), if present and in Ns.
+    - Returns 0.0 if no impulse can be determined.
+    """
+    if motors:
+        all_have_tc = all(
+            m.get("thrustcurve_id") and m.get("thrustcurve_data", {}).get("totImpulseNs")
+            for m in motors
+        )
+        if all_have_tc:
+            total = 0.0
+            for m in motors:
+                qty = m.get("quantity", 1) or 1
+                total += qty * m["thrustcurve_data"]["totImpulseNs"]
+            return total
+
+    # Fall back to card's total_impulse_value
+    if record.total_impulse_value and record.total_impulse_unit:
+        unit = record.total_impulse_unit.lower().replace(" ", "")
+        if unit in ("ns", "n-s", "n·s", "newton-seconds"):
+            return record.total_impulse_value
+
+    return 0.0
+
+
 def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
     """Compute aggregate statistics from a list of extracted records.
 
@@ -118,12 +149,11 @@ def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
             motor_counts[letter] += qty
             flyer_stats[flyer]["motors"][letter] += qty
 
-        # Impulse
-        if record.total_impulse_value and record.total_impulse_unit:
-            unit = record.total_impulse_unit.lower().replace(" ", "")
-            if unit in ("ns", "n-s", "n·s", "newton-seconds"):
-                total_impulse_ns += record.total_impulse_value
-                flyer_stats[flyer]["impulse_ns"] += record.total_impulse_value
+        # Impulse: prefer calculated from ThrustCurve data, fall back to card value
+        record_impulse = _compute_record_impulse(record, motors)
+        if record_impulse > 0:
+            total_impulse_ns += record_impulse
+            flyer_stats[flyer]["impulse_ns"] += record_impulse
 
     # Sort motor counts by letter class order
     motor_counts_sorted = dict(
