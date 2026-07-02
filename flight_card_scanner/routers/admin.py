@@ -477,3 +477,21 @@ async def get_queue(request: Request) -> dict:
     extraction_service = request.app.state.extraction_service
     queued = sorted(extraction_service.queued_ids)
     return {"queued_ids": queued, "count": len(queued)}
+
+
+@router.delete("/record/{record_id}")
+async def delete_record(
+    record_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Delete a flight record permanently (e.g. redundant/duplicate card).
+
+    Returns 404 if the record does not exist.
+    """
+    record = await record_service.get(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    await db.delete(record)
+    await db.commit()
+    return {"message": "Record deleted", "id": record_id}
