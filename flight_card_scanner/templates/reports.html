@@ -16,33 +16,89 @@
     text-decoration: underline;
   }
 
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  .report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
     gap: 0.75rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
   }
 
-  .summary-card {
+  .report-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .day-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .day-filter label {
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  .day-filter select {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  /* Summary box */
+  .summary-box {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    padding: 1rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .summary-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .summary-stat {
     text-align: center;
   }
 
-  .summary-card .value {
-    font-size: 1.75rem;
+  .summary-stat .value {
+    font-size: 1.5rem;
     font-weight: 700;
     color: #1a1a1a;
   }
 
-  .summary-card .label {
-    font-size: 0.8rem;
+  .summary-stat .label {
+    font-size: 0.75rem;
     color: #6b7280;
-    margin-top: 0.25rem;
+    margin-top: 0.1rem;
   }
 
+  .motor-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .motor-pill {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e40af;
+  }
+
+  /* Table */
   .section-title {
     font-size: 1.1rem;
     font-weight: 600;
@@ -68,6 +124,23 @@
   .stats-table th {
     background: #f9fafb;
     font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .stats-table th:hover {
+    background: #f0f4ff;
+  }
+
+  .stats-table th .sort-arrow {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+    color: #9ca3af;
+  }
+
+  .stats-table th.sorted .sort-arrow {
+    color: #2563eb;
   }
 
   .stats-table td.numeric {
@@ -79,89 +152,24 @@
     text-align: right;
   }
 
-  .day-section {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    margin-bottom: 1rem;
-  }
-
-  .day-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-
-  .day-header h3 {
-    margin: 0;
-    font-size: 1rem;
-  }
-
-  .day-header h3 a {
+  .stats-table td a {
     color: #2563eb;
     text-decoration: none;
   }
 
-  .day-header h3 a:hover {
+  .stats-table td a:hover {
     text-decoration: underline;
   }
 
-  .day-header .day-card-count {
-    font-size: 0.8rem;
-    color: #6b7280;
-  }
-
-  .motor-pills {
+  /* Status badges */
+  .status-counts {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .motor-pill {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #1e40af;
-  }
-
-  .inline-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
     font-size: 0.8rem;
-    color: #374151;
+    margin-bottom: 1rem;
   }
 
-  .inline-stats .stat-item {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .inline-stats .stat-value {
-    font-weight: 600;
-  }
-
-  @media (max-width: 600px) {
-    .summary-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .day-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.25rem;
-    }
-  }
-
-  /* Status badges */
   .count-item {
     padding: 0.15rem 0.5rem;
     border-radius: 4px;
@@ -188,151 +196,224 @@
     color: #991b1b;
   }
 
-  .no-date-records {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
+  /* Failed records */
+  .failed-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-top: 1.5rem;
   }
 
-  .no-date-records a {
+  .failed-section h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .failed-links a {
     color: #2563eb;
     text-decoration: none;
     margin-right: 0.75rem;
+    font-size: 0.8rem;
   }
 
-  .no-date-records a:hover {
+  .failed-links a:hover {
     text-decoration: underline;
+  }
+
+  @media (max-width: 600px) {
+    .report-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .summary-stats {
+      gap: 1rem;
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <nav class="report-nav">
-  <a href="/">← Back to Records</a>
+  <a href="/" id="backToList">&larr; Back to Records</a>
 </nav>
 
-<h2 style="margin:0 0 1rem; font-size:1.2rem;">Event Report</h2>
+<div class="report-header">
+  <h2>Event Report</h2>
+  <div class="day-filter">
+    <label for="dayFilter">Day:</label>
+    <select id="dayFilter">
+      <option value=""{{ ' selected' if not day_filter else '' }}>Whole Event</option>
+      {% for d in event_dates %}
+      <option value="{{ d.value }}"{{ ' selected' if day_filter == d.value else '' }}>{{ d.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
 
 <!-- Status Counts -->
-<div class="status-counts" style="display:flex; flex-wrap:wrap; gap:0.4rem; font-size:0.8rem; margin-bottom:1rem;">
+<div class="status-counts">
   <span class="count-item badge-pending">Pending: {{ status_counts.pending }}</span>
   <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
   <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
   <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
 </div>
 
-<!-- Overall Summary Cards -->
-<div class="summary-grid">
-  <div class="summary-card">
-    <div class="value">{{ total_cards }}</div>
-    <div class="label">Total Cards</div>
+<!-- Summary Box -->
+<div class="summary-box">
+  <div class="summary-stats">
+    <div class="summary-stat">
+      <div class="value">{{ stats.flier_count }}</div>
+      <div class="label">Fliers</div>
+    </div>
+    <div class="summary-stat">
+      <div class="value">{{ stats.flight_count }}</div>
+      <div class="label">Flights</div>
+    </div>
+    <div class="summary-stat">
+      <div class="value">{{ stats.motor_count }}</div>
+      <div class="label">Motors</div>
+    </div>
+    <div class="summary-stat">
+      <div class="value">{{ "%.1f"|format(stats.total_impulse_ns) }}</div>
+      <div class="label">Total Ns</div>
+    </div>
   </div>
-  <div class="summary-card">
-    <div class="value">{{ overall_stats.flight_count }}</div>
-    <div class="label">Flights</div>
+  {% if stats.motor_counts %}
+  <div class="motor-pills">
+    {% for letter, count in stats.motor_counts.items() %}
+    <span class="motor-pill">{{ letter }}: {{ count }}</span>
+    {% endfor %}
   </div>
-  <div class="summary-card">
-    <div class="value">{{ "%.1f"|format(overall_stats.total_impulse_ns) }}</div>
-    <div class="label">Total Ns</div>
-  </div>
+  {% endif %}
 </div>
 
-<!-- Motor Counts by Letter Class -->
-{% if overall_stats.motor_counts %}
-<h3 class="section-title">Motors by Impulse Class</h3>
-<div class="motor-pills">
-  {% for letter, count in overall_stats.motor_counts.items() %}
-  <span class="motor-pill">{{ letter }}: {{ count }}</span>
-  {% endfor %}
-</div>
-{% endif %}
-
-<!-- Flyer Statistics -->
-{% if overall_stats.flyer_stats %}
+<!-- Flyer Statistics Table -->
+{% if stats.flyer_stats %}
 <h3 class="section-title">Flyer Statistics</h3>
 <div style="overflow-x: auto;">
-  <table class="stats-table">
+  <table class="stats-table" id="flyerTable">
     <thead>
       <tr>
-        <th>Flyer</th>
-        <th class="numeric">Flights</th>
-        <th class="numeric">Motors</th>
+        <th data-sort="name" class="sorted">Flyer <span class="sort-arrow">&#9650;</span></th>
+        <th class="numeric" data-sort="flights">Flights <span class="sort-arrow">&#9650;</span></th>
+        <th class="numeric" data-sort="motors">Motors <span class="sort-arrow">&#9650;</span></th>
+        <th class="numeric" data-sort="impulse">Impulse (Ns) <span class="sort-arrow">&#9650;</span></th>
         <th>Breakdown</th>
-        <th class="numeric">Impulse (Ns)</th>
       </tr>
     </thead>
     <tbody>
-      {% for name, stats in overall_stats.flyer_stats.items() %}
-      <tr>
-        <td>{{ name }}</td>
-        <td class="numeric">{{ stats.flights }}</td>
-        <td class="numeric">{{ stats.motor_total }}</td>
+      {% for name, fstats in stats.flyer_stats.items() %}
+      <tr data-name="{{ name }}" data-flights="{{ fstats.flights }}" data-motors="{{ fstats.motor_total }}" data-impulse="{{ fstats.impulse_ns or 0 }}">
+        <td><a href="/?q={{ name | urlencode }}">{{ name }}</a></td>
+        <td class="numeric">{{ fstats.flights }}</td>
+        <td class="numeric">{{ fstats.motor_total }}</td>
+        <td class="numeric">{{ "%.1f"|format(fstats.impulse_ns) if fstats.impulse_ns else "—" }}</td>
         <td>
-          {% for letter, count in stats.motors.items() %}
+          {% for letter, count in fstats.motors.items() %}
           <span class="motor-pill">{{ letter }}: {{ count }}</span>
           {% endfor %}
         </td>
-        <td class="numeric">{{ "%.1f"|format(stats.impulse_ns) if stats.impulse_ns else "—" }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-{% endif %}
-
-<!-- Per-Day Breakdown -->
-<h3 class="section-title">Daily Breakdown</h3>
-{% if day_summaries %}
-  {% for day in day_summaries %}
-  <div class="day-section">
-    <div class="day-header">
-      <h3>
-        {% if day.date %}
-        <a href="/reports/{{ day.date.isoformat() }}">{{ day.label }}</a>
-        {% else %}
-        {{ day.label }}
-        {% endif %}
-      </h3>
-      <span class="day-card-count">{{ day.card_count }} card{{ "s" if day.card_count != 1 else "" }}</span>
-    </div>
-
-    <div class="inline-stats">
-      <span class="stat-item"><span class="stat-value">{{ day.flight_count }}</span> flights</span>
-      <span class="stat-item"><span class="stat-value">{{ "%.1f"|format(day.total_impulse_ns) }}</span> Ns</span>
-    </div>
-
-    {% if day.motor_counts %}
-    <div class="motor-pills" style="margin-top: 0.5rem;">
-      {% for letter, count in day.motor_counts.items() %}
-      <span class="motor-pill">{{ letter }}: {{ count }}</span>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if not day.date and day.records %}
-    <div class="no-date-records">
-      {% for rec in day.records %}
-      <a href="/record/{{ rec.id }}">#{{ rec.id }} {{ rec.flier_name }}</a>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-  {% endfor %}
 {% else %}
 <p style="color: #6b7280; text-align: center; padding: 1rem;">No extracted records to report on.</p>
 {% endif %}
 
 <!-- Failed Extractions -->
 {% if failed_records %}
-<h3 class="section-title">Failed Extractions</h3>
-<div class="day-section">
-  <div class="day-header">
-    <h3>{{ failed_records | length }} record{{ "s" if failed_records | length != 1 else "" }} failed extraction</h3>
-  </div>
-  <div class="no-date-records">
+<div class="failed-section">
+  <h3>{{ failed_records | length }} Failed Extraction{{ "s" if failed_records | length != 1 else "" }}</h3>
+  <div class="failed-links">
     {% for rec in failed_records %}
     <a href="/record/{{ rec.id }}">#{{ rec.id }} {{ rec.flier_name }}</a>
     {% endfor %}
   </div>
 </div>
 {% endif %}
+
+<script>
+(function() {
+  // --- Back to list link with localStorage prefs ---
+  var STORAGE_KEY = 'fcs_list_prefs';
+  var TTL_MS = 60 * 60 * 1000;
+  var link = document.getElementById('backToList');
+  if (link) {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (Date.now() - data.ts <= TTL_MS) {
+          var parts = ['/?page=1'];
+          if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
+          if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
+          if (data.status) parts.push('status=' + encodeURIComponent(data.status));
+          if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
+          if (parts.length > 1) link.href = parts[0] + '&' + parts.slice(1).join('&');
+        }
+      }
+    } catch(e) {}
+  }
+
+  // --- Day filter ---
+  document.getElementById('dayFilter').addEventListener('change', function() {
+    var val = this.value;
+    if (val) {
+      window.location.href = '/reports/?day=' + encodeURIComponent(val);
+    } else {
+      window.location.href = '/reports/';
+    }
+  });
+
+  // --- Sortable table ---
+  var table = document.getElementById('flyerTable');
+  if (table) {
+    var thead = table.querySelector('thead');
+    var tbody = table.querySelector('tbody');
+    var currentSort = 'name';
+    var currentDir = 'asc';
+
+    thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var key = th.dataset.sort;
+        if (currentSort === key) {
+          currentDir = currentDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSort = key;
+          currentDir = key === 'name' ? 'asc' : 'desc';
+        }
+        sortTable(key, currentDir);
+        // Update header styles
+        thead.querySelectorAll('th[data-sort]').forEach(function(h) {
+          h.classList.remove('sorted');
+          h.querySelector('.sort-arrow').innerHTML = '&#9650;';
+        });
+        th.classList.add('sorted');
+        th.querySelector('.sort-arrow').innerHTML = currentDir === 'asc' ? '&#9650;' : '&#9660;';
+      });
+    });
+
+    function sortTable(key, dir) {
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var aVal, bVal;
+        if (key === 'name') {
+          aVal = (a.dataset.name || '').toLowerCase();
+          bVal = (b.dataset.name || '').toLowerCase();
+          return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        } else {
+          aVal = parseFloat(a.dataset[key]) || 0;
+          bVal = parseFloat(b.dataset[key]) || 0;
+          return dir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+      });
+      rows.forEach(function(row) { tbody.appendChild(row); });
+    }
+  }
+})();
+</script>
 {% endblock %}

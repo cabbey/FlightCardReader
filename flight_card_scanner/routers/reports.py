@@ -144,6 +144,8 @@ def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
 
     return {
         "flight_count": flight_count,
+        "flier_count": len(flyer_stats_sorted),
+        "motor_count": sum(motor_counts.values()),
         "motor_counts": motor_counts_sorted,
         "total_impulse_ns": total_impulse_ns,
         "flyer_stats": flyer_stats_sorted,
@@ -160,13 +162,23 @@ router = APIRouter(prefix="/reports")
 @router.get("/", response_class=HTMLResponse)
 async def reports_overview(
     request: Request,
+    day: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """Render the overall event reporting page with per-day breakdowns."""
+    """Render the overall event reporting page with optional day filter."""
     templates = _get_templates()
     config = _get_config()
 
-    # Fetch all records
+    # Parse day filter
+    from datetime import timedelta
+    filter_date = None
+    if day:
+        try:
+            filter_date = date_type.fromisoformat(day)
+        except (ValueError, TypeError):
+            pass
+
+    # Fetch all records (for status counts)
     result = await db.execute(
         select(FlightRecord).order_by(FlightRecord.flight_date.asc())
     )
@@ -187,6 +199,12 @@ async def reports_overview(
         if r.extraction_status == "extracted":
             extracted_records.append(r)
 
+    # Apply day filter to extracted records for stats
+    if filter_date is not None:
+        filtered_records = [r for r in extracted_records if r.flight_date == filter_date]
+    else:
+        filtered_records = extracted_records
+
     # Collect failed records for display
     failed_records = [
         {"id": r.id, "flier_name": r.flier_name or "Unknown"}
@@ -194,56 +212,31 @@ async def reports_overview(
         if r.extraction_status == "extraction_failed"
     ]
 
-    # Overall stats (extracted records only)
-    overall_stats = _compute_stats(extracted_records)
+    # Compute stats from filtered records
+    stats = _compute_stats(filtered_records)
 
-    # Group extracted records by flight_date
-    by_date: dict[date_type | None, list[FlightRecord]] = defaultdict(list)
-    for r in extracted_records:
-        by_date[r.flight_date].append(r)
-
-    # Build day summaries (sorted by date, None last)
-    day_summaries: list[dict[str, Any]] = []
-    sorted_dates = sorted(
-        (d for d in by_date.keys() if d is not None),
-    )
-    for d in sorted_dates:
-        records = by_date[d]
-        stats = _compute_stats(records)
-        day_summaries.append({
-            "date": d,
-            "label": d.strftime("%A, %B %d, %Y"),
-            "card_count": len(records),
-            **stats,
+    # Build event dates for filter dropdown
+    event_dates = []
+    current = config.event_date_range.start
+    end = config.event_date_range.end
+    while current <= end:
+        event_dates.append({
+            "value": current.isoformat(),
+            "label": current.strftime("%A %-m/%-d"),
         })
-
-    # Records with no date
-    if None in by_date:
-        records = by_date[None]
-        stats = _compute_stats(records)
-        no_date_records = [
-            {"id": r.id, "flier_name": r.flier_name or "Unknown"}
-            for r in records
-        ]
-        day_summaries.append({
-            "date": None,
-            "label": "No date assigned",
-            "card_count": len(records),
-            "records": no_date_records,
-            **stats,
-        })
+        current += timedelta(days=1)
 
     return templates.TemplateResponse(
         "reports.html",
         {
             "request": request,
             "event_name": config.event_name,
-            "total_cards": len(all_records),
+            "total_cards": len(filtered_records),
             "status_counts": status_counts,
-            "extracted_count": len(extracted_records),
-            "overall_stats": overall_stats,
-            "day_summaries": day_summaries,
+            "stats": stats,
             "failed_records": failed_records,
+            "event_dates": event_dates,
+            "day_filter": day or "",
         },
     )
 
