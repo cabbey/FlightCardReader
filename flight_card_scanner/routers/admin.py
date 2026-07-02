@@ -308,9 +308,6 @@ async def search_motor(
     overflow = dict(record.overflow) if record.overflow else {}
     motors = overflow.get("motors", [])
 
-    if motor_index < 0 or motor_index >= len(motors):
-        raise HTTPException(status_code=404, detail="Motor index out of range")
-
     # Build a motor dict from the request
     search_motor_data = {
         "letter": body.letter,
