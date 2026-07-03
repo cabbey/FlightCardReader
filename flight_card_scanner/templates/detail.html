@@ -762,6 +762,7 @@
     {% if not record.human_verified %}
     <button type="button" class="btn-extract" id="btnExtract">Extract</button>
     {% endif %}
+    <button type="button" class="btn-redundant" id="btnRedundant" style="font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #dc2626; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:0.5rem;">Remove (Redundant)</button>
   </div>
 </div>
 
@@ -1734,6 +1735,42 @@
         });
     });
   }
+  // --- Redundant button ---
+  var btnRedundant = document.getElementById('btnRedundant');
+  if (btnRedundant) {
+    btnRedundant.addEventListener('click', function() {
+      var input = prompt(
+        'This will permanently delete this flight card record.\n\n' +
+        'This action cannot be undone.\n\n' +
+        'To confirm, type "redundant" below:'
+      );
+      if (input === null) return; // cancelled
+      if (input.trim().toLowerCase() !== 'redundant') {
+        alert('Deletion cancelled. You must type "redundant" to confirm.');
+        return;
+      }
+      btnRedundant.disabled = true;
+      btnRedundant.textContent = 'Deleting…';
+      fetch('/api/admin/record/' + recordId, { method: 'DELETE' })
+        .then(function(res) {
+          if (res.ok) {
+            window.location.href = getListUrl();
+          } else {
+            return res.json().then(function(data) {
+              alert('Failed to delete: ' + (data.detail || 'Unknown error'));
+              btnRedundant.disabled = false;
+              btnRedundant.textContent = 'Remove (Redundant)';
+            });
+          }
+        })
+        .catch(function() {
+          alert('Network error deleting record.');
+          btnRedundant.disabled = false;
+          btnRedundant.textContent = 'Remove (Redundant)';
+        });
+    });
+  }
+
   // --- Image lightbox ---
   var lightbox = document.getElementById('imageLightbox');
   var lightboxImg = document.getElementById('lightboxImg');
