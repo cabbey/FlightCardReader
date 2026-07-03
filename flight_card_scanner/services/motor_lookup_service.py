@@ -134,7 +134,7 @@ class MotorLookupService:
                 manufacturers[abbrev] = abbrev
 
         # Sort impulse classes in standard order
-        standard_order = "ABCDEFGHIJKLMNOP"
+        standard_order = ["\u00bcA", "\u00bdA"] + list("ABCDEFGHIJKLMNOP")
         sorted_classes = sorted(
             impulse_classes, key=lambda c: standard_order.index(c) if c in standard_order else 99
         )
