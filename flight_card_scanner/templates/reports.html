@@ -413,6 +413,9 @@
       });
       rows.forEach(function(row) { tbody.appendChild(row); });
     }
+
+    // Apply initial sort on page load
+    sortTable(currentSort, currentDir);
   }
 })();
 </script>
