@@ -90,6 +90,18 @@ def _motor_total_quantity(motors: list[dict[str, Any]]) -> int:
     return total
 
 
+# Standard motor class order: ¼A, ½A, then A through P
+_MOTOR_CLASS_ORDER = ["¼A", "½A"] + list("ABCDEFGHIJKLMNOP")
+
+
+def _motor_class_sort_key(letter: str) -> int:
+    """Return a sort index for a motor impulse class letter."""
+    try:
+        return _MOTOR_CLASS_ORDER.index(letter)
+    except ValueError:
+        return 99
+
+
 def _compute_record_impulse(record: FlightRecord, motors: list[dict[str, Any]]) -> float:
     """Compute the impulse for a single record.
 
@@ -157,7 +169,7 @@ def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
 
     # Sort motor counts by letter class order
     motor_counts_sorted = dict(
-        sorted(motor_counts.items(), key=lambda x: x[0])
+        sorted(motor_counts.items(), key=lambda x: _motor_class_sort_key(x[0]))
     )
 
     # Convert flyer_stats defaultdicts to regular dicts and sort by flights
@@ -168,7 +180,7 @@ def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
         flyer_stats_sorted[name] = {
             "flights": fs["flights"],
             "motor_total": motor_total,
-            "motors": dict(sorted(fs["motors"].items())),
+            "motors": dict(sorted(fs["motors"].items(), key=lambda x: _motor_class_sort_key(x[0]))),
             "impulse_ns": fs["impulse_ns"],
         }
 
