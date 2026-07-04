@@ -5,15 +5,18 @@
 #
 # Usage:
 #   docker build -t flight-card-scanner .
-#   docker run -v /path/to/event:/data -p 8000:8000 flight-card-scanner
+#   docker run -v /path/to/event:/data -p 80:80 flight-card-scanner
 #
 # The /data volume should contain:
 #   config.json          — application configuration
 #   <event_data_path>/   — images/ subdir and flight_cards.db (created automatically)
-#   (optional) known_fliers.tsv, SSL certs, etc.
+#   (optional) known_fliers.tsv
 #
 # All relative paths in config.json are resolved relative to /data (the
 # directory containing the config file).
+#
+# SSL/TLS is NOT handled inside the container. Use an external reverse proxy
+# (e.g. Tailscale Funnel/Serve) for HTTPS termination. See DEPLOY.md.
 # ---------------------------------------------------------------------------
 
 # =====  Stage 1: Install Node dependencies (thrustcurve-db, opencv.js)  =====
@@ -42,7 +45,8 @@ RUN apk add --no-cache \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python packages.  Pin major versions for reproducibility.
+# Install Python packages. Cryptography is omitted — SSL termination is
+# handled externally (e.g. Tailscale Funnel). See DEPLOY.md.
 RUN pip install --no-cache-dir \
         fastapi[standard] \
         uvicorn[standard] \
@@ -53,8 +57,7 @@ RUN pip install --no-cache-dir \
         jinja2 \
         Pillow \
         rapidfuzz \
-        segno \
-        cryptography
+        segno
 
 
 # =====  Stage 3: Final minimal runtime image  =====
@@ -94,7 +97,7 @@ VOLUME ["/data"]
 # Default CONFIG_PATH points to the mounted volume
 ENV CONFIG_PATH=/data/config.json
 
-EXPOSE 8000
+EXPOSE 80
 
 # Run the application via the package entry point
 CMD ["python", "-m", "flight_card_scanner"]
