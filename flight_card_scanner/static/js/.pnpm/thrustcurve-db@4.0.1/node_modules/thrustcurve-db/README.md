@@ -2,7 +2,7 @@
 
 This module is a rebundling of the model rocket motor data available on John Coker's excellent [thrustcurve.org](https://thrustcurve.org) website ("TC") as a stand-alone JSON file. The data is an array of motor items consistent with TC's [`SearchResponse#results` schema](https://app.swaggerhub.com/apis/JCSW7/thrust-curve_org_api/1.0.3#/SearchResponse).
 
-See also, the included [TypeScript definitions](https://github.com/broofa/thrustcurve-db/blob/main/thrustcurve.d.ts).
+See also, the included [TypeScript definitions](https://github.com/broofa/thrustcurve-db/blob/main/thrustcurve-db.d.ts).
 
 ### Alterations
 
@@ -12,7 +12,7 @@ In addition to the `SearchResponse` data, the following alterations have been ma
 - Most (but not all) motors include a `samples` array containing the thrust data found in the TC `/api/vi/download` endpoint.
 - `samples` data is normalized to insure the first data point is always `[0, 0]`
 
-For full details of how this data set is compiled, please refer to the [`build/build.js`](https://github.com/broofa/thrustcurve-db/blob/main/build/build.js) script in this repository.
+For full details of how this data set is compiled, please refer to the [`build/build.ts`](https://github.com/broofa/thrustcurve-db/blob/main/build/build.ts) script in this repository.
 
 ## Installation
 
@@ -41,15 +41,15 @@ Note: Users running `node` may need to supply the [`--experimental-json-modules`
 
 ```js
 const MOTORS = await fetch(
-  'https://cdn.jsdelivr.net/npm/thrustcurve-db@latest/thrustcurve-db.json'
-).then(res => res.json());
+  'https://cdn.jsdelivr.net/npm/thrustcurve-db@latest/thrustcurve-db.json',
+).then((res) => res.json());
 ```
 
 ## Example
 
 ```js
 // Find all J motors currently in production
-MOTORS.filter(m => m.availability === 'regular' && m.impulseClass === 'J');
+MOTORS.filter((m) => m.availability === 'regular' && m.impulseClass === 'J');
 ```
 
 ## Issues & Contributions

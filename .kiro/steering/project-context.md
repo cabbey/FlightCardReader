@@ -55,10 +55,8 @@ In `_call_ollama` → `_parse_response`:
 
 ### Motor Lookup
 
-- Uses `thrustcurve-db` npm package v2.0.3 (OUTDATED — only 1104 motors)
-- **KNOWN ISSUE**: Many motors on thrustcurve.org are NOT in this local DB (e.g., K1800ST-P)
-- **TODO**: Either update to v3.0+ or add ThrustCurve API fallback (`POST https://www.thrustcurve.org/api/v1/search.json`)
-- ThrustCurve API is at `https://www.thrustcurve.org/api/v1/search.json` — accepts POST with `{commonName, manufacturer, ...}`
+- Uses `thrustcurve-db` npm package v4.0.1 (1129 motors, updated 2026-05-20)
+- ThrustCurve API fallback at `https://www.thrustcurve.org/api/v1/search.json` — accepts POST with `{commonName, manufacturer, ...}` — may still be useful for motors not in the local DB
 - Search logic: builds `commonName = letter + number` (e.g., "K1800"), looks up in `_by_common_name` index (exact match on uppercase)
 - Motor class sort order: `¼A`, `½A`, `A`, `B`, `C`, ... `P`
 - Custom manufacturers not in TC: "Ex", "Sugar"
@@ -130,7 +128,7 @@ In `_call_ollama` → `_parse_response`:
 
 ### Key Dependencies (JS/Static)
 
-- thrustcurve-db v2.0.3 (npm, outdated)
+- thrustcurve-db v4.0.1 (npm, 1129 motors)
 - opencv.js (for card scanning edge detection)
 
 ### Config
@@ -140,10 +138,7 @@ In `_call_ollama` → `_parse_response`:
 
 ## Known Issues / TODOs
 
-1. **ThrustCurve DB outdated** — v2.0.3 has only 1104 motors. Many valid motors (e.g., K1800ST-P) are missing. Need to either:
-   - Update to v3.0+ of thrustcurve-db package
-   - Add a live API fallback to `https://www.thrustcurve.org/api/v1/search.json` (POST, accepts `{commonName, manufacturer, impulseClass, ...}`)
-   - The ThrustCurve API is free, no auth required, returns JSON matching the SearchResponse#results schema
+1. **ThrustCurve DB coverage** — v4.0.1 has 1129 motors. Some uncommon motors may still be missing. If needed, a live API fallback to `https://www.thrustcurve.org/api/v1/search.json` (POST, accepts `{commonName, manufacturer, impulseClass, ...}`) could supplement the local DB. The ThrustCurve API is free, no auth required, returns JSON matching the SearchResponse#results schema.
 
 2. **Queue status on list page** — Records process so quickly in immediate mode that the "(queued)" label rarely shows. The dedicated `/queue` page with 5s refresh is the practical way to observe queue state.
 
