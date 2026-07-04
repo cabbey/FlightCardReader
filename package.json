@@ -5,7 +5,7 @@
   "private": true,
   "dependencies": {
     "opencv.js": "^1.2.1",
-    "thrustcurve-db": "^2.0.0"
+    "thrustcurve-db": "^4.0.0"
   },
   "pnpm": {
     "moduleDirectory": "flight_card_scanner/static/js/node_modules"
