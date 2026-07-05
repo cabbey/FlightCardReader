@@ -92,12 +92,27 @@ def _parse_endpoint(obj: Any, index: int) -> EndpointConfig:
     return EndpointConfig(url=url, concurrency=concurrency)
 
 
+def _resolve_path(p: Path, config_dir: Path) -> Path:
+    """Resolve a path relative to the config file's directory.
+
+    Absolute paths are returned unchanged.  Relative paths are resolved
+    against *config_dir* (the directory containing the JSON config file).
+    """
+    if p.is_absolute():
+        return p
+    return (config_dir / p).resolve()
+
+
 def load_config(path: Path) -> AppConfig:
     """Load, parse, and validate application configuration from a JSON file.
 
     For any key that has a defined default and is absent from the file, the
     default is applied and a log message is emitted at INFO level identifying
     the key and the value used.
+
+    Path values that are not absolute are resolved relative to the directory
+    containing the configuration file.  This allows the same config to work
+    regardless of the process working directory.
 
     Raises:
         ConfigError: If the file is missing, is not valid JSON, or contains
@@ -115,6 +130,9 @@ def load_config(path: Path) -> AppConfig:
         raise ConfigError(
             f"Cannot read configuration file {path}: {exc}"
         ) from exc
+
+    # Base directory for resolving relative paths in the config
+    config_dir = Path(path).resolve().parent
 
     # --- Parse JSON ---
     try:
@@ -148,7 +166,9 @@ def load_config(path: Path) -> AppConfig:
         raise ConfigError(f"Config key 'port' must be an integer, got {port!r}.")
 
     # --- event_data_path ---
-    event_data_path = Path(get_with_default("event_data_path", "./data"))
+    event_data_path = _resolve_path(
+        Path(get_with_default("event_data_path", "./data")), config_dir
+    )
 
     # --- event_name ---
     event_name = get_with_default("event_name", "Flight Card Scanner")
@@ -210,15 +230,15 @@ def load_config(path: Path) -> AppConfig:
     ssl_certfile = None
     ssl_keyfile = None
     if "ssl_certfile" in data:
-        ssl_certfile = Path(data["ssl_certfile"])
+        ssl_certfile = _resolve_path(Path(data["ssl_certfile"]), config_dir)
     if "ssl_keyfile" in data:
-        ssl_keyfile = Path(data["ssl_keyfile"])
+        ssl_keyfile = _resolve_path(Path(data["ssl_keyfile"]), config_dir)
 
     # --- known_fliers_path / flier_match_model (optional) ---
     known_fliers_path: Path | None = None
     flier_match_model: str | None = None
     if "known_fliers_path" in data:
-        known_fliers_path = Path(data["known_fliers_path"])
+        known_fliers_path = _resolve_path(Path(data["known_fliers_path"]), config_dir)
     if "flier_match_model" in data:
         flier_match_model = data["flier_match_model"]
 

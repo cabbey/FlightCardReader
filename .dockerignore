@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Python bytecode and caches
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+env
+
+# Node — rebuilt in the build stage
+node_modules
+flight_card_scanner/static/js/node_modules
+flight_card_scanner/static/js/.pnpm
+
+# Local data files (provided via /data volume at runtime)
+*.db
+flight_cards.db
+images/
+
+# Kiro / specs
+.kiro
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+runserver.sh
+tests/
