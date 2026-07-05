@@ -1,0 +1,10 @@
+services:
+  flight-card-scanner:
+    build: .
+    image: flight-card-scanner
+    container_name: flight-card-scanner
+    restart: unless-stopped
+    volumes:
+      - /srv/flight-cards:/data
+    ports:
+      - "127.0.0.1:12345:80"
