@@ -5,7 +5,7 @@
 #
 # Usage:
 #   docker build -t flight-card-scanner .
-#   docker run -v /path/to/event:/data -p 80:80 flight-card-scanner
+#   docker run -v /path/to/event:/data -p 127.0.0.1:12345:80 flight-card-scanner
 #
 # The /data volume should contain:
 #   config.json          — application configuration

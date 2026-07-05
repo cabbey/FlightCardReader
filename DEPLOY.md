@@ -14,11 +14,11 @@ Internet (HTTPS :443)
 │  Tailscale Funnel       │  ← TLS termination, auto-provisioned certs
 │  (host-level daemon)    │
 └───────────┬─────────────┘
-            │ HTTP :80
+            │ HTTP :12345 (host)
             ▼
 ┌─────────────────────────┐
 │  Docker container       │
-│  flight-card-scanner    │  ← plain HTTP on port 80
+│  flight-card-scanner    │  ← plain HTTP on port 80 (container)
 │  volume: /data          │
 └─────────────────────────┘
             │
@@ -34,8 +34,8 @@ Internet (HTTPS :443)
 ```
 
 Tailscale handles TLS certificates automatically (via Let's Encrypt) and
-proxies decrypted HTTP traffic to `localhost:80` where the container is
-listening. The container never sees TLS.
+proxies decrypted HTTP traffic to `localhost:12345` on the host, which Docker
+maps to port 80 inside the container. The container never sees TLS.
 
 ---
 
@@ -118,14 +118,15 @@ docker run -d \
   --name flight-card-scanner \
   --restart unless-stopped \
   -v /srv/flight-cards:/data \
-  -p 127.0.0.1:80:80 \
+  -p 127.0.0.1:12345:80 \
   flight-card-scanner
 ```
 
 Notes:
 
-- **`-p 127.0.0.1:80:80`** binds to localhost only — the app is not directly
-  exposed to the network. Tailscale Funnel handles public access.
+- **`-p 127.0.0.1:12345:80`** maps host port 12345 to container port 80,
+  bound to localhost only — the app is not directly exposed to the network.
+  Tailscale Funnel handles public access.
 - **`--restart unless-stopped`** ensures the container comes back after reboot.
 - The container creates `myevent/images/` and `myevent/flight_cards.db`
   automatically on first run.
@@ -133,7 +134,7 @@ Notes:
 Verify it's running:
 
 ```bash
-curl -s http://localhost:80/ | head -5
+curl -s http://localhost:12345/ | head -5
 ```
 
 ---
@@ -149,7 +150,7 @@ tailscale status   # confirm the host is connected to your tailnet
 ### Expose via Funnel (public internet access)
 
 ```bash
-sudo tailscale funnel --bg localhost:80
+sudo tailscale funnel --bg localhost:12345
 ```
 
 This does the following:
@@ -159,8 +160,8 @@ This does the following:
 2. Starts a persistent background reverse proxy:
    - Internet → `https://myhost.tail1234.ts.net:443` (HTTPS)
    - Funnel relay → your host (encrypted WireGuard tunnel)
-   - Host Tailscale daemon → terminates TLS → forwards plain HTTP to `localhost:80`
-   - Docker container handles the request.
+   - Host Tailscale daemon → terminates TLS → forwards plain HTTP to `localhost:12345`
+   - Docker maps host port 12345 → container port 80 → app handles the request.
 
 Confirm it's working:
 
@@ -172,7 +173,7 @@ Expected output:
 
 ```
 https://myhost.tail1234.ts.net:443 (Funnel on)
-|-- / proxy http://127.0.0.1:80
+|-- / proxy http://127.0.0.1:12345
 ```
 
 Your app is now publicly accessible at `https://myhost.tail1234.ts.net`.
@@ -182,7 +183,7 @@ Your app is now publicly accessible at `https://myhost.tail1234.ts.net`.
 If you only need access from devices on your tailnet (not the public internet):
 
 ```bash
-sudo tailscale serve --bg localhost:80
+sudo tailscale serve --bg localhost:12345
 ```
 
 Same mechanics, but traffic is restricted to authenticated tailnet members.
@@ -192,7 +193,7 @@ Same mechanics, but traffic is restricted to authenticated tailnet members.
 Funnel only supports ports **443**, **8443**, and **10000**. To use port 8443:
 
 ```bash
-sudo tailscale funnel --bg --https=8443 localhost:80
+sudo tailscale funnel --bg --https=8443 localhost:12345
 ```
 
 The app will be reachable at `https://myhost.tail1234.ts.net:8443`.
@@ -206,7 +207,7 @@ The app will be reachable at `https://myhost.tail1234.ts.net:8443`.
 | Check status | `tailscale funnel status` |
 | Stop Funnel | `sudo tailscale funnel --https=443 off` |
 | Reset all Funnel config | `sudo tailscale funnel reset` |
-| Switch to tailnet-only | `sudo tailscale serve --bg localhost:80` |
+| Switch to tailnet-only | `sudo tailscale serve --bg localhost:12345` |
 
 The `--bg` flag makes the Funnel persistent — it survives Tailscale restarts
 and host reboots. Without `--bg`, the Funnel stops when the command exits.
@@ -226,7 +227,7 @@ services:
     volumes:
       - /srv/flight-cards:/data
     ports:
-      - "127.0.0.1:80:80"
+      - "127.0.0.1:12345:80"
 ```
 
 Run with:
@@ -261,7 +262,7 @@ Common issues:
    `nslookup myhost.tail1234.ts.net`
 4. Ensure the Funnel node attribute is in your tailnet policy file.
    The first `tailscale funnel` command prompts you to enable this.
-5. Test the local backend: `curl http://localhost:80/`
+5. Test the local backend: `curl http://localhost:12345/`
 
 ### Ollama not reachable from container
 
@@ -285,7 +286,7 @@ happens if you repeatedly reset and re-provision certificates.
 
 ## Security considerations
 
-- The container binds to `127.0.0.1:80` — it is **not** directly accessible
+- The container binds to `127.0.0.1:12345` — it is **not** directly accessible
   from the network. All external access goes through Tailscale's encrypted
   tunnel and Funnel relay.
 - Tailscale Funnel hides your host's IP address from the public internet.
