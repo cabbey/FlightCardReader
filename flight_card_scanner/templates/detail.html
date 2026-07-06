@@ -2064,7 +2064,7 @@
       var normalizedQuery = query.toUpperCase()
         .replace(/½/g, '1/2')
         .replace(/¼/g, '1/4');
-      var match = normalizedQuery.match(/^(1\/[24]A|[A-O])(\d+)/i);
+      var match = normalizedQuery.match(/^(1\/[24]A|[A-O])(\d+)/);
       var searchContext = {};
       if (match) {
         searchContext.letter = match[1].toUpperCase();
