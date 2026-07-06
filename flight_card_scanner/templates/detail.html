@@ -586,16 +586,59 @@
 
   .tc-search-fields {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 0.25rem;
     margin-top: 0.3rem;
-    align-items: center;
   }
 
   .tc-search-fields .field-input {
     font-size: 0.8rem;
     padding: 0.15rem 0.25rem;
     max-width: 80px;
+  }
+
+  .tc-freeform-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    width: 100%;
+    margin-bottom: 0.2rem;
+  }
+
+  .tc-freeform-row .field-input {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.4rem;
+    max-width: 200px;
+    width: 100%;
+  }
+
+  .btn-tc-query-freeform {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-tc-query-freeform:hover {
+    background: #1d4ed8;
+  }
+
+  .tc-or-divider {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    display: block;
+    margin: 0.1rem 0;
+  }
+
+  .tc-structured-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
   }
 
   .tc-field-label {
@@ -959,14 +1002,22 @@
                 <span class="tc-status tc-pending">? Not looked up</span>
                 {% endif %}
                 <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
-                  <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Re-search ThrustCurve">🔍</button>
+                  <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Search ThrustCurve">🔍</button>
                   <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}" style="{{ '' if motor.thrustcurve_candidates else 'display:none;' }}">Select</button>
                   <div class="tc-search-fields" style="display:none;" data-motor-index="{{ loop.index0 }}">
+                    <div class="tc-freeform-row">
+                      <label class="tc-field-label">Search by name
+                        <input type="text" class="field-input tc-field-freeform" placeholder="e.g. 1/2A3, K1100, H128W" size="18" value="">
+                      </label>
+                      <button type="button" class="btn-tc-query-freeform" data-motor-index="{{ loop.index0 }}">Search</button>
+                    </div>
+                    <div class="tc-structured-row">
+                      <span class="tc-or-divider">— or build query —</span>
+                    </div>
+                    <div class="tc-structured-row">
                     <label class="tc-field-label">Class
                       <select class="field-select tc-field-letter">
                         <option value="">—</option>
-                        <option value="¼A"{{ ' selected' if motor.letter == '¼A' else '' }}>¼A</option>
-                        <option value="½A"{{ ' selected' if motor.letter == '½A' else '' }}>½A</option>
                         {% if tc_metadata and tc_metadata.impulseClasses %}
                           {% for cls in tc_metadata.impulseClasses %}
                         <option value="{{ cls }}"{{ ' selected' if cls == motor.letter else '' }}>{{ cls }}</option>
@@ -998,6 +1049,7 @@
                     </label>
                     <button type="button" class="btn-tc-query" data-motor-index="{{ loop.index0 }}">Search</button>
                     <button type="button" class="btn-tc-save-asis" data-motor-index="{{ loop.index0 }}">Save as-is</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1864,7 +1916,97 @@
     });
   });
 
-  // Search button
+  // --- Load thrustcurve-db JSON into browser for client-side search ---
+  var _tcMotors = null; // will be populated on first search
+  function loadTcDb() {
+    if (_tcMotors) return Promise.resolve(_tcMotors);
+    return fetch('/static/js/node_modules/thrustcurve-db/thrustcurve-db.json')
+      .then(function(res) { return res.json(); })
+      .then(function(data) { _tcMotors = data; return data; });
+  }
+
+  /**
+   * Search the local thrustcurve-db array by commonName (case-insensitive,
+   * with fraction normalization) and optional manufacturer filter.
+   */
+  function tcLocalSearch(query, manufacturer) {
+    if (!_tcMotors) return [];
+    var q = query.trim().toUpperCase()
+      .replace(/½/g, '1/2').replace(/¼/g, '1/4');
+    var results = _tcMotors.filter(function(m) {
+      var cn = (m.commonName || '').toUpperCase();
+      var desig = (m.designation || '').toUpperCase();
+      if (cn !== q && desig !== q && !cn.startsWith(q) && !desig.startsWith(q)) return false;
+      if (manufacturer) {
+        var mfrAbbrev = (m.manufacturerAbbrev || '').toLowerCase();
+        if (mfrAbbrev !== manufacturer.toLowerCase()) return false;
+      }
+      return true;
+    });
+    return results;
+  }
+
+  /**
+   * Show search results in the motor entry (unique match or candidate dropdown).
+   */
+  function showTcResults(results, idx, entry, searchContext, fields) {
+    if (results.length === 1) {
+      var motor = results[0];
+      registerMotorChange(idx, {
+        thrustcurve_id: motor.motorId,
+        letter: searchContext.letter || null,
+        number: searchContext.number || null,
+        manufacturer: searchContext.manufacturer || motor.manufacturerAbbrev || null,
+        suffix: searchContext.suffix || null
+      });
+      updateMotorDisplay(entry, motor.motorId, motor);
+      entry.classList.add('field-dirty');
+      fields.style.display = 'none';
+      var selectWrapper = entry.querySelector('.tc-select-wrapper');
+      if (selectWrapper) selectWrapper.style.display = 'none';
+      var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
+      if (selectBtn) selectBtn.style.display = 'none';
+    } else if (results.length > 1) {
+      var selectWrapper = entry.querySelector('.tc-select-wrapper');
+      if (!selectWrapper) {
+        selectWrapper = document.createElement('div');
+        selectWrapper.className = 'tc-select-wrapper';
+        entry.querySelector('.tc-search-form').insertAdjacentElement('beforebegin', selectWrapper);
+      }
+      var html = '<select class="tc-candidate-select" data-motor-index="' + idx + '">';
+      html += '<option value="">— Select motor (' + results.length + ' found) —</option>';
+      results.forEach(function(c) {
+        html += '<option value="' + c.motorId + '">' + (c.manufacturerAbbrev || '') + ' ' + displayFractions(c.commonName || c.designation || '');
+        if (c.propInfo) html += ' (' + c.propInfo + ')';
+        if (c.totImpulseNs) html += ' ' + c.totImpulseNs.toFixed(1) + 'Ns';
+        if (c.diameter) html += ' ' + c.diameter + 'mm';
+        if (c.availability === 'OOP') html += ' [OOP]';
+        html += '</option>';
+      });
+      html += '</select>';
+      selectWrapper.innerHTML = html;
+      selectWrapper.style.display = '';
+      selectWrapper._searchContext = searchContext;
+      selectWrapper._candidateData = {};
+      results.forEach(function(c) { selectWrapper._candidateData[c.motorId] = c; });
+      var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
+      if (selectBtn) selectBtn.style.display = '';
+      var statusEl = entry.querySelector('.tc-status');
+      if (statusEl) {
+        statusEl.className = 'tc-status tc-ambiguous';
+        statusEl.textContent = '⚠ ' + results.length + ' found';
+      }
+      fields.style.display = 'none';
+    } else {
+      var statusEl = entry.querySelector('.tc-status');
+      if (statusEl) {
+        statusEl.className = 'tc-status tc-error';
+        statusEl.textContent = '✗ No matches';
+      }
+    }
+  }
+
+  // Search button (structured fields)
   document.querySelectorAll('.btn-tc-query').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var idx = btn.dataset.motorIndex;
@@ -1881,87 +2023,76 @@
 
       btn.disabled = true;
       btn.textContent = '…';
-
       var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+      var commonName = letter + number;
+      var searchContext = { letter: letter, number: number, manufacturer: mfr, suffix: suffix };
 
-      fetch('/api/admin/record/' + recordId + '/motor/' + idx + '/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          letter: letter,
-          number: number,
-          manufacturer: mfr || null,
-          suffix: suffix || null
-        })
-      })
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (data.motorId) {
-          // Unique match — register as pending change
-          registerMotorChange(idx, {
-            thrustcurve_id: data.motorId,
-            letter: letter,
-            number: number,
-            manufacturer: mfr || null,
-            suffix: suffix || null
-          });
-          // Update display with TC data
-          updateMotorDisplay(entry, data.motorId, data.motorData);
-          entry.classList.add('field-dirty');
-          fields.style.display = 'none';
-          var selectWrapper = entry.querySelector('.tc-select-wrapper');
-          if (selectWrapper) selectWrapper.style.display = 'none';
-          var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
-          if (selectBtn) selectBtn.style.display = 'none';
-        } else if (data.candidates && data.candidates.length > 0) {
-          // Multiple candidates — show dropdown
-          var selectWrapper = entry.querySelector('.tc-select-wrapper');
-          if (!selectWrapper) {
-            selectWrapper = document.createElement('div');
-            selectWrapper.className = 'tc-select-wrapper';
-            entry.querySelector('.tc-search-form').insertAdjacentElement('beforebegin', selectWrapper);
-          }
-          var html = '<select class="tc-candidate-select" data-motor-index="' + idx + '">';
-          html += '<option value="">— Select motor —</option>';
-          data.candidates.forEach(function(c) {
-            html += '<option value="' + c.motorId + '">' + (c.manufacturer || '') + ' ' + displayFractions(c.commonName || c.designation || '');
-            if (c.propInfo) html += ' (' + c.propInfo + ')';
-            if (c.totImpulseNs) html += ' ' + c.totImpulseNs.toFixed(1) + 'Ns';
-            if (c.diameter) html += ' ' + c.diameter + 'mm';
-            html += '</option>';
-          });
-          html += '</select>';
-          selectWrapper.innerHTML = html;
-          selectWrapper.style.display = '';
-          // Store candidates data and motor details for the select handler
-          selectWrapper._searchContext = { letter: letter, number: number, manufacturer: mfr, suffix: suffix };
-          selectWrapper._candidateData = {};
-          data.candidates.forEach(function(c) { selectWrapper._candidateData[c.motorId] = c; });
-          // Show the always-present Select button
-          var selectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
-          if (selectBtn) selectBtn.style.display = '';
-          // Update status
-          var statusEl = entry.querySelector('.tc-status');
-          if (statusEl) {
-            statusEl.className = 'tc-status tc-ambiguous';
-            statusEl.textContent = '⚠ ' + data.candidates.length + ' candidates';
-          }
-          fields.style.display = 'none';
-        } else {
-          var statusEl = entry.querySelector('.tc-status');
-          if (statusEl) {
-            statusEl.className = 'tc-status tc-error';
-            statusEl.textContent = '✗ ' + (data.error || 'No matches');
-          }
+      loadTcDb().then(function() {
+        var results = tcLocalSearch(commonName, mfr || null);
+        showTcResults(results, idx, entry, searchContext, fields);
+      }).catch(function() {
+        var statusEl = entry.querySelector('.tc-status');
+        if (statusEl) {
+          statusEl.className = 'tc-status tc-error';
+          statusEl.textContent = '✗ Failed to load motor DB';
         }
-      })
-      .catch(function() {
-        alert('Network error searching ThrustCurve.');
-      })
-      .finally(function() {
+      }).finally(function() {
         btn.disabled = false;
         btn.textContent = 'Search';
       });
+    });
+  });
+
+  // Free-form search button
+  document.querySelectorAll('.btn-tc-query-freeform').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var idx = btn.dataset.motorIndex;
+      var fields = document.querySelector('.tc-search-fields[data-motor-index="' + idx + '"]');
+      var input = fields.querySelector('.tc-field-freeform');
+      var query = input.value.trim();
+
+      if (!query) {
+        alert('Enter a motor name to search (e.g. "1/2A3", "K1100", "H128W").');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '…';
+      var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
+
+      // Extract letter/number from the query for search context
+      var match = query.match(/^(1\/[248]A|[A-O])(\d+)/i);
+      var searchContext = {};
+      if (match) {
+        searchContext.letter = match[1].toUpperCase();
+        searchContext.number = match[2];
+      }
+
+      loadTcDb().then(function() {
+        var results = tcLocalSearch(query, null);
+        showTcResults(results, idx, entry, searchContext, fields);
+      }).catch(function() {
+        var statusEl = entry.querySelector('.tc-status');
+        if (statusEl) {
+          statusEl.className = 'tc-status tc-error';
+          statusEl.textContent = '✗ Failed to load motor DB';
+        }
+      }).finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Search';
+      });
+    });
+  });
+
+  // Allow Enter key in free-form input to trigger search
+  document.querySelectorAll('.tc-field-freeform').forEach(function(input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var idx = input.closest('.tc-search-fields').dataset.motorIndex;
+        var btn = document.querySelector('.btn-tc-query-freeform[data-motor-index="' + idx + '"]');
+        if (btn) btn.click();
+      }
     });
   });
 
@@ -1978,11 +2109,9 @@
       return;
     }
 
-    // Get the search context from when the search was performed
     var selectWrapper = entry.querySelector('.tc-select-wrapper');
     var ctx = (selectWrapper && selectWrapper._searchContext) || {};
 
-    // Register as pending change
     registerMotorChange(idx, {
       thrustcurve_id: motorId,
       letter: ctx.letter || null,
@@ -1991,49 +2120,13 @@
       suffix: ctx.suffix || null
     });
 
-    // Use candidate data we already have, or fetch from select endpoint
+    // Use candidate data from the local search results
     var candidateData = (selectWrapper && selectWrapper._candidateData && selectWrapper._candidateData[motorId]) || null;
     var formSelectBtn = entry.querySelector('.tc-search-form .btn-tc-select');
-    if (candidateData) {
-      // Build a motorData-like object from candidate info
-      var motorData = {
-        commonName: candidateData.commonName,
-        manufacturerAbbrev: candidateData.manufacturer,
-        propInfo: candidateData.propInfo,
-        source_url: null // candidates don't have source_url, will show without link
-      };
-      updateMotorDisplay(entry, motorId, motorData);
-      entry.classList.add('field-dirty');
-      if (selectWrapper) selectWrapper.style.display = 'none';
-      if (formSelectBtn) formSelectBtn.style.display = 'none';
-    } else {
-      // Fetch full motor data from select endpoint
-      btn.disabled = true;
-      btn.textContent = '…';
-      fetch('/api/admin/record/' + recordId + '/motor/' + idx + '/select', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motor_id: motorId })
-      })
-      .then(function(res) { return res.json(); })
-      .then(function(resp) {
-        updateMotorDisplay(entry, motorId, resp.motorData);
-        entry.classList.add('field-dirty');
-        if (selectWrapper) selectWrapper.style.display = 'none';
-        if (formSelectBtn) formSelectBtn.style.display = 'none';
-      })
-      .catch(function() {
-        // Fallback: just show the ID
-        updateMotorDisplay(entry, motorId, null);
-        entry.classList.add('field-dirty');
-        if (selectWrapper) selectWrapper.style.display = 'none';
-        if (formSelectBtn) formSelectBtn.style.display = 'none';
-      })
-      .finally(function() {
-        btn.disabled = false;
-        btn.textContent = 'Select';
-      });
-    }
+    updateMotorDisplay(entry, motorId, candidateData);
+    entry.classList.add('field-dirty');
+    if (selectWrapper) selectWrapper.style.display = 'none';
+    if (formSelectBtn) formSelectBtn.style.display = 'none';
   }
 
   document.querySelectorAll('.btn-tc-select').forEach(function(btn) {
@@ -2085,7 +2178,10 @@
   });
 
   function registerMotorChange(idx, changes) {
-    pendingMotorChanges[idx] = changes;
+    if (!pendingMotorChanges[idx]) pendingMotorChanges[idx] = {};
+    Object.keys(changes).forEach(function(k) {
+      pendingMotorChanges[idx][k] = changes[k];
+    });
     // Register a synthetic pending change so the Save button activates
     pendingChanges['_motor_' + idx] = changes.thrustcurve_id || '_modified';
     updateSaveButton();
@@ -2236,51 +2332,45 @@
         searchBtn.disabled = true;
         searchBtn.textContent = '…';
 
-        fetch('/api/admin/record/' + recordId + '/motor/0/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ letter: letter, number: number, manufacturer: mfr || null, suffix: suffix || null })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          if (data.motorId) {
-            addedMotors[addIdx].thrustcurve_id = data.motorId;
-            // Show resolved display
+        var commonName = letter + number;
+        loadTcDb().then(function() {
+          var results = tcLocalSearch(commonName, mfr || null);
+          if (results.length === 1) {
+            var motor = results[0];
+            addedMotors[addIdx].thrustcurve_id = motor.motorId;
             var desig = document.createElement('span');
             desig.className = 'motor-designation';
-            if (data.motorData && data.motorData.commonName) {
-              var label = (data.motorData.manufacturerAbbrev || '') + ' ' + data.motorData.commonName;
-              if (data.motorData.propInfo) label += ' (' + data.motorData.propInfo + ')';
-              if (data.motorData.source_url) {
-                desig.innerHTML = '<a href="' + data.motorData.source_url + '" target="_blank" rel="noopener" class="tc-motor-link">' + label + '</a>';
-              } else {
-                desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
-              }
-            } else {
-              desig.textContent = letter + number;
-            }
+            var label = (motor.manufacturerAbbrev || '') + ' ' + motor.commonName;
+            if (motor.propInfo) label += ' (' + motor.propInfo + ')';
+            desig.innerHTML = '<span class="tc-motor-link">' + label + '</span>';
             fields.style.display = 'none';
             row.insertBefore(desig, row.firstChild);
             var badge = document.createElement('span');
             badge.className = 'tc-status tc-resolved';
             badge.textContent = '✓';
-            badge.title = 'ThrustCurve ID: ' + data.motorId;
+            badge.title = 'ThrustCurve ID: ' + motor.motorId;
             desig.insertAdjacentElement('afterend', badge);
-          } else if (data.candidates && data.candidates.length > 0) {
-            // Show candidates in a note
-            addedMotors[addIdx].thrustcurve_candidates = data.candidates;
+          } else if (results.length > 1) {
+            addedMotors[addIdx].thrustcurve_candidates = results.map(function(c) {
+              return { motorId: c.motorId, commonName: c.commonName, manufacturer: c.manufacturerAbbrev, designation: c.designation, propInfo: c.propInfo, totImpulseNs: c.totImpulseNs, diameter: c.diameter, availability: c.availability };
+            });
             var note = document.createElement('span');
             note.className = 'tc-status tc-ambiguous';
-            note.textContent = '⚠ ' + data.candidates.length + ' candidates — save and use detail page to select';
+            note.textContent = '⚠ ' + results.length + ' candidates — save and use detail page to select';
             row.appendChild(note);
           } else {
             var note = document.createElement('span');
             note.className = 'tc-status tc-error';
-            note.textContent = '✗ ' + (data.error || 'No matches');
+            note.textContent = '✗ No matches';
             row.appendChild(note);
           }
         })
-        .catch(function() { alert('Network error.'); })
+        .catch(function() {
+          var note = document.createElement('span');
+          note.className = 'tc-status tc-error';
+          note.textContent = '✗ Failed to load motor DB';
+          row.appendChild(note);
+        })
         .finally(function() {
           searchBtn.disabled = false;
           searchBtn.textContent = 'Search';
