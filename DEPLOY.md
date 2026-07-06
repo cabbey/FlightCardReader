@@ -222,6 +222,7 @@ For convenience, here's a `docker-compose.yml`:
 services:
   flight-card-scanner:
     build: .
+    image: flight-card-scanner
     container_name: flight-card-scanner
     restart: unless-stopped
     volumes:
