@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Export human-verified flight card records into a benchmark dataset.
 
-Reads the project's SQLite database, finds all records marked as human_verified,
+Reads the project's SQLite database, finds records marked as human_verified,
 and exports:
   - The original card image (copied to the dataset directory)
   - A JSON ground truth file containing the verified field values
 
 Usage:
+    # Export all verified records
     python -m benchmark.export_dataset --db path/to/flight_cards.db \
-        --image-dir path/to/images --output benchmark/dataset
+        --image-dir path/to/images --output /path/to/dataset
+
+    # Export specific record IDs only
+    python -m benchmark.export_dataset --db path/to/flight_cards.db \
+        --image-dir path/to/images --output /path/to/dataset \
+        --records 1 5 12 47
 
 The output directory will contain:
     dataset/
@@ -29,13 +35,22 @@ import sys
 from pathlib import Path
 
 
-def _load_verified_records(db_path: Path) -> list[dict]:
-    """Query the database for all human-verified records with extracted status."""
+def _load_verified_records(
+    db_path: Path,
+    record_ids: list[int] | None = None,
+) -> list[dict]:
+    """Query the database for human-verified records with extracted status.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        record_ids: If provided, only export these specific record IDs.
+            Records must still be human_verified and extracted to be included.
+    """
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("""
+    base_query = """
         SELECT
             id, image_path, flight_date, flier_name,
             total_impulse_value, total_impulse_unit,
@@ -45,7 +60,14 @@ def _load_verified_records(db_path: Path) -> list[dict]:
             recovery_plan, overflow
         FROM flight_records
         WHERE human_verified = 1 AND extraction_status = 'extracted'
-    """)
+    """
+
+    if record_ids:
+        placeholders = ",".join("?" for _ in record_ids)
+        query = f"{base_query} AND id IN ({placeholders})"
+        cursor.execute(query, record_ids)
+    else:
+        cursor.execute(base_query)
 
     records = []
     for row in cursor.fetchall():
@@ -101,6 +123,7 @@ def export_dataset(
     db_path: Path,
     image_dir: Path,
     output_dir: Path,
+    record_ids: list[int] | None = None,
 ) -> int:
     """Export verified records to a benchmark dataset.
 
@@ -108,11 +131,12 @@ def export_dataset(
         db_path: Path to the SQLite database file.
         image_dir: Path to the image store directory (where image_path is relative to).
         output_dir: Directory to write the dataset into.
+        record_ids: If provided, only export these specific record IDs.
 
     Returns:
         Number of records exported.
     """
-    records = _load_verified_records(db_path)
+    records = _load_verified_records(db_path, record_ids)
 
     if not records:
         print("No human-verified records found in the database.", file=sys.stderr)
@@ -184,8 +208,15 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("benchmark/dataset"),
-        help="Output directory for the benchmark dataset (default: benchmark/dataset)",
+        required=True,
+        help="Output directory where the benchmark dataset will be written",
+    )
+    parser.add_argument(
+        "--records",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Specific record IDs to export (default: all human-verified records)",
     )
 
     args = parser.parse_args()
@@ -198,7 +229,7 @@ def main() -> None:
         print(f"Error: Image directory not found: {args.image_dir}", file=sys.stderr)
         sys.exit(1)
 
-    count = export_dataset(args.db, args.image_dir, args.output)
+    count = export_dataset(args.db, args.image_dir, args.output, args.records)
     if count == 0:
         sys.exit(1)
 

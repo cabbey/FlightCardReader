@@ -29,20 +29,27 @@ The benchmark has three stages:
 python -m benchmark export \
     --db /path/to/event/data/flight_cards.db \
     --image-dir /path/to/event/data/images \
-    --output benchmark/dataset
+    --output /path/to/benchmark/dataset
+
+# 1b. Or export only specific record IDs
+python -m benchmark export \
+    --db /path/to/event/data/flight_cards.db \
+    --image-dir /path/to/event/data/images \
+    --output /path/to/benchmark/dataset \
+    --records 1 5 12 47 63
 
 # 2. Run the benchmark against multiple models
 python -m benchmark run \
-    --dataset benchmark/dataset \
+    --dataset /path/to/benchmark/dataset \
     --models qwen3-vl gemma3:27b minicpm-v \
     --endpoint http://localhost:11434 \
-    --output benchmark/results
+    --output /path/to/benchmark/results
 
 # 3. Score results and generate the comparison report
 python -m benchmark score \
-    --dataset benchmark/dataset \
-    --results benchmark/results \
-    --output benchmark/report.md
+    --dataset /path/to/benchmark/dataset \
+    --results /path/to/benchmark/results \
+    --output /path/to/benchmark/report.md
 ```
 
 ## Detailed Usage
@@ -53,7 +60,8 @@ python -m benchmark score \
 python -m benchmark export \
     --db <path-to-flight_cards.db> \
     --image-dir <path-to-images-directory> \
-    --output <output-directory>
+    --output <output-directory> \
+    [--records <id1> <id2> ...]
 ```
 
 **Arguments:**
@@ -61,7 +69,8 @@ python -m benchmark export \
 |----------|----------|-------------|
 | `--db` | Yes | Path to the SQLite database file |
 | `--image-dir` | Yes | Path to the image store directory (parent of `image_path` values in DB) |
-| `--output` | No | Output directory (default: `benchmark/dataset`) |
+| `--output` | Yes | Output directory where the dataset will be written |
+| `--records` | No | Specific record IDs to export (default: all human-verified records) |
 
 **Output structure:**
 ```
@@ -95,10 +104,10 @@ python -m benchmark run \
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `--dataset` | No | Path to exported dataset (default: `benchmark/dataset`) |
+| `--dataset` | Yes | Path to exported dataset (from step 1) |
 | `--models` | Yes | Space-separated list of Ollama model names |
 | `--endpoint` | No | Ollama API URL (default: `http://localhost:11434`) |
-| `--output` | No | Results output directory (default: `benchmark/results`) |
+| `--output` | Yes | Results output directory |
 | `--event-start` | No | Event start date for the prompt context |
 | `--event-end` | No | Event end date for the prompt context |
 | `--samples` | No | Limit to N samples (useful for quick testing) |
@@ -139,9 +148,9 @@ python -m benchmark score \
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `--dataset` | No | Path to benchmark dataset (default: `benchmark/dataset`) |
-| `--results` | No | Path to benchmark results (default: `benchmark/results`) |
-| `--output` | No | Markdown report output path (default: `benchmark/report.md`) |
+| `--dataset` | Yes | Path to benchmark dataset (from step 1) |
+| `--results` | Yes | Path to benchmark results (from step 2) |
+| `--output` | Yes | Markdown report output path |
 | `--json-output` | No | Optional JSON report for programmatic use |
 
 ## Understanding the Report
@@ -190,19 +199,28 @@ ollama pull minicpm-v
 # Export your verified data
 python -m benchmark export \
     --db /home/user/events/2026/march/flight_cards.db \
-    --image-dir /home/user/events/2026/march/images
+    --image-dir /home/user/events/2026/march/images \
+    --output /home/user/benchmarks/dataset
 
 # Quick test with 3 samples
 python -m benchmark run \
+    --dataset /home/user/benchmarks/dataset \
     --models qwen3-vl gemma3:27b minicpm-v \
+    --output /home/user/benchmarks/results \
     --samples 3
 
 # Full benchmark (may take a while depending on hardware and sample count)
 python -m benchmark run \
-    --models qwen3-vl gemma3:27b minicpm-v
+    --dataset /home/user/benchmarks/dataset \
+    --models qwen3-vl gemma3:27b minicpm-v \
+    --output /home/user/benchmarks/results
 
 # Generate comparison report
-python -m benchmark score --json-output benchmark/report.json
+python -m benchmark score \
+    --dataset /home/user/benchmarks/dataset \
+    --results /home/user/benchmarks/results \
+    --output /home/user/benchmarks/report.md \
+    --json-output /home/user/benchmarks/report.json
 ```
 
 ## Adding the Dataset to Version Control
@@ -224,10 +242,12 @@ to see how the change affects each model:
 ```bash
 # Results are saved per-run, so use a different output directory to compare
 python -m benchmark run \
+    --dataset /path/to/benchmark/dataset \
     --models qwen3-vl \
-    --output benchmark/results_v2
+    --output /path/to/benchmark/results_v2
 
 python -m benchmark score \
-    --results benchmark/results_v2 \
-    --output benchmark/report_v2.md
+    --dataset /path/to/benchmark/dataset \
+    --results /path/to/benchmark/results_v2 \
+    --output /path/to/benchmark/report_v2.md
 ```

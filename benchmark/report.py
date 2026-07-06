@@ -257,20 +257,20 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=Path("benchmark/dataset"),
-        help="Path to the benchmark dataset directory",
+        required=True,
+        help="Path to the benchmark dataset directory (output of export step)",
     )
     parser.add_argument(
         "--results",
         type=Path,
-        default=Path("benchmark/results"),
-        help="Path to the benchmark results directory",
+        required=True,
+        help="Path to the benchmark results directory (output of run step)",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("benchmark/report.md"),
-        help="Output path for the Markdown report (default: benchmark/report.md)",
+        required=True,
+        help="Output path for the Markdown report",
     )
     parser.add_argument(
         "--json-output",

@@ -6,10 +6,10 @@ used by the production application, measures extraction time, and saves raw
 model outputs for scoring.
 
 Usage:
-    python -m benchmark.runner --dataset benchmark/dataset \
+    python -m benchmark.runner --dataset /path/to/dataset \
         --models qwen3-vl gemma3:27b minicpm-v \
         --endpoint http://localhost:11434 \
-        --output benchmark/results
+        --output /path/to/results
 
 The output directory will contain:
     results/
@@ -294,7 +294,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=Path("benchmark/dataset"),
+        required=True,
         help="Path to the exported benchmark dataset directory",
     )
     parser.add_argument(
@@ -312,8 +312,8 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("benchmark/results"),
-        help="Output directory for results (default: benchmark/results)",
+        required=True,
+        help="Output directory where benchmark results will be written",
     )
     parser.add_argument(
         "--event-start",
