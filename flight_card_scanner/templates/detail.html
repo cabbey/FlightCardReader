@@ -930,17 +930,17 @@
                 <span class="motor-qty-display" data-motor-index="{{ loop.index0 }}" data-value="{{ motor.quantity or 1 }}" title="Click to edit quantity">{{ motor.quantity or 1 }}×</span>
                 {% if motor.thrustcurve_id and motor.thrustcurve_data %}
                 <span class="motor-designation">
-                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
+                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName | display_fractions }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% elif motor.thrustcurve_id %}
                 <span class="motor-designation">
-                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ (motor.letter ~ motor.number) | display_fractions }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% else %}
                 <span class="motor-designation">
-                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ (motor.letter ~ motor.number) | display_fractions }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
                 </span>
                 {% endif %}
                 {% if motor.thrustcurve_candidates %}
@@ -949,7 +949,7 @@
                   <select class="tc-candidate-select" data-motor-index="{{ loop.index0 }}">
                     <option value="">— Select motor —</option>
                     {% for candidate in motor.thrustcurve_candidates %}
-                    <option value="{{ candidate.motorId }}">{{ candidate.manufacturer or "" }} {{ candidate.commonName or candidate.designation or "" }}{% if candidate.propInfo %} ({{ candidate.propInfo }}){% endif %}{% if candidate.totImpulseNs %} {{ "%.1f"|format(candidate.totImpulseNs) }}Ns{% endif %}{% if candidate.diameter %} {{ candidate.diameter }}mm{% endif %}</option>
+                    <option value="{{ candidate.motorId }}">{{ candidate.manufacturer or "" }} {{ (candidate.commonName or candidate.designation or "") | display_fractions }}{% if candidate.propInfo %} ({{ candidate.propInfo }}){% endif %}{% if candidate.totImpulseNs %} {{ "%.1f"|format(candidate.totImpulseNs) }}Ns{% endif %}{% if candidate.diameter %} {{ candidate.diameter }}mm{% endif %}</option>
                     {% endfor %}
                   </select>
                 </div>
@@ -1227,6 +1227,12 @@
   var recordId = {{ record.id }};
   var pendingChanges = {};
   var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
+
+  // Convert ASCII fraction prefixes to unicode for display
+  function displayFractions(s) {
+    if (!s) return s;
+    return s.replace(/1\/2A/g, '\u00bdA').replace(/1\/4A/g, '\u00bcA');
+  }
 
   // --- Inline editing logic ---
 
@@ -1918,7 +1924,7 @@
           var html = '<select class="tc-candidate-select" data-motor-index="' + idx + '">';
           html += '<option value="">— Select motor —</option>';
           data.candidates.forEach(function(c) {
-            html += '<option value="' + c.motorId + '">' + (c.manufacturer || '') + ' ' + (c.commonName || c.designation || '');
+            html += '<option value="' + c.motorId + '">' + (c.manufacturer || '') + ' ' + displayFractions(c.commonName || c.designation || '');
             if (c.propInfo) html += ' (' + c.propInfo + ')';
             if (c.totImpulseNs) html += ' ' + c.totImpulseNs.toFixed(1) + 'Ns';
             if (c.diameter) html += ' ' + c.diameter + 'mm';
@@ -2089,7 +2095,8 @@
     // Update the motor designation span to show TC info with link
     var desig = entry.querySelector('.motor-designation');
     if (desig && motorData && motorData.commonName) {
-      var label = (motorData.manufacturerAbbrev || '') + ' ' + motorData.commonName;
+      var displayName = displayFractions(motorData.commonName);
+      var label = (motorData.manufacturerAbbrev || '') + ' ' + displayName;
       if (motorData.propInfo) label += ' (' + motorData.propInfo + ')';
       if (motorData.source_url) {
         desig.innerHTML = '<a href="' + motorData.source_url + '" target="_blank" rel="noopener" class="tc-motor-link">' + label + '</a>';
