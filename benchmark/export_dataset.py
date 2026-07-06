@@ -119,6 +119,43 @@ def _build_ground_truth(record: dict) -> dict:
     return ground_truth
 
 
+def _load_event_date_range(db_path: Path) -> tuple[str | None, str | None]:
+    """Load the event date range from exported flight_date values.
+
+    Determines the date range by finding the min and max flight_date values
+    among verified records. Returns (start, end) as ISO date strings, or
+    (None, None) if no dates are available.
+    """
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT MIN(flight_date), MAX(flight_date)
+        FROM flight_records
+        WHERE human_verified = 1 AND extraction_status = 'extracted'
+            AND flight_date IS NOT NULL
+    """)
+    row = cursor.fetchone()
+    conn.close()
+    if row and row[0] and row[1]:
+        return row[0], row[1]
+    return None, None
+
+
+def _warn_if_inside_repo(output_dir: Path) -> None:
+    """Warn the user if the output path appears to be inside a git repository tree."""
+    check = output_dir.resolve()
+    while check != check.parent:
+        if (check / ".git").exists():
+            print(
+                f"  WARNING: Output path is inside a git repository ({check}).\n"
+                f"  Consider writing benchmark data outside the source tree to avoid "
+                f"accidentally committing large files.",
+                file=sys.stderr,
+            )
+            return
+        check = check.parent
+
+
 def export_dataset(
     db_path: Path,
     image_dir: Path,
@@ -136,6 +173,8 @@ def export_dataset(
     Returns:
         Number of records exported.
     """
+    _warn_if_inside_repo(output_dir)
+
     records = _load_verified_records(db_path, record_ids)
 
     if not records:
@@ -148,7 +187,7 @@ def export_dataset(
     images_out.mkdir(parents=True, exist_ok=True)
     gt_out.mkdir(parents=True, exist_ok=True)
 
-    manifest = []
+    samples = []
     exported = 0
 
     for record in records:
@@ -172,7 +211,7 @@ def export_dataset(
         gt_file = gt_out / f"{record_id}.json"
         gt_file.write_text(json.dumps(ground_truth, indent=2, default=str))
 
-        manifest.append({
+        samples.append({
             "record_id": record_id,
             "image_file": f"images/{record_id}{ext}",
             "ground_truth_file": f"ground_truth/{record_id}.json",
@@ -181,11 +220,37 @@ def export_dataset(
         })
         exported += 1
 
-    # Write manifest
+    # Determine event date range from the data
+    event_start, event_end = _load_event_date_range(db_path)
+
+    # Build manifest with metadata at the top level
+    manifest = {
+        "event_date_range": {
+            "start": event_start,
+            "end": event_end,
+        },
+        "samples": samples,
+    }
+
+    # If a manifest already exists (incremental export), merge date ranges
     manifest_file = output_dir / "manifest.json"
+    if manifest_file.exists():
+        existing = json.loads(manifest_file.read_text())
+        existing_range = existing.get("event_date_range", {})
+        if existing_range.get("start") and event_start:
+            manifest["event_date_range"]["start"] = min(
+                existing_range["start"], event_start
+            )
+        if existing_range.get("end") and event_end:
+            manifest["event_date_range"]["end"] = max(
+                existing_range["end"], event_end
+            )
+
     manifest_file.write_text(json.dumps(manifest, indent=2, default=str))
 
     print(f"Exported {exported} verified records to {output_dir}")
+    if event_start and event_end:
+        print(f"Event date range: {event_start} to {event_end}")
     return exported
 
 

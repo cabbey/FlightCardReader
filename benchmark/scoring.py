@@ -133,7 +133,12 @@ def _compare_motor(expected: dict, actual: dict) -> float:
 
 
 def _compare_motors(expected: Any, actual: Any) -> float:
-    """Compare motor lists. Order-sensitive since motor order matters for staging."""
+    """Compare motor lists with bonus for proper quantity collapsing.
+
+    A model that correctly collapses N identical motors into a single entry
+    with quantity=N scores higher than one that emits N separate entries each
+    with quantity=1. This rewards models that understand cluster notation.
+    """
     if expected is None and actual is None:
         return 1.0
     if expected is None or actual is None:
@@ -146,16 +151,80 @@ def _compare_motors(expected: Any, actual: Any) -> float:
     if len(expected) == 0 or len(actual) == 0:
         return 0.0
 
-    # Compare up to the length of the expected list
-    max_len = max(len(expected), len(actual))
-    total_score = 0.0
+    def _motor_key(m: dict) -> tuple:
+        """Key for grouping identical motors (ignoring quantity)."""
+        return (
+            _normalize_string(m.get("manufacturer")),
+            _normalize_string(m.get("leading_number")),
+            _normalize_string(m.get("letter")),
+            _normalize_string(m.get("number")),
+            _normalize_string(m.get("suffix")),
+        )
 
-    for i in range(max_len):
-        if i < len(expected) and i < len(actual):
-            total_score += _compare_motor(expected[i], actual[i])
-        # else: missing or extra motor = 0 for that slot
+    # Build effective motor counts from each list.
+    # This lets us compare what's *meant* regardless of representation.
+    def _effective_counts(motors: list[dict]) -> dict[tuple, int]:
+        counts: dict[tuple, int] = {}
+        for m in motors:
+            key = _motor_key(m)
+            qty = m.get("quantity", 1) or 1
+            counts[key] = counts.get(key, 0) + qty
+        return counts
 
-    return total_score / max_len
+    expected_counts = _effective_counts(expected)
+    actual_counts = _effective_counts(actual)
+
+    # Compare effective motor content (are the same motors/quantities present?)
+    all_keys = set(expected_counts.keys()) | set(actual_counts.keys())
+    if not all_keys:
+        return 1.0
+
+    content_score = 0.0
+    for key in all_keys:
+        e_qty = expected_counts.get(key, 0)
+        a_qty = actual_counts.get(key, 0)
+        if e_qty == a_qty:
+            content_score += 1.0
+        elif e_qty > 0 and a_qty > 0:
+            # Partial credit: right motor, wrong quantity
+            content_score += 0.5
+        # else: motor missing entirely = 0
+
+    content_score /= len(all_keys)
+
+    # Per-motor component accuracy (letter, number, suffix, etc.)
+    # Compare element-by-element up to the shorter list length
+    component_scores = []
+    for i in range(min(len(expected), len(actual))):
+        component_scores.append(_compare_motor(expected[i], actual[i]))
+    component_avg = (
+        sum(component_scores) / len(component_scores) if component_scores else 0.0
+    )
+
+    # Combine: content matching (60%) + component accuracy (40%)
+    base_score = content_score * 0.6 + component_avg * 0.4
+
+    # Collapsing bonus/penalty: if ground truth uses collapsed form (qty > 1),
+    # reward actual that also uses collapsed form.
+    has_collapsed_expected = any((m.get("quantity", 1) or 1) > 1 for m in expected)
+    if has_collapsed_expected:
+        # Check if actual matches the collapsed structure exactly
+        # (same number of entries, same quantities per entry)
+        expected_structure = sorted(
+            (_motor_key(m), m.get("quantity", 1) or 1) for m in expected
+        )
+        actual_structure = sorted(
+            (_motor_key(m), m.get("quantity", 1) or 1) for m in actual
+        )
+        if expected_structure == actual_structure:
+            # Perfect structural match — apply bonus
+            base_score = min(1.0, base_score + 0.1)
+        elif expected_counts == actual_counts:
+            # Right content but wrong structure (expanded instead of collapsed)
+            # Apply a small penalty
+            base_score = max(0.0, base_score - 0.05)
+
+    return base_score
 
 
 def _compare_measurements(expected: Any, actual: Any) -> float:
@@ -273,7 +342,7 @@ FIELD_SPECS: list[FieldSpec] = [
     FieldSpec("flag_complex", _compare_booleans, weight=1.0, category="flags"),
 
     # Supplementary fields
-    FieldSpec("membership", _compare_membership, weight=1.5, category="identity"),
+    FieldSpec("membership", _compare_membership, weight=2.0, category="identity"),
     FieldSpec("measurements", _compare_measurements, weight=1.0, category="technical"),
     FieldSpec("total_impulse_value", _compare_numbers, weight=1.0, category="technical"),
     FieldSpec("total_impulse_unit", _compare_strings, weight=0.5, category="technical"),
@@ -441,13 +510,19 @@ def score_model(
     Returns:
         A ModelScorecard with aggregate statistics.
     """
-    manifest = json.loads((dataset_dir / "manifest.json").read_text())
+    manifest_data = json.loads((dataset_dir / "manifest.json").read_text())
+    # Support both new format (dict with "samples" key) and legacy (plain list)
+    if isinstance(manifest_data, dict):
+        sample_list = manifest_data.get("samples", [])
+    else:
+        sample_list = manifest_data
+
     model_dir_name = model_name.replace("/", "_").replace(":", "_")
-    model_raw_dir = results_dir / "raw_outputs" / model_dir_name
+    model_raw_dir = results_dir / model_dir_name / "raw_outputs"
 
     scorecard = ModelScorecard(model_name=model_name)
 
-    for sample in manifest:
+    for sample in sample_list:
         record_id = sample["record_id"]
         gt_path = dataset_dir / sample["ground_truth_file"]
         output_path = model_raw_dir / f"{record_id}.json"

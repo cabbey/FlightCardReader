@@ -96,8 +96,8 @@ python -m benchmark run \
     --models <model1> [model2] ... \
     --endpoint <ollama-url> \
     --output <results-directory> \
-    [--event-start "April 24, 2026"] \
-    [--event-end "April 26, 2026"] \
+    [--event-start "2026-04-24"] \
+    [--event-end "2026-04-26"] \
     [--samples N]
 ```
 
@@ -108,25 +108,24 @@ python -m benchmark run \
 | `--models` | Yes | Space-separated list of Ollama model names |
 | `--endpoint` | No | Ollama API URL (default: `http://localhost:11434`) |
 | `--output` | Yes | Results output directory |
-| `--event-start` | No | Event start date for the prompt context |
-| `--event-end` | No | Event end date for the prompt context |
+| `--event-start` | No | Override event start date (default: read from dataset manifest) |
+| `--event-end` | No | Override event end date (default: read from dataset manifest) |
 | `--samples` | No | Limit to N samples (useful for quick testing) |
 
 **Output structure:**
 ```
 results/
-├── run_metadata.json      # Run configuration, timing summaries
-├── raw_outputs/           # Per-model raw extraction JSON
-│   ├── qwen3-vl/
-│   │   ├── 1.json
-│   │   └── ...
-│   ├── gemma3_27b/
-│   │   └── ...
-│   └── ...
-└── timings/               # Per-model timing data
-    ├── qwen3-vl.json
-    ├── gemma3_27b.json
-    └── ...
+├── run_metadata.json          # Run configuration, timing summaries
+├── qwen3-vl/                  # One directory per model
+│   ├── timings.json           # Per-sample timing data
+│   └── raw_outputs/           # Raw extraction JSON per sample
+│       ├── 1.json
+│       └── ...
+├── gemma3_27b/
+│   ├── timings.json
+│   └── raw_outputs/
+│       └── ...
+└── ...
 ```
 
 **Tips:**
@@ -165,7 +164,7 @@ type-appropriate comparison strategies:
 | Strings | Case-insensitive exact match (with fuzzy partial credit for substrings) |
 | Numbers | Exact for integers; 1% relative tolerance for floats |
 | Booleans | Exact match |
-| Motors | Weighted component comparison (letter > number > manufacturer > suffix) |
+| Motors | Weighted component comparison (letter > number > manufacturer > suffix > quantity); bonus for proper cluster collapsing |
 | Measurements | Per-dimension value + unit comparison |
 | Membership | Club + member number + cert level comparison |
 | String lists | Jaccard similarity (order-insensitive) |
@@ -174,8 +173,8 @@ type-appropriate comparison strategies:
 
 - **Weighted accuracy** prioritizes critical fields that matter most for record keeping:
   - High weight (3x): `flier_name`, `motors`
-  - Medium weight (2x): `flight_date`, `evaluation_outcome`
-  - Standard weight (1.5x): `rack`, `pad`, `fso_rso_initials`, `recovery_plan`, `membership`
+  - Medium weight (2x): `flight_date`, `evaluation_outcome`, `membership`
+  - Standard weight (1.5x): `rack`, `pad`, `fso_rso_initials`, `recovery_plan`
   - Low weight (0.5-1x): `notes`, `rocket_colors`, `rocket_manufacturer`
 
 - **Unweighted accuracy** treats all fields equally (simple average)
@@ -223,16 +222,20 @@ python -m benchmark score \
     --json-output /home/user/benchmarks/report.json
 ```
 
+## Output Path Warnings
+
+Both `export` and `run` will emit a warning if the output path is inside a git repository.
+Benchmark data (images, raw model outputs) can be large and should generally live **outside**
+the source tree to avoid accidentally committing them. Choose a path like
+`/home/user/benchmarks/` or another data directory.
+
 ## Adding the Dataset to Version Control
 
-The exported dataset directory (`benchmark/dataset/`) contains images and can be large.
-Consider:
-- Adding `benchmark/dataset/` to `.gitignore` if images are sensitive or large
+If you do choose to store the dataset inside the repo tree (despite the warning above),
+consider:
+- Adding the output directory to `.gitignore`
 - Using Git LFS for the images directory
 - Keeping just the `manifest.json` and `ground_truth/` in version control
-
-The `benchmark/results/` directory should generally be in `.gitignore` since results
-are machine-specific.
 
 ## Re-running After Prompt Changes
 

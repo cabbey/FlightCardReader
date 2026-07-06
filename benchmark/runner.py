@@ -13,12 +13,11 @@ Usage:
 
 The output directory will contain:
     results/
-        run_metadata.json      # Run configuration and timing summary
-        raw_outputs/           # Per-model, per-sample raw extraction JSON
-            <model>/
+        run_metadata.json          # Run configuration and timing summary
+        <model>/                   # One directory per model
+            timings.json           # Per-sample timing data for this model
+            raw_outputs/           # Per-sample raw extraction JSON
                 <record_id>.json
-        timings/               # Per-model timing data
-            <model>.json
 """
 
 from __future__ import annotations
@@ -44,8 +43,19 @@ from flight_card_scanner.services.extraction_service import (
 )
 
 
-DEFAULT_EVENT_START = "April 24, 2026"
-DEFAULT_EVENT_END = "April 26, 2026"
+def _warn_if_inside_repo(output_dir: Path) -> None:
+    """Warn the user if the output path appears to be inside a git repository tree."""
+    check = output_dir.resolve()
+    while check != check.parent:
+        if (check / ".git").exists():
+            print(
+                f"  WARNING: Output path is inside a git repository ({check}).\n"
+                f"  Consider writing benchmark results outside the source tree to avoid "
+                f"accidentally committing large files.",
+                file=sys.stderr,
+            )
+            return
+        check = check.parent
 
 
 def _prepare_image(image_path: Path, target_height: int = 1600) -> str:
@@ -153,8 +163,8 @@ def run_benchmark(
     models: list[str],
     endpoint: str,
     output_dir: Path,
-    event_start: str = DEFAULT_EVENT_START,
-    event_end: str = DEFAULT_EVENT_END,
+    event_start: str | None = None,
+    event_end: str | None = None,
     samples: int | None = None,
 ) -> dict:
     """Run the full benchmark across all models and samples.
@@ -164,40 +174,73 @@ def run_benchmark(
         models: List of Ollama model names to evaluate.
         endpoint: Ollama endpoint URL.
         output_dir: Directory to write results into.
-        event_start: Event start date string for the prompt.
-        event_end: Event end date string for the prompt.
+        event_start: Event start date string for the prompt. If None, read from manifest.
+        event_end: Event end date string for the prompt. If None, read from manifest.
         samples: If set, limit to this many samples (for quick testing).
 
     Returns:
         Run metadata dict with summary statistics.
     """
+    _warn_if_inside_repo(output_dir)
+
     # Load manifest
     manifest_path = dataset_dir / "manifest.json"
     if not manifest_path.exists():
         print(f"Error: manifest.json not found in {dataset_dir}", file=sys.stderr)
         sys.exit(1)
 
-    manifest = json.loads(manifest_path.read_text())
+    manifest_data = json.loads(manifest_path.read_text())
+
+    # Read event date range from manifest (written by export step)
+    date_range = manifest_data.get("event_date_range", {})
+    if event_start is None:
+        event_start = date_range.get("start")
+    if event_end is None:
+        event_end = date_range.get("end")
+
+    if not event_start or not event_end:
+        print(
+            "Error: Event date range not found in manifest and not provided via CLI.\n"
+            "Re-export the dataset or pass --event-start and --event-end.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Convert ISO dates to human-readable format for the prompt
+    from datetime import date as _date
+    try:
+        start_dt = _date.fromisoformat(event_start)
+        event_start_fmt = start_dt.strftime("%B %-d, %Y")
+    except ValueError:
+        event_start_fmt = event_start
+    try:
+        end_dt = _date.fromisoformat(event_end)
+        event_end_fmt = end_dt.strftime("%B %-d, %Y")
+    except ValueError:
+        event_end_fmt = event_end
+
+    sample_list = manifest_data.get("samples", manifest_data)
+    # Support both new format (dict with "samples" key) and legacy (plain list)
+    if isinstance(sample_list, dict):
+        sample_list = sample_list.get("samples", [])
 
     if samples is not None:
-        manifest = manifest[:samples]
+        sample_list = sample_list[:samples]
 
-    print(f"Benchmark: {len(manifest)} samples x {len(models)} models = "
-          f"{len(manifest) * len(models)} extractions")
+    print(f"Benchmark: {len(sample_list)} samples x {len(models)} models = "
+          f"{len(sample_list) * len(models)} extractions")
     print(f"Endpoint: {endpoint}")
+    print(f"Event dates: {event_start} to {event_end}")
     print()
 
     # Create output structure
-    raw_out = output_dir / "raw_outputs"
-    timings_out = output_dir / "timings"
-    raw_out.mkdir(parents=True, exist_ok=True)
-    timings_out.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     run_metadata = {
         "started_at": datetime.now(timezone.utc).isoformat(),
         "endpoint": endpoint,
         "models": models,
-        "num_samples": len(manifest),
+        "num_samples": len(sample_list),
         "event_start": event_start,
         "event_end": event_end,
         "model_results": {},
@@ -206,7 +249,9 @@ def run_benchmark(
     for model in models:
         print(f"=== Model: {model} ===")
 
-        model_raw_dir = raw_out / model.replace("/", "_").replace(":", "_")
+        model_dir_name = model.replace("/", "_").replace(":", "_")
+        model_dir = output_dir / model_dir_name
+        model_raw_dir = model_dir / "raw_outputs"
         model_raw_dir.mkdir(parents=True, exist_ok=True)
 
         model_timings: list[dict] = []
@@ -217,14 +262,14 @@ def run_benchmark(
         with httpx.Client(
             base_url=endpoint, timeout=httpx.Timeout(600.0)
         ) as client:
-            for i, sample in enumerate(manifest, 1):
+            for i, sample in enumerate(sample_list, 1):
                 record_id = sample["record_id"]
                 image_file = dataset_dir / sample["image_file"]
 
-                print(f"  [{i}/{len(manifest)}] Record {record_id}...", end=" ", flush=True)
+                print(f"  [{i}/{len(sample_list)}] Record {record_id}...", end=" ", flush=True)
 
                 result, elapsed, error = run_single_extraction(
-                    client, model, image_file, event_start, event_end
+                    client, model, image_file, event_start_fmt, event_end_fmt
                 )
 
                 if error:
@@ -255,13 +300,13 @@ def run_benchmark(
                     out_file.write_text(json.dumps(result, indent=2, default=str))
 
         # Save timings for this model
-        timings_file = timings_out / f"{model.replace('/', '_').replace(':', '_')}.json"
+        timings_file = model_dir / "timings.json"
         timings_file.write_text(json.dumps(model_timings, indent=2))
 
         # Compute summary stats
         successful_times = [t["elapsed_seconds"] for t in model_timings if t["success"]]
         summary = {
-            "total_samples": len(manifest),
+            "total_samples": len(sample_list),
             "successes": successes,
             "failures": failures,
             "total_time_seconds": sum(t["elapsed_seconds"] for t in model_timings),
@@ -273,7 +318,7 @@ def run_benchmark(
             summary["median_time_seconds"] = sorted(successful_times)[len(successful_times) // 2]
 
         run_metadata["model_results"][model] = summary
-        print(f"  Summary: {successes}/{len(manifest)} succeeded, "
+        print(f"  Summary: {successes}/{len(sample_list)} succeeded, "
               f"avg {summary.get('avg_time_seconds', 0):.1f}s per extraction")
         print()
 
@@ -318,14 +363,14 @@ def main() -> None:
     parser.add_argument(
         "--event-start",
         type=str,
-        default=DEFAULT_EVENT_START,
-        help=f"Event start date for prompt (default: {DEFAULT_EVENT_START})",
+        default=None,
+        help="Override event start date for prompt (default: read from dataset manifest)",
     )
     parser.add_argument(
         "--event-end",
         type=str,
-        default=DEFAULT_EVENT_END,
-        help=f"Event end date for prompt (default: {DEFAULT_EVENT_END})",
+        default=None,
+        help="Override event end date for prompt (default: read from dataset manifest)",
     )
     parser.add_argument(
         "--samples",
