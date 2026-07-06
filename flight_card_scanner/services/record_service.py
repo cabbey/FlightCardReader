@@ -261,8 +261,11 @@ def display_fractions(s: str) -> str:
 def _format_motor(motor: dict[str, Any]) -> str:
     """Format a single motor dict into a designation string.
 
-    Format: [Nx ][manufacturer ][[leading_number]-]letter+number[ - suffix]
+    If the motor has been resolved via ThrustCurve (has thrustcurve_data with
+    a commonName), use the commonName directly. Otherwise fall back to building
+    the designation from the raw extracted fields.
 
+    Format (fallback): [Nx ][manufacturer ][[leading_number]-]letter+number[ - suffix]
     Quantity prefix shown only when > 1. Suffix separated by " - ".
     """
     parts: list[str] = []
@@ -272,11 +275,17 @@ def _format_motor(motor: dict[str, Any]) -> str:
     if qty and qty > 1:
         parts.append(f"{qty}×")
 
-    # Core designation: [leading_number-]letter+number
+    # Prefer commonName from thrustcurve_data if we have a resolved motor
+    tc_data = motor.get("thrustcurve_data")
+    if motor.get("thrustcurve_id") and tc_data and tc_data.get("commonName"):
+        parts.append(tc_data["commonName"])
+        return display_fractions(" ".join(parts))
+
+    # Fallback: build from raw extracted fields
     core = ""
     if motor.get("leading_number"):
         core += f"{motor['leading_number']}-"
-    core += f"{motor['letter']}{motor['number']}"
+    core += f"{motor.get('letter', '')}{motor.get('number', '')}"
 
     # Manufacturer prefix (space-separated from core)
     if motor.get("manufacturer"):
