@@ -252,9 +252,9 @@ async def scan_page(
         qr_entries.append({"url": url, "qr": data_uri})
 
     return _templates.TemplateResponse(
-        "scan.html",
-        {
-            "request": request,
+        name="scan.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "qr_entries": qr_entries,
             "event_dates": _build_event_dates(config),

@@ -269,9 +269,9 @@ async def reports_overview(
         current += timedelta(days=1)
 
     return templates.TemplateResponse(
-        "reports.html",
-        {
-            "request": request,
+        name="reports.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "total_cards": len(filtered_records),
             "status_counts": status_counts,
@@ -298,9 +298,9 @@ async def reports_day(
         target_date = date_type.fromisoformat(report_date)
     except ValueError:
         return templates.TemplateResponse(
-            "404.html",
-            {
-                "request": request,
+            name="404.html",
+            request=request,
+            context={
                 "event_name": config.event_name,
                 "message": f"Invalid date format: {report_date}",
             },
@@ -318,9 +318,9 @@ async def reports_day(
 
     if not records:
         return templates.TemplateResponse(
-            "404.html",
-            {
-                "request": request,
+            name="404.html",
+            request=request,
+            context={
                 "event_name": config.event_name,
                 "message": f"No extracted records found for {target_date.strftime('%A, %B %d, %Y')}.",
             },
@@ -330,9 +330,9 @@ async def reports_day(
     stats = _compute_stats(records)
 
     return templates.TemplateResponse(
-        "report_day.html",
-        {
-            "request": request,
+        name="report_day.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "date": target_date,
             "date_label": target_date.strftime("%A, %B %d, %Y"),
