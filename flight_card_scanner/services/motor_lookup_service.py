@@ -249,6 +249,7 @@ class MotorLookupService:
                     "avgThrustN": match.get("avgThrustN"),
                     "diameter": match.get("diameter"),
                     "impulseClass": match.get("impulseClass"),
+                    "source_url": match.get("source_url"),
                 }
                 motor.pop("thrustcurve_candidates", None)
                 motor.pop("thrustcurve_error", None)
@@ -372,6 +373,7 @@ class MotorLookupService:
                         "avgThrustN": motor_data.get("avgThrustN"),
                         "diameter": motor_data.get("diameter"),
                         "impulseClass": motor_data.get("impulseClass"),
+                        "source_url": motor_data.get("source_url"),
                     }
                 else:
                     motor_copy["thrustcurve_data"] = None

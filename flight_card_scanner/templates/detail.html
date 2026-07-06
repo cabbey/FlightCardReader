@@ -930,7 +930,7 @@
                 <span class="motor-qty-display" data-motor-index="{{ loop.index0 }}" data-value="{{ motor.quantity or 1 }}" title="Click to edit quantity">{{ motor.quantity or 1 }}×</span>
                 {% if motor.thrustcurve_id and motor.thrustcurve_data %}
                 <span class="motor-designation">
-                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
+                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation | replace('/', '%2F') ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% elif motor.thrustcurve_id %}
