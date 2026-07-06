@@ -250,6 +250,14 @@ async def update_fields(
     return record
 
 
+def display_fractions(s: str) -> str:
+    """Convert ASCII fraction prefixes to unicode for display.
+
+    '1/2A' → '½A', '1/4A' → '¼A'. Other strings pass through unchanged.
+    """
+    return s.replace("1/2A", "\u00bdA").replace("1/4A", "\u00bcA")
+
+
 def _format_motor(motor: dict[str, Any]) -> str:
     """Format a single motor dict into a designation string.
 
@@ -284,7 +292,7 @@ def _format_motor(motor: dict[str, Any]) -> str:
         parts.append("-")
         parts.append(suffix)
 
-    return " ".join(parts)
+    return display_fractions(" ".join(parts))
 
 
 def _format_stage(stage: list[dict[str, Any]]) -> str:
