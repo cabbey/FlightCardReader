@@ -2061,7 +2061,7 @@
       var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
 
       // Extract letter/number from the query for search context
-      var match = query.match(/^(1\/[248]A|[A-O])(\d+)/i);
+      var match = query.match(/^(1\/[24]A|[A-O])(\d+)/i);
       var searchContext = {};
       if (match) {
         searchContext.letter = match[1].toUpperCase();
