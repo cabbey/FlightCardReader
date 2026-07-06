@@ -965,8 +965,6 @@
                     <label class="tc-field-label">Class
                       <select class="field-select tc-field-letter">
                         <option value="">—</option>
-                        <option value="¼A"{{ ' selected' if motor.letter == '¼A' else '' }}>¼A</option>
-                        <option value="½A"{{ ' selected' if motor.letter == '½A' else '' }}>½A</option>
                         {% if tc_metadata and tc_metadata.impulseClasses %}
                           {% for cls in tc_metadata.impulseClasses %}
                         <option value="{{ cls }}"{{ ' selected' if cls == motor.letter else '' }}>{{ cls }}</option>
