@@ -2079,7 +2079,10 @@
   });
 
   function registerMotorChange(idx, changes) {
-    pendingMotorChanges[idx] = changes;
+    if (!pendingMotorChanges[idx]) pendingMotorChanges[idx] = {};
+    Object.keys(changes).forEach(function(k) {
+      pendingMotorChanges[idx][k] = changes[k];
+    });
     // Register a synthetic pending change so the Save button activates
     pendingChanges['_motor_' + idx] = changes.thrustcurve_id || '_modified';
     updateSaveButton();
