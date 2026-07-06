@@ -89,7 +89,7 @@ def _normalize_common_name(name: str) -> str:
     """
     s = name.strip().upper()
     for unicode_frac, ascii_frac in _UNICODE_TO_ASCII_FRACTIONS.items():
-        s = s.replace(unicode_frac.upper(), ascii_frac)
+        s = s.replace(unicode_frac, ascii_frac)
     return s
 
 
