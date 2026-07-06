@@ -133,7 +133,7 @@
 <h3 class="section-title">Motors by Impulse Class</h3>
 <div class="motor-pills">
   {% for letter, count in motor_counts.items() %}
-  <span class="motor-pill">{{ letter }}: {{ count }}</span>
+  <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
   {% endfor %}
 </div>
 {% endif %}
@@ -160,7 +160,7 @@
         <td class="numeric">{{ stats.motor_total }}</td>
         <td>
           {% for letter, count in stats.motors.items() %}
-          <span class="motor-pill">{{ letter }}: {{ count }}</span>
+          <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
           {% endfor %}
         </td>
         <td class="numeric">{{ "%.1f"|format(stats.impulse_ns) if stats.impulse_ns else "—" }}</td>

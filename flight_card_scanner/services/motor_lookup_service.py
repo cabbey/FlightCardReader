@@ -70,6 +70,30 @@ _MANUFACTURER_ALIASES: dict[str, str] = {
 }
 
 
+# Fraction normalization: map between unicode fractions and ASCII equivalents
+# used in thrustcurve-db commonName values (e.g. "1/4A3", "1/2A6").
+_UNICODE_TO_ASCII_FRACTIONS: dict[str, str] = {
+    "\u00bc": "1/4",  # ¼
+    "\u00bd": "1/2",  # ½
+}
+_ASCII_TO_UNICODE_FRACTIONS: dict[str, str] = {v: k for k, v in _UNICODE_TO_ASCII_FRACTIONS.items()}
+
+
+def _normalize_common_name(name: str) -> str:
+    """Normalize a motor common name for index lookup.
+
+    Ensures consistent key regardless of whether the source uses
+    unicode fractions (¼A, ½A) or ASCII fractions (1/4A, 1/2A).
+    The canonical form uses ASCII fractions uppercased, matching
+    the thrustcurve-db convention.
+    """
+    s = name.strip().upper()
+    for unicode_frac, ascii_frac in _UNICODE_TO_ASCII_FRACTIONS.items():
+        s = s.replace(unicode_frac.upper(), ascii_frac)
+        s = s.replace(unicode_frac, ascii_frac)
+    return s
+
+
 class MotorLookupService:
     """In-memory motor database loaded from thrustcurve-db npm package."""
 
@@ -121,20 +145,21 @@ class MotorLookupService:
         manufacturers: dict[str, str] = {}  # abbrev -> abbrev
 
         for motor in self._motors:
-            # Extract impulse class letter from commonName (first char)
-            cn = motor.get("commonName", "")
-            if cn:
-                letter = cn.strip()[0].upper()
-                if letter.isalpha():
-                    impulse_classes.add(letter)
+            # Use the impulseClass field directly from thrustcurve-db.
+            # Sub-A motors (¼A, ½A) have impulseClass "A" in the database
+            # and their commonName uses the "1/2A" / "1/4A" prefix which is
+            # handled by _normalize_common_name() during lookup.
+            ic = motor.get("impulseClass", "")
+            if ic and len(ic) == 1 and ic.isalpha():
+                impulse_classes.add(ic.upper())
 
             # Collect unique manufacturers
             abbrev = motor.get("manufacturerAbbrev", "")
             if abbrev and abbrev not in manufacturers:
                 manufacturers[abbrev] = abbrev
 
-        # Sort impulse classes in standard order
-        standard_order = ["\u00bcA", "\u00bdA"] + list("ABCDEFGHIJKLMNOP")
+        # Sort impulse classes in standard order (A–P)
+        standard_order = list("ABCDEFGHIJKLMNOP")
         sorted_classes = sorted(
             impulse_classes, key=lambda c: standard_order.index(c) if c in standard_order else 99
         )
@@ -151,10 +176,10 @@ class MotorLookupService:
     def _build_indexes(self) -> None:
         """Build lookup indexes from the motor list."""
         for motor in self._motors:
-            # Index by commonName (case-insensitive key)
+            # Index by commonName (normalized, case-insensitive key)
             cn = motor.get("commonName", "")
             if cn:
-                key = cn.strip().upper()
+                key = _normalize_common_name(cn)
                 self._by_common_name.setdefault(key, []).append(motor)
 
             # Index by motorId
@@ -193,7 +218,7 @@ class MotorLookupService:
         self, common_name: str, manufacturer: str | None = None
     ) -> list[dict[str, Any]]:
         """Search for motors by common name and optional manufacturer."""
-        key = common_name.strip().upper()
+        key = _normalize_common_name(common_name)
         candidates = self._by_common_name.get(key, [])
 
         if manufacturer and candidates:

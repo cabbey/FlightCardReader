@@ -309,9 +309,9 @@ async def list_records(
     current_mode = extraction_service.mode.value
 
     return templates.TemplateResponse(
-        "list.html",
-        {
-            "request": request,
+        name="list.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "records": records,
             "status_counts": status_counts,
@@ -379,9 +379,9 @@ async def queue_status(
         processing_records.sort(key=lambda x: x["id"])
 
     return templates.TemplateResponse(
-        "queue.html",
-        {
-            "request": request,
+        name="queue.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "queued_records": queued_records,
             "processing_records": processing_records,
@@ -411,9 +411,9 @@ async def detail_record(
 
     if record_obj is None:
         return templates.TemplateResponse(
-            "404.html",
-            {
-                "request": request,
+            name="404.html",
+            request=request,
+            context={
                 "event_name": config.event_name,
                 "message": f"Flight record #{record_id} does not exist.",
             },
@@ -519,9 +519,9 @@ async def detail_record(
                     motor["_resolved_manufacturer"] = resolved
 
     return templates.TemplateResponse(
-        "detail.html",
-        {
-            "request": request,
+        name="detail.html",
+        request=request,
+        context={
             "event_name": config.event_name,
             "record": record_obj,
             "prev_id": prev_id,

@@ -283,7 +283,7 @@
   {% if stats.motor_counts %}
   <div class="motor-pills">
     {% for letter, count in stats.motor_counts.items() %}
-    <span class="motor-pill">{{ letter }}: {{ count }}</span>
+    <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
     {% endfor %}
   </div>
   {% endif %}
@@ -312,7 +312,7 @@
         <td class="numeric">{{ "%.1f"|format(fstats.impulse_ns) if fstats.impulse_ns else "—" }}</td>
         <td>
           {% for letter, count in fstats.motors.items() %}
-          <span class="motor-pill">{{ letter }}: {{ count }}</span>
+          <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
           {% endfor %}
         </td>
       </tr>

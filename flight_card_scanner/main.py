@@ -25,6 +25,7 @@ from .routers import admin, reports, review, scan
 from .services.extraction_service import ExtractionMode, ExtractionService
 from .services.flier_match_service import FlierMatchService
 from .services.motor_lookup_service import MotorLookupService
+from .services.record_service import display_fractions
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +241,8 @@ async def lifespan(app: FastAPI):
 
     # 6. Configure routers with their dependencies
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    # Register custom filter for displaying ASCII fractions as unicode
+    templates.env.filters["display_fractions"] = display_fractions
     scan.configure(config=config, extraction_service=extraction_service, templates=templates)
     admin.configure(
         extraction_service=extraction_service,
