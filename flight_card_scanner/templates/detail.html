@@ -973,7 +973,7 @@
                 <span class="motor-qty-display" data-motor-index="{{ loop.index0 }}" data-value="{{ motor.quantity or 1 }}" title="Click to edit quantity">{{ motor.quantity or 1 }}×</span>
                 {% if motor.thrustcurve_id and motor.thrustcurve_data %}
                 <span class="motor-designation">
-                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName | display_fractions }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
+                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation | replace('/', '%2F') ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName | display_fractions }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% elif motor.thrustcurve_id %}
@@ -2061,7 +2061,10 @@
       var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
 
       // Extract letter/number from the query for search context
-      var match = query.match(/^(1\/[248]A|[A-O])(\d+)/i);
+      var normalizedQuery = query.toUpperCase()
+        .replace(/½/g, '1/2')
+        .replace(/¼/g, '1/4');
+      var match = normalizedQuery.match(/^(1\/[24]A|[A-O])(\d+)/);
       var searchContext = {};
       if (match) {
         searchContext.letter = match[1].toUpperCase();
