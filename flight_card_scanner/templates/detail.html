@@ -788,8 +788,11 @@
     <h2>Record #{{ record.id }}</h2>
     <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
     <span class="header-meta">{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "" }}</span>
+    {% if not read_only %}
     <span class="edit-hint">(click any value to edit)</span>
+    {% endif %}
   </div>
+  {% if not read_only %}
   <div class="header-actions">
     <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
     <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
@@ -807,6 +810,7 @@
     {% endif %}
     <button type="button" class="btn-redundant" id="btnRedundant" style="font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #dc2626; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:0.5rem;">Remove (Redundant)</button>
   </div>
+  {% endif %}
 </div>
 
 <div class="detail-layout">
@@ -1001,6 +1005,7 @@
                 {% elif not motor.thrustcurve_id %}
                 <span class="tc-status tc-pending">? Not looked up</span>
                 {% endif %}
+                {% if not read_only %}
                 <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
                   <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Search ThrustCurve">🔍</button>
                   <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}" style="{{ '' if motor.thrustcurve_candidates else 'display:none;' }}">Select</button>
@@ -1052,6 +1057,7 @@
                     </div>
                   </div>
                 </div>
+                {% endif %}
               </div>
               {% else %}
                 {# Legacy nested format #}
@@ -1060,16 +1066,22 @@
                 {% endfor %}{% if not loop.last %} / {% endif %}
               {% endif %}
             {% endfor %}
+            {% if not read_only %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
+            {% endif %}
           </dd>
           {% else %}
           <dt>Motors</dt>
           <dd>
+            {% if not read_only %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
+            {% else %}
+            <span>—</span>
+            {% endif %}
           </dd>
           {% endif %}
 
@@ -1286,8 +1298,21 @@
     return s.replace(/1\/2A/g, '\u00bdA').replace(/1\/4A/g, '\u00bcA');
   }
 
+  var isReadOnly = {{ 'true' if read_only else 'false' }};
+
   // --- Inline editing logic ---
 
+  if (isReadOnly) {
+    // In read-only mode, remove cursor styling from editable fields
+    document.querySelectorAll('.editable-field .field-display').forEach(function(el) {
+      el.style.cursor = 'default';
+    });
+    document.querySelectorAll('.motor-qty-display').forEach(function(el) {
+      el.style.cursor = 'default';
+    });
+  }
+
+  if (!isReadOnly) {
   document.querySelectorAll('.editable-field').forEach(function(wrapper) {
     var display = wrapper.querySelector('.field-display');
     display.addEventListener('click', function() {
@@ -2427,6 +2452,7 @@
       updateSaveButton();
     });
   }
+  } // end if (!isReadOnly)
 })();
 </script>
 {% endblock %}

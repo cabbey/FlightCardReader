@@ -352,6 +352,12 @@
 <div style="margin-bottom:0.75rem;">
   <a href="/" style="color:#2563eb; text-decoration:none; font-size:0.85rem;">&larr; Back to list</a>
 </div>
+{% if read_only %}
+<div style="text-align:center; padding:2rem; color:#6b7280;">
+  <p style="font-size:1.1rem; font-weight:500;">This event is in read-only mode.</p>
+  <p>Card scanning is disabled.</p>
+</div>
+{% else %}
 <div class="scan-container">
   <!-- State 1: Live Preview -->
   <div id="livePreviewState">
@@ -505,4 +511,5 @@ if (qrSelect) {
 })();
 </script>
 <script src="/static/js/scanner.js"></script>
+{% endif %}
 {% endblock %}

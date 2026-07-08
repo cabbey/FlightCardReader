@@ -37,20 +37,26 @@ _engine: AsyncEngine | None = None
 _async_session: async_sessionmaker[AsyncSession] | None = None
 
 
-def init_engine(db_path: Path) -> AsyncEngine:
+def init_engine(db_path: Path, read_only: bool = False) -> AsyncEngine:
     """Create and store the async engine and session factory.
 
     Call this once during application startup (e.g., in the FastAPI lifespan).
 
     Args:
         db_path: Filesystem path to the SQLite database file.
+        read_only: If True, open the database in read-only mode (SQLite URI mode).
 
     Returns:
         The newly created ``AsyncEngine``.
     """
     global _engine, _async_session
 
-    url = f"sqlite+aiosqlite:///{db_path}"
+    if read_only:
+        # Use SQLite URI mode with ?mode=ro for true read-only access
+        uri_path = str(db_path).replace("?", "%3f").replace("#", "%23")
+        url = f"sqlite+aiosqlite:///file:{uri_path}?mode=ro&uri=true"
+    else:
+        url = f"sqlite+aiosqlite:///{db_path}"
     _engine = create_async_engine(url, echo=False)
     _async_session = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
