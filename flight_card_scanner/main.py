@@ -55,6 +55,12 @@ def _check_image_store(config: AppConfig) -> None:
     """Verify Image Store directory exists and is writable; create if absent."""
     image_path = config.image_store_path
     if not image_path.exists():
+        if config.read_only:
+            logger.warning(
+                "Image store directory does not exist: %s (read-only mode, skipping creation)",
+                image_path,
+            )
+            return
         try:
             image_path.mkdir(parents=True, exist_ok=True)
             logger.info("Created image store directory: %s", image_path)
@@ -64,7 +70,7 @@ def _check_image_store(config: AppConfig) -> None:
             )
             sys.exit(1)
 
-    if not os.access(image_path, os.W_OK):
+    if not config.read_only and not os.access(image_path, os.W_OK):
         logger.error(
             "Image store directory is not writable: %s", image_path
         )
@@ -74,13 +80,18 @@ def _check_image_store(config: AppConfig) -> None:
 async def _check_database(config: AppConfig) -> None:
     """Verify DB file is accessible; init schema if needed."""
     db_path = config.db_path
-    # Ensure the parent directory exists
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    if not config.read_only:
+        # Ensure the parent directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        engine = init_engine(db_path)
-        await create_all(engine)
-        logger.info("Database initialised at %s", db_path)
+        engine = init_engine(db_path, read_only=config.read_only)
+        if not config.read_only:
+            await create_all(engine)
+        logger.info(
+            "Database initialised at %s%s",
+            db_path, " (read-only)" if config.read_only else ""
+        )
     except Exception as exc:
         logger.error(
             "Cannot initialise database at %s: %s", db_path, exc
@@ -178,68 +189,73 @@ async def lifespan(app: FastAPI):
         flier_match_service=flier_match_service,
     )
 
-    # Roll back any records stuck in "processing" from a previous unclean shutdown
-    async with session_factory() as db:
-        stale_records = await record_service.get_by_status(db, "processing")
-        for record in stale_records:
-            await record_service.set_status(db, record.id, "pending")
-        if stale_records:
-            logger.info(
-                "Rolled back %d stale 'processing' records to 'pending'",
-                len(stale_records),
-            )
+    if not config.read_only:
+        # Roll back any records stuck in "processing" from a previous unclean shutdown
+        async with session_factory() as db:
+            stale_records = await record_service.get_by_status(db, "processing")
+            for record in stale_records:
+                await record_service.set_status(db, record.id, "pending")
+            if stale_records:
+                logger.info(
+                    "Rolled back %d stale 'processing' records to 'pending'",
+                    len(stale_records),
+                )
 
-    # Upgrade pending records that already have meaningful extracted data to "extracted"
-    async with session_factory() as db:
-        pending_records = await record_service.get_by_status(db, "pending")
-        upgraded_count = 0
-        for record in pending_records:
-            # Check if the record has any meaningful data beyond just
-            # the image — if so, it was already extracted at some point
-            has_flier = bool(record.flier_name)
-            has_motors = bool((record.overflow or {}).get("motors"))
-            has_rocket = bool((record.overflow or {}).get("rocket_name"))
-            has_impulse = record.total_impulse_value is not None
-            has_evaluation = bool(record.evaluation_outcome)
-            if has_flier or has_motors or has_rocket or has_impulse or has_evaluation:
+        # Upgrade pending records that already have meaningful extracted data to "extracted"
+        async with session_factory() as db:
+            pending_records = await record_service.get_by_status(db, "pending")
+            upgraded_count = 0
+            for record in pending_records:
+                # Check if the record has any meaningful data beyond just
+                # the image — if so, it was already extracted at some point
+                has_flier = bool(record.flier_name)
+                has_motors = bool((record.overflow or {}).get("motors"))
+                has_rocket = bool((record.overflow or {}).get("rocket_name"))
+                has_impulse = record.total_impulse_value is not None
+                has_evaluation = bool(record.evaluation_outcome)
+                if has_flier or has_motors or has_rocket or has_impulse or has_evaluation:
+                    await record_service.set_status(db, record.id, "extracted")
+                    upgraded_count += 1
+            if upgraded_count:
+                logger.info(
+                    "Upgraded %d pending records with existing data to 'extracted'",
+                    upgraded_count,
+                )
+
+        # Fix any human_verified records that aren't in "extracted" state
+        async with session_factory() as db:
+            from sqlalchemy import select as _select
+            from .models import FlightRecord
+            stmt = (
+                _select(FlightRecord)
+                .where(FlightRecord.human_verified == True)  # noqa: E712
+                .where(FlightRecord.extraction_status != "extracted")
+            )
+            result = await db.execute(stmt)
+            mismatched = list(result.scalars().all())
+            for record in mismatched:
                 await record_service.set_status(db, record.id, "extracted")
-                upgraded_count += 1
-        if upgraded_count:
-            logger.info(
-                "Upgraded %d pending records with existing data to 'extracted'",
-                upgraded_count,
-            )
+            if mismatched:
+                logger.info(
+                    "Fixed %d human-verified records with incorrect extraction_status",
+                    len(mismatched),
+                )
 
-    # Fix any human_verified records that aren't in "extracted" state
-    async with session_factory() as db:
-        from sqlalchemy import select as _select
-        from .models import FlightRecord
-        stmt = (
-            _select(FlightRecord)
-            .where(FlightRecord.human_verified == True)  # noqa: E712
-            .where(FlightRecord.extraction_status != "extracted")
-        )
-        result = await db.execute(stmt)
-        mismatched = list(result.scalars().all())
-        for record in mismatched:
-            await record_service.set_status(db, record.id, "extracted")
-        if mismatched:
-            logger.info(
-                "Fixed %d human-verified records with incorrect extraction_status",
-                len(mismatched),
-            )
+        await extraction_service.start()
+        logger.info("Extraction service started.")
 
-    await extraction_service.start()
-    logger.info("Extraction service started.")
-
-    # In immediate mode, enqueue any pending records (including rolled-back ones)
-    if extraction_service.mode == ExtractionMode.IMMEDIATE:
-        dispatched = await extraction_service.trigger_pending()
-        if dispatched:
-            logger.info("Enqueued %d pending records for extraction", dispatched)
+        # In immediate mode, enqueue any pending records (including rolled-back ones)
+        if extraction_service.mode == ExtractionMode.IMMEDIATE:
+            dispatched = await extraction_service.trigger_pending()
+            if dispatched:
+                logger.info("Enqueued %d pending records for extraction", dispatched)
+    else:
+        logger.info("Read-only mode: extraction service and data migrations skipped.")
 
     # 6. Configure routers with their dependencies
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    # Make read_only available in all templates as a global
+    templates.env.globals["read_only"] = config.read_only
     scan.configure(config=config, extraction_service=extraction_service, templates=templates)
     admin.configure(
         extraction_service=extraction_service,
@@ -268,8 +284,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # 7. Graceful shutdown: stop extraction service
-    await extraction_service.stop()
-    logger.info("Extraction service stopped.")
+    if not config.read_only:
+        await extraction_service.stop()
+        logger.info("Extraction service stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +294,19 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def read_only_guard(request, call_next):
+    """Block all mutating requests when the application is in read-only mode."""
+    config = getattr(getattr(request.app, "state", None), "config", None)
+    if config and config.read_only and request.method not in ("GET", "HEAD", "OPTIONS"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Event is in read-only mode. No modifications allowed."},
+        )
+    return await call_next(request)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
