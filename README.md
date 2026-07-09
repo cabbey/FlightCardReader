@@ -13,24 +13,72 @@ The extraction can run in two modes:
 - **Immediate** — extraction begins as soon as a card is scanned.
 - **Deferred** — images are queued and extraction is triggered manually via the admin API.
 
+## Deployment Options
+
+### Docker (recommended for production)
+
+The application ships with a multi-stage Alpine-based Dockerfile (~220 MB image).
+
+```bash
+docker build -t flight-card-scanner .
+docker run -d \
+  --name flight-card-scanner \
+  --restart unless-stopped \
+  -v /srv/flight-cards:/data \
+  -p 127.0.0.1:12345:80 \
+  flight-card-scanner
+```
+
+Or use Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+The container listens on port 80 internally. Mount a `/data` volume containing your `config.json` and event data. All relative paths in the config are resolved relative to the config file's directory.
+
+See **[DEPLOY.md](DEPLOY.md)** for the full deployment guide including Tailscale Funnel configuration.
+
+### Tailscale Funnel (HTTPS for public access)
+
+For serving the app over the internet with automatic TLS certificates, use Tailscale Funnel on the Docker host:
+
+```bash
+sudo tailscale funnel --bg localhost:12345
+```
+
+This provisions a certificate for your `*.ts.net` domain, terminates TLS on the host, and proxies plain HTTP to the container. The app is then reachable at `https://yourhost.tail1234.ts.net`.
+
+For tailnet-only access (no public internet):
+
+```bash
+sudo tailscale serve --bg localhost:12345
+```
+
+See **[DEPLOY.md](DEPLOY.md)** for details on requirements, Docker Compose setup, and troubleshooting.
+
+### Local Development
+
+```bash
+cd FlightCardReader
+python3 -m venv .venv
+source .venv/bin/activate
+pip install fastapi uvicorn[standard] sqlalchemy aiosqlite httpx \
+            pydantic jinja2 python-multipart pillow rapidfuzz segno
+pnpm install
+python -m flight_card_scanner
+```
+
 ## Prerequisites
 
-- **Ubuntu Linux** (22.04 or later recommended)
-- **Python 3.13+**
-- **Node.js 18+** and **pnpm** (for client-side OpenCV.js dependency)
+- **Python 3.12+** (3.10+ minimum for type annotations)
+- **Node.js 18+** and **pnpm** (for client-side OpenCV.js and thrustcurve-db)
 - **Ollama** with the `qwen3-vl` model pulled and running
 
 ### Installing Ollama
 
-Follow the official instructions at [https://ollama.com/download/linux](https://ollama.com/download/linux):
-
 ```bash
 curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-Then pull the vision model:
-
-```bash
 ollama pull qwen3-vl
 ```
 
@@ -38,63 +86,34 @@ Ollama listens on `http://localhost:11434` by default.
 
 ### Installing pnpm
 
-If you don't already have pnpm:
-
-```bash
-npm install -g pnpm
-```
-
-Or via corepack (bundled with Node.js 16.9+):
-
 ```bash
 corepack enable
 corepack prepare pnpm@latest --activate
 ```
 
-## Installation
-
-Clone the repository and set up the Python virtual environment:
-
-```bash
-cd FlightCardReader
-
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Python dependencies
-pip install fastapi uvicorn[standard] sqlalchemy aiosqlite httpx \
-            pydantic jinja2 python-multipart
-```
-
-Install the client-side JavaScript dependencies (OpenCV.js):
-
-```bash
-pnpm install
-```
-
-This places `opencv.js` into `flight_card_scanner/static/js/node_modules/` where the application expects it.
+Or: `npm install -g pnpm`
 
 ## Configuration
 
-The application reads its configuration from a JSON file. By default it looks for `config.json` in the current working directory. You can override this with the `CONFIG_PATH` environment variable.
+The application reads its configuration from a JSON file. By default it looks for `config.json` in the current working directory. Override with the `CONFIG_PATH` environment variable.
 
-### config.json
+Path values that are not absolute are resolved relative to the directory containing the config file. This allows the same config to work regardless of the process working directory (important for Docker deployments where the config lives in `/data`).
+
+### Example config.json
 
 ```json
 {
   "host": "0.0.0.0",
-  "port": 8000,
-  "event_data_path": "./data",
-  "thrustcurve_cache_path": "./thrustcurve_cache",
-  "event_name": "My Launch Event 2025",
+  "port": 80,
+  "event_data_path": "./myevent",
+  "event_name": "My Launch Event 2026",
   "event_date_range": {
-    "start": "2025-07-18",
-    "end": "2025-07-20"
+    "start": "2026-07-04",
+    "end": "2026-07-06"
   },
   "extraction_mode": "immediate",
   "extraction_endpoints": [
-    { "url": "http://localhost:11434", "concurrency": 2 }
+    { "url": "http://host.docker.internal:11434", "concurrency": 2 }
   ]
 }
 ```
@@ -105,67 +124,52 @@ The application reads its configuration from a JSON file. By default it looks fo
 |-----|------|---------|-------------|
 | `host` | string | `"0.0.0.0"` | Address to bind the HTTP server to |
 | `port` | integer | `8000` | Port to listen on |
-| `event_data_path` | string | `"./data"` | Base directory for event data. Images are stored in `<event_data_path>/images/` and the database at `<event_data_path>/flight_cards.db`. |
-| `thrustcurve_cache_path` | string | `"./thrustcurve_cache"` | Directory for caching ThrustCurve.org motor data. |
+| `event_data_path` | string | `"./data"` | Base directory for event data. Images stored in `<path>/images/`, database at `<path>/flight_cards.db`. Relative paths resolve against the config file's directory. |
 | `event_name` | string | `"Flight Card Scanner"` | Display name shown in the web UI |
-| `event_date_range` | object | today–today | Inclusive start/end dates (ISO 8601) for the launch event. Used to resolve day-of-week dates written on cards. |
+| `event_date_range` | object | today-today | Inclusive start/end dates (ISO 8601) for the event. Used to resolve day-of-week dates. |
 | `extraction_mode` | string | `"immediate"` | `"immediate"` or `"deferred"`. Controls whether extraction runs automatically on upload. |
-| `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit (number of parallel requests). |
-| `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Optional — enables HTTPS when paired with `ssl_keyfile`. |
-| `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Optional — enables HTTPS when paired with `ssl_certfile`. |
-| `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification. Requires `flier_match_model` to also be set. |
-| `flier_match_model` | string | *(none)* | Ollama model name used for flier name matching (e.g., `qwen2.5:7b`). Required when `known_fliers_path` is set. |
+| `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit. |
+| `ssl_certfile` | string | *(none)* | Path to TLS certificate (PEM). Enables HTTPS when paired with `ssl_keyfile`. Not needed when using Tailscale Funnel. |
+| `ssl_keyfile` | string | *(none)* | Path to TLS private key (PEM). |
+| `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification. |
+| `flier_match_model` | string | *(none)* | Ollama model for flier name matching (e.g., `qwen2.5:7b`). |
+| `auto_accept_threshold` | float | `0.95` | Confidence threshold for automatic flier verification. |
+| `read_only` | boolean | `false` | When `true`, locks the event into a view-only archive. See [Read-Only Mode](#read-only-mode). |
 
 All keys are optional — defaults are applied for any missing key.
 
-## Running the Application
+## Read-Only Mode
 
-Make sure Ollama is running, then start the server:
+Set `"read_only": true` in config.json to lock down a completed event:
 
-```bash
-source .venv/bin/activate
-python -m flight_card_scanner
-```
+- **Database** opens in read-only mode (SQLite `?mode=ro`) — writes are physically impossible
+- **All write APIs** return `403 Forbidden` with "Event is in read-only mode"
+- **UI editing controls** are hidden (Save, Verify, Extract, Requeue, Remove, motor editing, scan page)
+- **Extraction service** is not started; startup migrations are skipped
 
-This reads `config.json` (or `CONFIG_PATH`) and starts uvicorn on the configured host/port with SSL if configured.
-
-Or use a custom config path:
-
-```bash
-CONFIG_PATH=/path/to/my-config.json python -m flight_card_scanner
-```
-
-You can also use uvicorn directly (without automatic SSL):
-
-```bash
-uvicorn flight_card_scanner.main:app --host 0.0.0.0 --port 8000
-```
-
-The app will:
-1. Create the image store directory if it doesn't exist.
-2. Initialize the SQLite database schema.
-3. Verify that OpenCV.js is installed.
-4. Start extraction worker tasks for each configured endpoint.
+This is useful for archiving an event after all cards have been processed and verified, preventing accidental modifications while still allowing browsing and reports.
 
 ## Using the Application
 
 ### Web Interface
 
-- **`/`** — Review list: paginated table of all scanned records with search.
-- **`/scan`** (browser) — Camera UI: opens the device camera for capturing flight cards. Detected card edges are highlighted in real-time using OpenCV.js. Tap to capture, then accept or retake.
-- **`/record/{id}`** — Detail view: shows the original image alongside all extracted fields.
+- **`/`** — Review list: paginated table of all scanned records with search, filters (verified status, extraction status, flight day, impulse class), and measurement proximity search.
+- **`/scan`** — Camera UI: opens the device camera for capturing flight cards. Card edges are highlighted in real-time using OpenCV.js.
+- **`/record/{id}`** — Detail view: original image alongside all extracted fields with inline editing.
+- **`/reports`** — Event statistics: flier counts, motor breakdown by impulse class, per-day reports.
+- **`/queue`** — Extraction queue status with processing indicators.
 
 ### API Endpoints
 
-- **`POST /api/scan`** — Upload a card image (multipart form, field name `card_image`). Accepts JPEG or PNG. Returns `201` with `{ "record_id": N }`.
+- **`POST /api/scan`** — Upload a card image (multipart form, field `card_image`). Returns `201` with `{ "record_id": N }`.
 - **`POST /api/admin/mode`** — Switch extraction mode. Body: `{ "mode": "immediate" }` or `{ "mode": "deferred" }`.
-- **`POST /api/admin/trigger`** — Manually trigger extraction of all pending records.
-- **`POST /api/admin/requeue`** — Reset all failed records to pending and re-enqueue.
-- **`POST /api/admin/requeue/{record_id}`** — Reset a single failed record.
+- **`POST /api/admin/trigger`** — Trigger extraction of all pending records.
+- **`POST /api/admin/requeue`** — Reset all failed records to pending.
+- **`PUT /api/admin/record/{id}`** — Update fields on a record (human review corrections).
 
 ## Running Multiple Ollama Endpoints
 
-For faster extraction at busy launches, you can distribute work across multiple machines running Ollama. List each in the `extraction_endpoints` array:
+For faster extraction at busy launches, distribute work across multiple machines:
 
 ```json
 "extraction_endpoints": [
@@ -174,81 +178,18 @@ For faster extraction at busy launches, you can distribute work across multiple 
 ]
 ```
 
-The concurrency value controls how many images are sent to that endpoint in parallel. Total worker count equals the sum of all concurrency values.
+Total worker count equals the sum of all concurrency values.
 
-## HTTPS with Tailscale
+## HTTPS with Tailscale (direct, non-Docker)
 
-Mobile browsers (especially iOS Safari) require HTTPS for camera access. The simplest way to get valid HTTPS certificates for local/home use is through Tailscale's built-in certificate provisioning.
+For local development or non-Docker deployments where the app handles TLS directly:
 
-### Prerequisites
+1. Install Tailscale on the server and mobile devices
+2. Generate certificates: `tailscale cert <hostname>`
+3. Add `ssl_certfile` and `ssl_keyfile` to config.json
+4. Start the server — it will serve HTTPS directly
 
-- Tailscale installed on the server and on any mobile devices that will scan cards
-- All devices logged into the same Tailnet
-- MagicDNS enabled in your Tailscale admin console (enabled by default)
-- HTTPS certificates enabled in Tailscale admin console: **DNS** → **HTTPS Certificates** → Enable
-
-### Generating Certificates
-
-Run on the server (the machine running Flight Card Scanner):
-
-```bash
-tailscale cert $(tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))")
-```
-
-This creates two files in the current directory:
-- `<hostname>.crt` — the certificate (signed by Let's Encrypt via Tailscale)
-- `<hostname>.key` — the private key
-
-For example, if your machine is `cheshire.neon-tegus.ts.net`:
-- `cheshire.neon-tegus.ts.net.crt`
-- `cheshire.neon-tegus.ts.net.key`
-
-### Configuring the Application
-
-Add the certificate paths to your `config.json`:
-
-```json
-{
-  "host": "0.0.0.0",
-  "port": 8000,
-  "ssl_certfile": "/home/user/FlightCardReader/cheshire.neon-tegus.ts.net.crt",
-  "ssl_keyfile": "/home/user/FlightCardReader/cheshire.neon-tegus.ts.net.key",
-  ...
-}
-```
-
-Then start the server:
-
-```bash
-python -m flight_card_scanner
-```
-
-You'll see:
-```
-INFO:     SSL enabled — using cert: /home/user/FlightCardReader/cheshire.neon-tegus.ts.net.crt
-INFO:     Starting HTTPS server on 0.0.0.0:8000
-```
-
-The scan page will automatically generate QR codes with `https://` URLs for Tailscale addresses, making them work with iOS camera access.
-
-### Certificate Renewal
-
-Tailscale certificates are valid for 90 days. When a certificate expires, the server will detect it at startup and fall back to HTTP with a clear warning:
-
-```
-WARNING:  SSL disabled — certificate expired on 2025-09-15 12:00 UTC
-          Run 'tailscale cert <hostname>' to renew
-```
-
-To renew, re-run the `tailscale cert` command and restart the server.
-
-### Troubleshooting Tailscale HTTPS
-
-- **"SSL not configured"** — `ssl_certfile` and/or `ssl_keyfile` are not set in config.json
-- **"certificate file not found"** — the path in config.json doesn't point to an existing file
-- **"certificate expired"** — run `tailscale cert <hostname>` to get a fresh certificate
-- **Phone can't connect** — make sure the phone has Tailscale installed, is logged into the same tailnet, and has the VPN toggle enabled
-- **Camera still blocked** — verify you're accessing via the `https://` URL (not `http://`). The QR code on the scan page should show the correct `https://` URL for Tailscale addresses.
+For Docker deployments, use **Tailscale Funnel** instead (TLS termination happens on the host, not in the container). See [DEPLOY.md](DEPLOY.md).
 
 ## Running Tests
 
@@ -261,7 +202,11 @@ python -m pytest tests/ -v
 
 ```
 FlightCardReader/
+├── Dockerfile                         # Multi-stage Alpine build
+├── compose.yaml                       # Docker Compose configuration
+├── DEPLOY.md                          # Full deployment guide (Docker + Tailscale Funnel)
 ├── config.json                        # Application configuration
+├── package.json                       # pnpm manifest (opencv.js, thrustcurve-db)
 ├── flight_card_scanner/              # Python package (FastAPI app)
 │   ├── main.py                       # App factory, lifespan, startup checks
 │   ├── config.py                     # Configuration loading and validation
@@ -270,30 +215,35 @@ FlightCardReader/
 │   ├── schemas.py                    # Pydantic request/response models
 │   ├── exceptions.py                 # Custom exception classes
 │   ├── routers/
-│   │   ├── scan.py                   # POST /scan endpoint
-│   │   ├── review.py                 # GET / and GET /record/{id} (HTML)
-│   │   └── admin.py                  # Admin API (mode, trigger, requeue)
+│   │   ├── scan.py                   # Card scanning UI and image upload
+│   │   ├── review.py                 # List view, detail view, queue page
+│   │   ├── reports.py                # Event statistics and reports
+│   │   └── admin.py                  # Admin API (mode, trigger, requeue, update)
 │   ├── services/
 │   │   ├── extraction_service.py     # Ollama dispatch, worker pool, date resolution
+│   │   ├── motor_lookup_service.py   # In-memory motor DB from thrustcurve-db
+│   │   ├── flier_match_service.py    # Fuzzy name matching against known fliers
 │   │   ├── image_service.py          # Image storage utilities
-│   │   └── record_service.py         # Database CRUD for flight records
-│   ├── static/js/                    # Client-side JS (scanner.js, opencv.js)
+│   │   └── record_service.py         # Database CRUD, unit normalization
+│   ├── static/js/                    # Client-side JS (scanner.js, opencv.js, thrustcurve-db)
 │   └── templates/                    # Jinja2 HTML templates
 ├── tests/                            # pytest test suite
-├── package.json                      # pnpm package manifest (opencv.js)
-└── .venv/                            # Python virtual environment
+└── .venv/                            # Python virtual environment (local dev)
 ```
 
 ## Troubleshooting
 
 **"Required client-side asset missing: opencv.js"**
-Run `pnpm install` from the project root. This installs OpenCV.js into the static assets directory.
+Run `pnpm install` from the project root.
 
 **"Ollama returned HTTP 4xx/5xx" or records stuck in `extraction_failed`**
-Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed. Re-pull the model if needed: `ollama pull qwen3-vl`.
+Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed.
 
 **Camera not working in the scan UI**
-The camera API requires HTTPS on mobile browsers (iOS, Android Chrome). If accessing from a phone on the local network, set up HTTPS via Tailscale (see the "HTTPS with Tailscale" section above). On `localhost` in a desktop browser, HTTP works fine for development.
+The camera API requires HTTPS on mobile browsers. Use Tailscale Funnel (Docker) or configure `ssl_certfile`/`ssl_keyfile` (local dev).
 
 **Database locked errors**
-SQLite supports limited concurrency. For high-volume events, consider running a single extraction worker per endpoint or tuning the `concurrency` values.
+SQLite supports limited concurrency. Reduce `concurrency` values or use fewer endpoints.
+
+**Container can't reach Ollama on the host**
+Use `http://host.docker.internal:11434` in `extraction_endpoints`. On Linux, add `--add-host=host.docker.internal:host-gateway` to `docker run`.
