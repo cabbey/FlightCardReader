@@ -210,11 +210,11 @@ This plan implements session-based authentication, role-based authorization (adm
     - These are required for password hashing and cookie signing respectively
     - _Requirements: 1.3, 2.4_
 
-- [~] 12. Checkpoint - Ensure all tests pass
+- [-] 12. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Integration tests
-  - [-] 13.1 Write integration tests for full auth flow
+- [x] 13. Integration tests
+  - [x] 13.1 Write integration tests for full auth flow
     - Test login → access protected page → logout flow
     - Test rate limiting through actual HTTP requests
     - Test read-only mode interaction with auth
@@ -223,18 +223,18 @@ This plan implements session-based authentication, role-based authorization (adm
     - Test default admin creation at startup
     - _Requirements: 2.1, 2.2, 2.6, 2.7, 8.2, 1.6, 1.7_
 
-  - [-] 13.2 Write integration tests for audit log output
+  - [x] 13.2 Write integration tests for audit log output
     - Test audit log file written correctly across multiple actions
     - Verify JSON Lines format with correct fields
     - Verify no plaintext passwords in audit entries
     - _Requirements: 6.3, 6.4, 6.5, 6.7, 8.6_
 
-  - [-] 13.3 Write property test for session lifecycle validity (Property 3)
+  - [x] 13.3 Write property test for session lifecycle validity (Property 3)
     - **Property 3: Session Lifecycle Validity**
     - Generate sessions with varying activity patterns, verify validity within idle timeout AND Hard_Max_Lifetime, verify expiry after either limit
     - **Validates: Requirements 2.2, 2.7, 2.8, 2.9, 2.12, 2.13**
 
-- [~] 14. Final checkpoint - Ensure all tests pass
+- [-] 14. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
