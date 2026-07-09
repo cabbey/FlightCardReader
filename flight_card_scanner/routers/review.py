@@ -168,11 +168,11 @@ async def list_records(
     status: str | None = Query(default=None),
     flight_day: str | None = Query(default=None),
     impulse_class: str | None = Query(default=None),
-    search_length: float | None = Query(default=None),
+    search_length: str | None = Query(default=None),
     search_length_unit: str | None = Query(default=None),
-    search_diameter: float | None = Query(default=None),
+    search_diameter: str | None = Query(default=None),
     search_diameter_unit: str | None = Query(default=None),
-    search_weight: float | None = Query(default=None),
+    search_weight: str | None = Query(default=None),
     search_weight_unit: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
@@ -342,10 +342,23 @@ async def list_records(
         page_records = list(records_result.scalars().all())
 
     # --- Measurement proximity search (re-sorts results if active) ---
+    # Parse measurement search values (form sends empty strings for blank fields)
+    def _parse_float(val: str | None) -> float | None:
+        if not val or not val.strip():
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    search_length_val = _parse_float(search_length)
+    search_diameter_val = _parse_float(search_diameter)
+    search_weight_val = _parse_float(search_weight)
+
     # Normalize the search values to metric
-    norm_search_length = normalize_length_to_mm(search_length, search_length_unit)
-    norm_search_diameter = normalize_length_to_mm(search_diameter, search_diameter_unit)
-    norm_search_weight = normalize_weight_to_g(search_weight, search_weight_unit)
+    norm_search_length = normalize_length_to_mm(search_length_val, search_length_unit)
+    norm_search_diameter = normalize_length_to_mm(search_diameter_val, search_diameter_unit)
+    norm_search_weight = normalize_weight_to_g(search_weight_val, search_weight_unit)
     has_measurement_search = any(v is not None for v in (norm_search_length, norm_search_diameter, norm_search_weight))
 
     if has_measurement_search:
@@ -447,11 +460,11 @@ async def list_records(
             "status_filter": status or "",
             "flight_day_filter": flight_day or "",
             "impulse_class_filter": impulse_class or "",
-            "search_length": search_length,
+            "search_length": search_length_val,
             "search_length_unit": search_length_unit or "",
-            "search_diameter": search_diameter,
+            "search_diameter": search_diameter_val,
             "search_diameter_unit": search_diameter_unit or "",
-            "search_weight": search_weight,
+            "search_weight": search_weight_val,
             "search_weight_unit": search_weight_unit or "",
             "event_dates": _build_event_dates(config),
         },

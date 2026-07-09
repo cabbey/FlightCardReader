@@ -89,6 +89,7 @@ async def _check_database(config: AppConfig) -> None:
         engine = init_engine(db_path, read_only=config.read_only)
         if not config.read_only:
             await create_all(engine)
+            await _apply_schema_migrations(engine)
         logger.info(
             "Database initialised at %s%s",
             db_path, " (read-only)" if config.read_only else ""
@@ -98,6 +99,34 @@ async def _check_database(config: AppConfig) -> None:
             "Cannot initialise database at %s: %s", db_path, exc
         )
         sys.exit(1)
+
+
+async def _apply_schema_migrations(engine) -> None:
+    """Add columns that may be missing from an older database schema.
+
+    SQLAlchemy's create_all() only creates new tables, not new columns.
+    This function uses ALTER TABLE to add any columns that don't exist yet.
+    """
+    from sqlalchemy import text
+
+    # Columns to ensure exist: (column_name, column_type_sql)
+    migrations = [
+        ("norm_length_mm", "FLOAT"),
+        ("norm_diameter_mm", "FLOAT"),
+        ("norm_weight_g", "FLOAT"),
+    ]
+
+    async with engine.begin() as conn:
+        # Get existing column names
+        result = await conn.execute(text("PRAGMA table_info(flight_records)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+
+        for col_name, col_type in migrations:
+            if col_name not in existing_columns:
+                await conn.execute(
+                    text(f"ALTER TABLE flight_records ADD COLUMN {col_name} {col_type}")
+                )
+                logger.info("Migration: added column %s to flight_records", col_name)
 
 
 def _check_static_assets() -> None:
@@ -265,7 +294,7 @@ async def lifespan(app: FastAPI):
             candidates = list(result.scalars().all())
             norm_count = 0
             for record in candidates:
-                metrics = compute_normalized_metrics(record.overflow)
+                metrics = compute_normalized_metrics(record.overflow, record.id)
                 # Only update if we actually computed something
                 if any(v is not None for v in metrics.values()):
                     record.norm_length_mm = metrics["norm_length_mm"]
