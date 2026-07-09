@@ -56,7 +56,7 @@ _WEIGHT_TO_G: dict[str, float] = {
 }
 
 
-def normalize_length_to_mm(value: float | None, unit: str | None) -> float | None:
+def normalize_length_to_mm(value: float | None, unit: str | None, record_id: int | None = None) -> float | None:
     """Convert a length/diameter value to millimeters. Returns None if not convertible."""
     if value is None:
         return None
@@ -65,12 +65,12 @@ def normalize_length_to_mm(value: float | None, unit: str | None) -> float | Non
         return value * 25.4
     factor = _LENGTH_TO_MM.get(unit.lower().strip())
     if factor is None:
-        logger.warning("Unknown length/diameter unit %r (value=%s), skipping normalization", unit, value)
+        logger.warning("Unknown length/diameter unit %r (value=%s, record=%s), skipping normalization", unit, value, record_id)
         return None
     return value * factor
 
 
-def normalize_weight_to_g(value: float | None, unit: str | None) -> float | None:
+def normalize_weight_to_g(value: float | None, unit: str | None, record_id: int | None = None) -> float | None:
     """Convert a weight value to grams. Returns None if not convertible."""
     if value is None:
         return None
@@ -79,12 +79,12 @@ def normalize_weight_to_g(value: float | None, unit: str | None) -> float | None
         return value * 28.3495
     factor = _WEIGHT_TO_G.get(unit.lower().strip())
     if factor is None:
-        logger.warning("Unknown weight unit %r (value=%s), skipping normalization", unit, value)
+        logger.warning("Unknown weight unit %r (value=%s, record=%s), skipping normalization", unit, value, record_id)
         return None
     return value * factor
 
 
-def compute_normalized_metrics(overflow: dict | None) -> dict[str, float | None]:
+def compute_normalized_metrics(overflow: dict | None, record_id: int | None = None) -> dict[str, float | None]:
     """Extract measurements from overflow and compute normalized metric values.
 
     Returns a dict with keys: norm_length_mm, norm_diameter_mm, norm_weight_g.
@@ -103,13 +103,13 @@ def compute_normalized_metrics(overflow: dict | None) -> dict[str, float | None]
         return result
 
     result["norm_length_mm"] = normalize_length_to_mm(
-        measurements.get("length"), measurements.get("length_unit")
+        measurements.get("length"), measurements.get("length_unit"), record_id
     )
     result["norm_diameter_mm"] = normalize_length_to_mm(
-        measurements.get("diameter"), measurements.get("diameter_unit")
+        measurements.get("diameter"), measurements.get("diameter_unit"), record_id
     )
     result["norm_weight_g"] = normalize_weight_to_g(
-        measurements.get("weight"), measurements.get("weight_unit")
+        measurements.get("weight"), measurements.get("weight_unit"), record_id
     )
     return result
 
@@ -277,7 +277,7 @@ async def apply_extraction(
     flag_modified(record, "overflow")
 
     # --- Compute normalized metric values for search ---
-    metrics = compute_normalized_metrics(record.overflow)
+    metrics = compute_normalized_metrics(record.overflow, record_id)
     record.norm_length_mm = metrics["norm_length_mm"]
     record.norm_diameter_mm = metrics["norm_diameter_mm"]
     record.norm_weight_g = metrics["norm_weight_g"]
@@ -349,7 +349,7 @@ async def update_fields(
 
     # Recompute normalized metrics if overflow was updated (measurements may have changed)
     if "overflow" in updates:
-        metrics = compute_normalized_metrics(record.overflow)
+        metrics = compute_normalized_metrics(record.overflow, record_id)
         record.norm_length_mm = metrics["norm_length_mm"]
         record.norm_diameter_mm = metrics["norm_diameter_mm"]
         record.norm_weight_g = metrics["norm_weight_g"]

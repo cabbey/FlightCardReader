@@ -294,7 +294,7 @@ async def lifespan(app: FastAPI):
             candidates = list(result.scalars().all())
             norm_count = 0
             for record in candidates:
-                metrics = compute_normalized_metrics(record.overflow)
+                metrics = compute_normalized_metrics(record.overflow, record.id)
                 # Only update if we actually computed something
                 if any(v is not None for v in metrics.values()):
                     record.norm_length_mm = metrics["norm_length_mm"]
