@@ -50,6 +50,7 @@ class AppConfig:
     known_fliers_path: Path | None = None
     flier_match_model: str | None = None
     auto_accept_threshold: float = 0.95
+    read_only: bool = False
 
     @property
     def image_store_path(self) -> Path:
@@ -252,6 +253,11 @@ def load_config(path: Path) -> AppConfig:
     # --- auto_accept_threshold (optional, default 0.95) ---
     auto_accept_threshold = get_with_default("auto_accept_threshold", 0.95)
 
+    # --- read_only (optional, default false) ---
+    read_only = get_with_default("read_only", False)
+    if not isinstance(read_only, bool):
+        raise ConfigError(f"Config key 'read_only' must be a boolean, got {read_only!r}.")
+
     return AppConfig(
         host=host,
         port=port,
@@ -265,4 +271,5 @@ def load_config(path: Path) -> AppConfig:
         known_fliers_path=known_fliers_path,
         flier_match_model=flier_match_model,
         auto_accept_threshold=auto_accept_threshold,
+        read_only=read_only,
     )
