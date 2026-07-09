@@ -390,6 +390,12 @@ def _format_motor(motor: dict[str, Any]) -> str:
         parts.append(tc_data["commonName"])
         return display_fractions(" ".join(parts))
 
+    # Safety net: if thrustcurve_id is set but thrustcurve_data is missing
+    # (e.g. enrich failed), use letter+number cleanly without manufacturer junk
+    if motor.get("thrustcurve_id") and not tc_data:
+        parts.append(f"{motor.get('letter', '')}{motor.get('number', '')}")
+        return display_fractions(" ".join(parts))
+
     # Fallback: build from raw extracted fields
     core = ""
     if motor.get("leading_number"):
