@@ -767,6 +767,11 @@
 {% endblock %}
 
 {% block content %}
+{# Derive current_user from session middleware for conditional rendering #}
+{% set current_user = request.state.user if request and request.state else None %}
+{% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
+{% set is_admin = current_user and current_user.role == "admin" %}
+
 <nav class="record-nav">
   <a href="/" class="back-link" id="backToList">&larr; Back to list</a>
   <span class="prev-next">
@@ -788,11 +793,11 @@
     <h2>Record #{{ record.id }}</h2>
     <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
     <span class="header-meta">{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "" }}</span>
-    {% if not read_only %}
+    {% if can_mutate %}
     <span class="edit-hint">(click any value to edit)</span>
     {% endif %}
   </div>
-  {% if not read_only %}
+  {% if can_mutate %}
   <div class="header-actions">
     <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
     <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
@@ -808,7 +813,9 @@
     {% if not record.human_verified %}
     <button type="button" class="btn-extract" id="btnExtract">Extract</button>
     {% endif %}
+    {% if is_admin %}
     <button type="button" class="btn-redundant" id="btnRedundant" style="font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #dc2626; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:0.5rem;">Remove (Redundant)</button>
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -1005,7 +1012,7 @@
                 {% elif not motor.thrustcurve_id %}
                 <span class="tc-status tc-pending">? Not looked up</span>
                 {% endif %}
-                {% if not read_only %}
+                {% if can_mutate %}
                 <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
                   <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Search ThrustCurve">🔍</button>
                   <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}" style="{{ '' if motor.thrustcurve_candidates else 'display:none;' }}">Select</button>
@@ -1066,7 +1073,7 @@
                 {% endfor %}{% if not loop.last %} / {% endif %}
               {% endif %}
             {% endfor %}
-            {% if not read_only %}
+            {% if can_mutate %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
@@ -1075,7 +1082,7 @@
           {% else %}
           <dt>Motors</dt>
           <dd>
-            {% if not read_only %}
+            {% if can_mutate %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
@@ -1298,7 +1305,7 @@
     return s.replace(/1\/2A/g, '\u00bdA').replace(/1\/4A/g, '\u00bcA');
   }
 
-  var isReadOnly = {{ 'true' if read_only else 'false' }};
+  var isReadOnly = {{ 'true' if not can_mutate else 'false' }};
 
   // --- Inline editing logic ---
 

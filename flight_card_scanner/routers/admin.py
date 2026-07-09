@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import AppConfig
 from ..database import get_db
+from ..dependencies.auth import Role, require_role
 from ..schemas import (
     FlightRecordUpdate,
     ModeResponse,
@@ -25,6 +26,7 @@ from ..schemas import (
     TriggerResponse,
 )
 from ..services import record_service
+from ..services.audit_service import log_action
 from ..services.extraction_service import ExtractionMode, ExtractionService
 from ..services.flier_match_service import FlierMatchService
 
@@ -65,7 +67,7 @@ def get_extraction_service() -> ExtractionService:
 router = APIRouter(prefix="/api/admin")
 
 
-@router.post("/mode", response_model=ModeResponse)
+@router.post("/mode", response_model=ModeResponse, dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def set_mode(
     body: SetModeRequest,
     extraction_service: ExtractionService = Depends(get_extraction_service),
@@ -86,17 +88,25 @@ async def set_mode(
     return ModeResponse(mode=mode.value, message=f"Mode set to {mode.value}")
 
 
-@router.post("/trigger", response_model=TriggerResponse)
+@router.post("/trigger", response_model=TriggerResponse, dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def trigger_extraction(
+    request: Request,
     extraction_service: ExtractionService = Depends(get_extraction_service),
 ) -> TriggerResponse:
     """Manually trigger extraction of all pending records."""
     dispatched = await extraction_service.trigger_pending()
+
+    # Audit log the trigger action
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "extracted", "flight_record", 0, details={"dispatched": dispatched})
+
     return TriggerResponse(dispatched=dispatched)
 
 
-@router.post("/requeue", response_model=RequeueResponse)
+@router.post("/requeue", response_model=RequeueResponse, dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def requeue_all_failed(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     extraction_service: ExtractionService = Depends(get_extraction_service),
 ) -> RequeueResponse:
@@ -108,11 +118,19 @@ async def requeue_all_failed(
     for record in failed_records:
         await record_service.set_status(db, record.id, "pending")
         await extraction_service.enqueue(record.id)
+
+    # Audit log the requeue action
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    for record in failed_records:
+        log_action(actor, "requeued", "flight_record", record.id)
+
     return RequeueResponse(requeued=len(failed_records))
 
 
-@router.post("/requeue/{record_id}", response_model=RequeueResponse)
+@router.post("/requeue/{record_id}", response_model=RequeueResponse, dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def requeue_single(
+    request: Request,
     record_id: int,
     db: AsyncSession = Depends(get_db),
     extraction_service: ExtractionService = Depends(get_extraction_service),
@@ -132,11 +150,18 @@ async def requeue_single(
         )
     await record_service.set_status(db, record.id, "pending")
     await extraction_service.enqueue(record.id)
+
+    # Audit log the requeue action
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "requeued", "flight_record", record_id)
+
     return RequeueResponse(requeued=1)
 
 
-@router.post("/extract/{record_id}", response_model=TriggerResponse)
+@router.post("/extract/{record_id}", response_model=TriggerResponse, dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def extract_single(
+    request: Request,
     record_id: int,
     db: AsyncSession = Depends(get_db),
     extraction_service: ExtractionService = Depends(get_extraction_service),
@@ -151,11 +176,18 @@ async def extract_single(
         raise HTTPException(status_code=404, detail="Record not found")
     await record_service.set_status(db, record.id, "pending")
     await extraction_service.force_enqueue(record.id)
+
+    # Audit log the extraction
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "extracted", "flight_record", record_id)
+
     return TriggerResponse(dispatched=1)
 
 
-@router.put("/record/{record_id}")
+@router.put("/record/{record_id}", dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def update_record(
+    request: Request,
     record_id: int,
     body: FlightRecordUpdate,
     db: AsyncSession = Depends(get_db),
@@ -174,7 +206,23 @@ async def update_record(
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update")
 
+    # Capture old values for audit logging
+    old_values = {}
+    for field_name in updates:
+        old_values[field_name] = getattr(record, field_name, None)
+
     updated_record = await record_service.update_fields(db, record_id, updates)
+
+    # Audit log the update with old/new field changes
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    changes = {}
+    for field_name, new_value in updates.items():
+        old_value = old_values.get(field_name)
+        if old_value != new_value:
+            changes[field_name] = {"old": old_value, "new": new_value}
+    if changes:
+        log_action(actor, "updated", "flight_record", record_id, details={"changes": changes})
 
     # Re-run flier verification if flier_name or membership fields changed
     should_reverify = "flier_name" in updates
@@ -282,7 +330,7 @@ class MotorSelectRequest(BaseModel):
     motor_id: str
 
 
-@router.post("/record/{record_id}/motor/{motor_index}/search")
+@router.post("/record/{record_id}/motor/{motor_index}/search", dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def search_motor(
     request: Request,
     record_id: int,
@@ -332,7 +380,7 @@ async def search_motor(
     }
 
 
-@router.post("/record/{record_id}/motor/{motor_index}/select")
+@router.post("/record/{record_id}/motor/{motor_index}/select", dependencies=[Depends(require_role(Role.DATA_ENTRY))])
 async def select_motor(
     request: Request,
     record_id: int,
@@ -479,8 +527,9 @@ async def get_queue(request: Request) -> dict:
     return {"queued_ids": queued, "count": len(queued)}
 
 
-@router.delete("/record/{record_id}")
+@router.delete("/record/{record_id}", dependencies=[Depends(require_role(Role.ADMIN))])
 async def delete_record(
+    request: Request,
     record_id: int,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -494,4 +543,10 @@ async def delete_record(
 
     await db.delete(record)
     await db.commit()
+
+    # Audit log the deletion
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "deleted", "flight_record", record_id)
+
     return {"message": "Record deleted", "id": record_id}

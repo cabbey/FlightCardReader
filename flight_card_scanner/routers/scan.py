@@ -22,9 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import AppConfig
 from ..database import get_db
+from ..dependencies.auth import Role, require_role
 from ..exceptions import ImageStorageError
 from ..schemas import ScanResponse
 from ..services import image_service, record_service
+from ..services.audit_service import log_action
 from ..services.extraction_service import ExtractionService
 
 logger = logging.getLogger(__name__)
@@ -258,12 +260,19 @@ async def scan_page(
             "event_name": config.event_name,
             "qr_entries": qr_entries,
             "event_dates": _build_event_dates(config),
+            "current_user": getattr(request.state, "user", None),
         },
     )
 
 
-@router.post("/api/scan", status_code=201, response_model=ScanResponse)
+@router.post(
+    "/api/scan",
+    status_code=201,
+    response_model=ScanResponse,
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
 async def submit_card(
+    request: Request,
     card_image: UploadFile = File(...),
     flight_date: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
@@ -326,5 +335,10 @@ async def submit_card(
     # --- 4. Enqueue for extraction ---
     await extraction_service.enqueue(record.id)
 
-    # --- 5. Return success ---
+    # --- 5. Audit log ---
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "created", "flight_record", record.id)
+
+    # --- 6. Return success ---
     return ScanResponse(record_id=record.id)

@@ -349,6 +349,10 @@
 {% endblock %}
 
 {% block content %}
+{# Derive current_user from session middleware for conditional rendering #}
+{% set current_user = request.state.user if request and request.state else None %}
+{% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
+
 <div style="margin-bottom:0.75rem;">
   <a href="/" style="color:#2563eb; text-decoration:none; font-size:0.85rem;">&larr; Back to list</a>
 </div>
@@ -356,6 +360,12 @@
 <div style="text-align:center; padding:2rem; color:#6b7280;">
   <p style="font-size:1.1rem; font-weight:500;">This event is in read-only mode.</p>
   <p>Card scanning is disabled.</p>
+</div>
+{% elif not can_mutate %}
+<div style="text-align:center; padding:2rem; color:#6b7280;">
+  <p style="font-size:1.1rem; font-weight:500;">Login required.</p>
+  <p>You must be logged in to scan cards.</p>
+  <a href="/login?next=/scan" style="color:#2563eb;">Login</a>
 </div>
 {% else %}
 <div class="scan-container">

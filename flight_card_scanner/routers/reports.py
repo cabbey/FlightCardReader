@@ -279,6 +279,7 @@ async def reports_overview(
             "failed_records": failed_records,
             "event_dates": event_dates,
             "day_filter": day or "",
+            "current_user": getattr(request.state, "user", None),
         },
     )
 
@@ -303,6 +304,7 @@ async def reports_day(
             context={
                 "event_name": config.event_name,
                 "message": f"Invalid date format: {report_date}",
+                "current_user": getattr(request.state, "user", None),
             },
             status_code=404,
         )
@@ -323,6 +325,7 @@ async def reports_day(
             context={
                 "event_name": config.event_name,
                 "message": f"No extracted records found for {target_date.strftime('%A, %B %d, %Y')}.",
+                "current_user": getattr(request.state, "user", None),
             },
             status_code=404,
         )
@@ -338,5 +341,6 @@ async def reports_day(
             "date_label": target_date.strftime("%A, %B %d, %Y"),
             "card_count": len(records),
             **stats,
+            "current_user": getattr(request.state, "user", None),
         },
     )

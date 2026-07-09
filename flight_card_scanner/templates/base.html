@@ -31,11 +31,52 @@
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
+
+    nav.auth-nav {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 0;
+      font-size: 0.875rem;
+      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 0.5rem;
+    }
+
+    nav.auth-nav .nav-spacer {
+      flex: 1;
+    }
+
+    nav.auth-nav a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+
+    nav.auth-nav a:hover {
+      text-decoration: underline;
+    }
+
+    nav.auth-nav .user-name {
+      color: #555;
+    }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
+  {# Derive current_user from session middleware. Falls back to None if not set. #}
+  {%- set current_user = request.state.user if request and request.state else None %}
   <div class="container">
+    <nav class="auth-nav" aria-label="User navigation">
+      <span class="nav-spacer"></span>
+      {% if current_user %}
+        <span class="user-name">{{ current_user.display_name }}</span>
+        {% if current_user.role == "admin" %}
+          <a href="/admin/users">Users</a>
+        {% endif %}
+        <a href="/logout">Logout</a>
+      {% else %}
+        <a href="/login">Login</a>
+      {% endif %}
+    </nav>
     <h1>{{ event_name }}</h1>
     {% block content %}{% endblock %}
   </div>

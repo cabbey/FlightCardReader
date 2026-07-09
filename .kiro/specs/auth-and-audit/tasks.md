@@ -153,10 +153,10 @@ This plan implements session-based authentication, role-based authorization (adm
     - Verify identical response body for existing vs non-existing emails, and timing within 100ms
     - **Validates: Requirements 2.3, 8.5**
 
-- [~] 8. Checkpoint - Ensure all tests pass
+- [-] 8. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Application wiring and startup integration
+- [x] 9. Application wiring and startup integration
   - [x] 9.1 Wire auth into application lifespan (`flight_card_scanner/main.py`)
     - Initialize auth engine and create tables in lifespan startup
     - Initialize audit logger with configured path
@@ -166,14 +166,14 @@ This plan implements session-based authentication, role-based authorization (adm
     - Include the new auth router
     - _Requirements: 1.5, 1.6, 1.7, 2.5, 6.2_
 
-  - [~] 9.2 Add `require_role()` dependencies to existing routers
+  - [x] 9.2 Add `require_role()` dependencies to existing routers
     - Protect `scan.py` endpoints: `POST /api/scan` requires DATA_ENTRY
     - Protect `admin.py` endpoints: all mutating endpoints require DATA_ENTRY; `DELETE /api/admin/record/{id}` requires ADMIN
     - Keep `review.py` GET endpoints accessible to PUBLIC (list, detail, queue pages)
     - Keep `reports.py` GET endpoints accessible to PUBLIC
     - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6_
 
-  - [~] 9.3 Add audit logging calls to existing routers
+  - [x] 9.3 Add audit logging calls to existing routers
     - Audit record creation in `scan.py` (POST /api/scan)
     - Audit record updates in `admin.py` (PUT /api/admin/record/{id}) with old/new field changes
     - Audit record deletion in `admin.py` (DELETE /api/admin/record/{id})
@@ -181,23 +181,23 @@ This plan implements session-based authentication, role-based authorization (adm
     - _Requirements: 6.3, 6.4_
 
 - [ ] 10. Template modifications
-  - [~] 10.1 Create login page template (`flight_card_scanner/templates/login.html`)
+  - [x] 10.1 Create login page template (`flight_card_scanner/templates/login.html`)
     - Email and password form with error display area
     - Rate limit message display with seconds remaining
     - Support `next` parameter for post-login redirect
     - _Requirements: 2.1_
 
-  - [~] 10.2 Create user management page template (`flight_card_scanner/templates/users.html`)
+  - [x] 10.2 Create user management page template (`flight_card_scanner/templates/users.html`)
     - List all users with email, display_name, role, active status
     - Forms for creating and editing users
     - _Requirements: 5.1_
 
-  - [~] 10.3 Update base template with auth context
+  - [-] 10.3 Update base template with auth context
     - Add navigation bar: login link (unauthenticated) or display_name + logout link (authenticated)
     - Inject `current_user` into template context from `request.state.user`
     - _Requirements: 4.1, 4.4, 4.5_
 
-  - [~] 10.4 Update existing templates with conditional rendering
+  - [-] 10.4 Update existing templates with conditional rendering
     - Hide edit/delete/scan/queue/trigger/requeue/mode-switch elements for unauthenticated users
     - Hide delete and user management elements for data_entry users
     - Respect read_only mode: hide all mutating elements regardless of role

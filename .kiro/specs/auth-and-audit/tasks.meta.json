@@ -438,6 +438,11 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552952
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636077304
       }
     ],
     "9.1 Wire auth into application lifespan (`flight_card_scanner/main.py`)": [
@@ -462,6 +467,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552979
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635682215
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636069767
       }
     ],
     "9.3 Add audit logging calls to existing routers": [
@@ -469,6 +484,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552995
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635684691
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636070596
       }
     ],
     "10.1 Create login page template (`flight_card_scanner/templates/login.html`)": [
@@ -476,6 +501,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626553008
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635683879
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636067973
       }
     ],
     "10.2 Create user management page template (`flight_card_scanner/templates/users.html`)": [
@@ -483,6 +518,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626553026
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635683100
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636068857
       }
     ],
     "10.3 Update base template with auth context": [
@@ -490,6 +535,11 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626553042
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636075457
       }
     ],
     "10.4 Update existing templates with conditional rendering": [
@@ -497,6 +547,11 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626553060
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636076242
       }
     ],
     "11.1 Install argon2-cffi and itsdangerous packages": [
@@ -598,6 +653,13 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783635676643
+      }
+    ],
+    "9. Application wiring and startup integration": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783636070614
       }
     ]
   }

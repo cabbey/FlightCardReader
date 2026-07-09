@@ -5,13 +5,31 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from flight_card_scanner.database import get_db
 from flight_card_scanner.routers import admin
 from flight_card_scanner.routers.admin import router
 from flight_card_scanner.services.extraction_service import ExtractionMode
+
+
+class _FakeUser:
+    """Minimal user object to satisfy require_role checks in tests."""
+
+    def __init__(self, role: str = "admin"):
+        self.role = role
+        self.email = "test@example.com"
+        self.display_name = "Test Admin"
+
+
+class _MockAuthMiddleware(BaseHTTPMiddleware):
+    """Middleware that attaches a fake admin user to request.state for tests."""
+
+    async def dispatch(self, request: Request, call_next):
+        request.state.user = _FakeUser("admin")
+        return await call_next(request)
 
 
 @pytest.fixture
@@ -24,6 +42,7 @@ def mock_db():
 def app(mock_db):
     """Create a FastAPI test app with the admin router included."""
     app = FastAPI()
+    app.add_middleware(_MockAuthMiddleware)
     app.include_router(router)
 
     # Override the get_db dependency so we don't need a real database

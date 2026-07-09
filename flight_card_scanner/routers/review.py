@@ -475,6 +475,7 @@ async def list_records(
             "search_weight": search_weight_val,
             "search_weight_unit": search_weight_unit or "",
             "event_dates": _build_event_dates(config),
+            "current_user": getattr(request.state, "user", None),
         },
     )
 
@@ -535,6 +536,7 @@ async def queue_status(
             "processing_records": processing_records,
             "queue_size": len(queued_ids),
             "processing_size": len(processing_records),
+            "current_user": getattr(request.state, "user", None),
         },
     )
 
@@ -564,6 +566,7 @@ async def detail_record(
             context={
                 "event_name": config.event_name,
                 "message": f"Flight record #{record_id} does not exist.",
+                "current_user": getattr(request.state, "user", None),
             },
             status_code=404,
         )
@@ -682,5 +685,6 @@ async def detail_record(
             "enriched_motors": enriched_motors,
             "event_dates": _build_event_dates(config),
             "show_all_fields": True,
+            "current_user": getattr(request.state, "user", None),
         },
     )
