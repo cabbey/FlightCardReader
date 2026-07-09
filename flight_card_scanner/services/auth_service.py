@@ -243,8 +243,16 @@ class AuthService:
 
             now = datetime.now(timezone.utc)
 
+            # SQLite stores datetimes without timezone info; treat as UTC
+            last_active = session.last_active
+            if last_active.tzinfo is None:
+                last_active = last_active.replace(tzinfo=timezone.utc)
+            created_at = session.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+
             # Check idle timeout
-            idle_expiry = session.last_active + timedelta(
+            idle_expiry = last_active + timedelta(
                 hours=self._timeout_hours
             )
             if now > idle_expiry:
@@ -269,7 +277,7 @@ class AuthService:
 
             # Check Hard_Max_Lifetime based on role
             max_hours = HARD_MAX_LIFETIME_HOURS.get(user.role, 8)
-            hard_expiry = session.created_at + timedelta(hours=max_hours)
+            hard_expiry = created_at + timedelta(hours=max_hours)
             if now > hard_expiry:
                 # Session exceeded hard max lifetime
                 session.is_valid = False

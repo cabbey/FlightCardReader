@@ -7,6 +7,30 @@
     "4.2 Write property test for audit log integrity (Property 7)": {
       "status": "passed",
       "lastRunTimestamp": 1783627245556
+    },
+    "3.2 Write property test for password hashing round-trip (Property 1)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783627558579
+    },
+    "3.4 Write property test for rate limiting enforcement (Property 8)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783627566758
+    },
+    "3.3 Write property test for case-insensitive email identity (Property 2)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783627587039
+    },
+    "3.6 Write property test for data entry soft IP binding (Property 12)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783627759683
+    },
+    "3.5 Write property test for admin strict IP binding (Property 11)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783628097765
+    },
+    "3.7 Write property test for hard max lifetime enforcement (Property 13)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783628196357
     }
   },
   "executionHistory": {
@@ -105,6 +129,11 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783627058325
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627477069
       }
     ],
     "3.2 Write property test for password hashing round-trip (Property 1)": [
@@ -112,6 +141,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552624
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627482477
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628110769
       }
     ],
     "3.3 Write property test for case-insensitive email identity (Property 2)": [
@@ -119,6 +158,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552640
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627483261
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628111639
       }
     ],
     "3.4 Write property test for rate limiting enforcement (Property 8)": [
@@ -126,6 +175,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552658
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627483980
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628112399
       }
     ],
     "3.5 Write property test for admin strict IP binding (Property 11)": [
@@ -133,6 +192,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552678
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627484737
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628113268
       }
     ],
     "3.6 Write property test for data entry soft IP binding (Property 12)": [
@@ -140,6 +209,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552704
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627485563
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628114042
       }
     ],
     "3.7 Write property test for hard max lifetime enforcement (Property 13)": [
@@ -147,6 +226,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552729
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628117717
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632639064
       }
     ],
     "4.1 Implement audit service (`flight_card_scanner/services/audit_service.py`)": [
@@ -176,6 +265,11 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783627059103
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627478033
       }
     ],
     "5. Checkpoint - Ensure all tests pass": [
@@ -190,6 +284,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552823
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628118493
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632640047
       }
     ],
     "6.2 Implement role dependency (`flight_card_scanner/dependencies/auth.py`)": [
@@ -197,6 +301,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552840
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783628119317
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632640856
       }
     ],
     "6.3 Write property test for role hierarchy access control (Property 4)": [
@@ -368,6 +482,20 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783627049670
+      }
+    ],
+    "4. Audit service": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627478053
+      }
+    ],
+    "3. Auth service": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632639092
       }
     ]
   }

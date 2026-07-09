@@ -40,8 +40,8 @@ This plan implements session-based authentication, role-based authorization (adm
     - Add indexes on sessions.user_id and sessions.last_active
     - _Requirements: 1.2, 1.5, 2.11_
 
-- [ ] 3. Auth service
-  - [-] 3.1 Implement auth service (`flight_card_scanner/services/auth_service.py`)
+- [x] 3. Auth service
+  - [x] 3.1 Implement auth service (`flight_card_scanner/services/auth_service.py`)
     - Implement `create_user()`: hash password with argon2id, normalize email to lowercase, insert user
     - Implement `authenticate()`: verify credentials; always run argon2 verify (even for non-existent emails) to prevent timing attacks
     - Implement `create_session()`: generate token via `secrets.token_urlsafe(32)`, store with client_ip
@@ -50,37 +50,37 @@ This plan implements session-based authentication, role-based authorization (adm
     - Implement rate limiting: in-memory dict, 5 attempts per 15-min sliding window, with `check_rate_limit()`, `record_failed_attempt()`, `reset_failed_attempts()`
     - _Requirements: 1.3, 1.4, 2.2, 2.8, 2.11, 2.12, 2.13, 8.1, 8.2, 8.3, 8.4, 8.5, 8.7, 8.8, 8.9_
 
-  - [~] 3.2 Write property test for password hashing round-trip (Property 1)
+  - [x] 3.2 Write property test for password hashing round-trip (Property 1)
     - **Property 1: Password Hashing Round-Trip**
     - Generate valid password strings (8-128 chars), hash with argon2id, verify original succeeds, verify different password fails
     - **Validates: Requirements 1.3, 8.1**
 
-  - [~] 3.3 Write property test for case-insensitive email identity (Property 2)
+  - [x] 3.3 Write property test for case-insensitive email identity (Property 2)
     - **Property 2: Case-Insensitive Email Identity**
     - Generate email strings, verify case-variants are treated as same identity
     - **Validates: Requirements 1.4**
 
-  - [~] 3.4 Write property test for rate limiting enforcement (Property 8)
+  - [x] 3.4 Write property test for rate limiting enforcement (Property 8)
     - **Property 8: Rate Limiting Enforcement**
     - Generate sequences of failed attempts, verify lockout after 5 within 15-min window, verify reset on success
     - **Validates: Requirements 8.2, 8.3, 8.7**
 
-  - [~] 3.5 Write property test for admin strict IP binding (Property 11)
+  - [x] 3.5 Write property test for admin strict IP binding (Property 11)
     - **Property 11: Admin Strict IP Binding**
     - Generate admin sessions with recorded IP, verify different IP invalidates session
     - **Validates: Requirements 8.8**
 
-  - [~] 3.6 Write property test for data entry soft IP binding (Property 12)
+  - [x] 3.6 Write property test for data entry soft IP binding (Property 12)
     - **Property 12: Data Entry Soft IP Binding**
     - Generate data_entry sessions with IP changes, verify session survives and audit entry is written
     - **Validates: Requirements 8.9, 6.6**
 
-  - [~] 3.7 Write property test for hard max lifetime enforcement (Property 13)
+  - [x] 3.7 Write property test for hard max lifetime enforcement (Property 13)
     - **Property 13: Hard Max Lifetime Enforcement**
     - Generate sessions at various ages per role, verify expiry at boundary (8h admin, 120h data_entry)
     - **Validates: Requirements 2.12, 2.13, 8.10**
 
-- [ ] 4. Audit service
+- [x] 4. Audit service
   - [x] 4.1 Implement audit service (`flight_card_scanner/services/audit_service.py`)
     - Implement `init_audit_logger(log_path)` configuring a dedicated "audit" logger with FileHandler (append mode, no propagate)
     - Implement `log_action(actor, action, object_type, object_id, details)` writing JSON Lines
@@ -88,7 +88,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Never log plaintext passwords
     - _Requirements: 6.1, 6.2, 6.3, 6.7, 6.8, 6.9, 6.10, 8.6_
 
-  - [-] 4.2 Write property test for audit log integrity (Property 7)
+  - [x] 4.2 Write property test for audit log integrity (Property 7)
     - **Property 7: Audit Log Integrity**
     - Generate random actions, verify each produces exactly one parseable JSON line with valid ISO 8601 timestamp, correct actor/action/object_type/object_id, and no plaintext passwords
     - **Validates: Requirements 6.3, 6.4, 6.5, 6.6, 8.6**
@@ -97,7 +97,7 @@ This plan implements session-based authentication, role-based authorization (adm
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Session middleware and role dependency
-  - [~] 6.1 Implement session middleware (`flight_card_scanner/middleware/session_middleware.py`)
+  - [x] 6.1 Implement session middleware (`flight_card_scanner/middleware/session_middleware.py`)
     - Create `SessionMiddleware` class (ASGI middleware)
     - Decode signed cookie using `itsdangerous`
     - Call `auth_service.validate_session()` with client_ip
@@ -106,7 +106,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Set cookie attributes: HttpOnly, SameSite=Lax, Secure if SSL configured
     - _Requirements: 2.4, 2.6, 2.8, 2.9_
 
-  - [~] 6.2 Implement role dependency (`flight_card_scanner/dependencies/auth.py`)
+  - [x] 6.2 Implement role dependency (`flight_card_scanner/dependencies/auth.py`)
     - Define `Role` IntEnum (PUBLIC=0, DATA_ENTRY=1, ADMIN=2) and ROLE_MAP
     - Implement `require_role(min_role)` dependency factory
     - For unauthenticated: redirect to /login?next=... for HTML, 401 for API
