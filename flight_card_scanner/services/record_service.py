@@ -390,6 +390,14 @@ def _format_motor(motor: dict[str, Any]) -> str:
         parts.append(tc_data["commonName"])
         return display_fractions(" ".join(parts))
 
+    # If we have a thrustcurve_id but no thrustcurve_data (e.g. selected from
+    # candidates via the UI), use letter+number as the commonName — it's the
+    # standard identifier since the motor was already positively matched.
+    if motor.get("thrustcurve_id"):
+        core = f"{motor.get('letter', '')}{motor.get('number', '')}"
+        parts.append(core)
+        return display_fractions(" ".join(parts))
+
     # Fallback: build from raw extracted fields
     core = ""
     if motor.get("leading_number"):
