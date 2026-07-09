@@ -153,7 +153,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Verify identical response body for existing vs non-existing emails, and timing within 100ms
     - **Validates: Requirements 2.3, 8.5**
 
-- [-] 8. Checkpoint - Ensure all tests pass
+- [x] 8. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 9. Application wiring and startup integration
@@ -180,7 +180,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Audit extraction triggers and requeue actions
     - _Requirements: 6.3, 6.4_
 
-- [ ] 10. Template modifications
+- [x] 10. Template modifications
   - [x] 10.1 Create login page template (`flight_card_scanner/templates/login.html`)
     - Email and password form with error display area
     - Rate limit message display with seconds remaining
@@ -192,12 +192,12 @@ This plan implements session-based authentication, role-based authorization (adm
     - Forms for creating and editing users
     - _Requirements: 5.1_
 
-  - [-] 10.3 Update base template with auth context
+  - [x] 10.3 Update base template with auth context
     - Add navigation bar: login link (unauthenticated) or display_name + logout link (authenticated)
     - Inject `current_user` into template context from `request.state.user`
     - _Requirements: 4.1, 4.4, 4.5_
 
-  - [-] 10.4 Update existing templates with conditional rendering
+  - [x] 10.4 Update existing templates with conditional rendering
     - Hide edit/delete/scan/queue/trigger/requeue/mode-switch elements for unauthenticated users
     - Hide delete and user management elements for data_entry users
     - Respect read_only mode: hide all mutating elements regardless of role
@@ -214,7 +214,7 @@ This plan implements session-based authentication, role-based authorization (adm
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 13. Integration tests
-  - [~] 13.1 Write integration tests for full auth flow
+  - [-] 13.1 Write integration tests for full auth flow
     - Test login → access protected page → logout flow
     - Test rate limiting through actual HTTP requests
     - Test read-only mode interaction with auth
@@ -223,13 +223,13 @@ This plan implements session-based authentication, role-based authorization (adm
     - Test default admin creation at startup
     - _Requirements: 2.1, 2.2, 2.6, 2.7, 8.2, 1.6, 1.7_
 
-  - [~] 13.2 Write integration tests for audit log output
+  - [-] 13.2 Write integration tests for audit log output
     - Test audit log file written correctly across multiple actions
     - Verify JSON Lines format with correct fields
     - Verify no plaintext passwords in audit entries
     - _Requirements: 6.3, 6.4, 6.5, 6.7, 8.6_
 
-  - [~] 13.3 Write property test for session lifecycle validity (Property 3)
+  - [-] 13.3 Write property test for session lifecycle validity (Property 3)
     - **Property 3: Session Lifecycle Validity**
     - Generate sessions with varying activity patterns, verify validity within idle timeout AND Hard_Max_Lifetime, verify expiry after either limit
     - **Validates: Requirements 2.2, 2.7, 2.8, 2.9, 2.12, 2.13**
