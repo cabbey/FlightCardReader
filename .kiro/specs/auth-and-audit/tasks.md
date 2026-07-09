@@ -93,10 +93,10 @@ This plan implements session-based authentication, role-based authorization (adm
     - Generate random actions, verify each produces exactly one parseable JSON line with valid ISO 8601 timestamp, correct actor/action/object_type/object_id, and no plaintext passwords
     - **Validates: Requirements 6.3, 6.4, 6.5, 6.6, 8.6**
 
-- [~] 5. Checkpoint - Ensure all tests pass
+- [x] 5. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Session middleware and role dependency
+- [x] 6. Session middleware and role dependency
   - [x] 6.1 Implement session middleware (`flight_card_scanner/middleware/session_middleware.py`)
     - Create `SessionMiddleware` class (ASGI middleware)
     - Decode signed cookie using `itsdangerous`
@@ -114,13 +114,13 @@ This plan implements session-based authentication, role-based authorization (adm
     - Implement `_is_api_request()` heuristic (/api/ prefix or Accept: application/json)
     - _Requirements: 3.1, 3.7, 3.8, 3.9_
 
-  - [~] 6.3 Write property test for role hierarchy access control (Property 4)
+  - [x] 6.3 Write property test for role hierarchy access control (Property 4)
     - **Property 4: Role Hierarchy Access Control**
     - Generate (role, min_required_role) pairs, verify access is permitted iff user_role >= min_role
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9**
 
-- [ ] 7. Auth router (login/logout/user management)
-  - [~] 7.1 Create login/logout endpoints (`flight_card_scanner/routers/auth.py`)
+- [x] 7. Auth router (login/logout/user management)
+  - [x] 7.1 Create login/logout endpoints (`flight_card_scanner/routers/auth.py`)
     - Implement `GET /login` rendering login form template
     - Implement `POST /login`: rate limit check → authenticate → create session → set cookie → redirect (or render error)
     - Implement `GET /logout`: invalidate session → clear cookie → redirect to /login
@@ -128,7 +128,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Generic error message on failure (no user enumeration)
     - _Requirements: 2.1, 2.2, 2.3, 2.7, 2.10, 6.5, 8.5_
 
-  - [~] 7.2 Create user management API endpoints in auth router
+  - [x] 7.2 Create user management API endpoints in auth router
     - Implement `GET /admin/users` (HTML page, admin only)
     - Implement `GET /api/admin/users` (JSON list, admin only)
     - Implement `POST /api/admin/users` (create user, admin only)
@@ -138,17 +138,17 @@ This plan implements session-based authentication, role-based authorization (adm
     - Handle duplicate email (409), user not found (404), validation errors (422)
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10_
 
-  - [~] 7.3 Write property test for user CRUD correctness (Property 5)
+  - [x] 7.3 Write property test for user CRUD correctness (Property 5)
     - **Property 5: User CRUD Correctness**
     - Generate valid user creation requests, verify round-trip returns same email (lowercased), display_name, role, with non-plaintext password_hash and active=True
     - **Validates: Requirements 5.2, 5.3**
 
-  - [~] 7.4 Write unit tests for session invalidation on deactivation (Property 6)
+  - [x] 7.4 Write unit tests for session invalidation on deactivation (Property 6)
     - **Property 6: Session Invalidation on Deactivation**
     - Create user with N active sessions, deactivate user, verify all sessions invalidated
     - **Validates: Requirements 5.5**
 
-  - [~] 7.5 Write unit tests for no user enumeration (Property 9)
+  - [x] 7.5 Write unit tests for no user enumeration (Property 9)
     - **Property 9: No User Enumeration**
     - Verify identical response body for existing vs non-existing emails, and timing within 100ms
     - **Validates: Requirements 2.3, 8.5**
@@ -157,7 +157,7 @@ This plan implements session-based authentication, role-based authorization (adm
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Application wiring and startup integration
-  - [~] 9.1 Wire auth into application lifespan (`flight_card_scanner/main.py`)
+  - [x] 9.1 Wire auth into application lifespan (`flight_card_scanner/main.py`)
     - Initialize auth engine and create tables in lifespan startup
     - Initialize audit logger with configured path
     - Validate `FCS_SESSION_SECRET` and add session middleware to the app

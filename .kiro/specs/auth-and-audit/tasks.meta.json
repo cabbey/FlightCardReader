@@ -31,6 +31,14 @@
     "3.7 Write property test for hard max lifetime enforcement (Property 13)": {
       "status": "passed",
       "lastRunTimestamp": 1783628196357
+    },
+    "6.3 Write property test for role hierarchy access control (Property 4)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783632738295
+    },
+    "7.3 Write property test for user CRUD correctness (Property 5)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783635191577
     }
   },
   "executionHistory": {
@@ -277,6 +285,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552803
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632655856
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635114555
       }
     ],
     "6.1 Implement session middleware (`flight_card_scanner/middleware/session_middleware.py`)": [
@@ -318,6 +336,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552856
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632656696
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635111993
       }
     ],
     "7.1 Create login/logout endpoints (`flight_card_scanner/routers/auth.py`)": [
@@ -325,6 +353,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552874
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632657479
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635112896
       }
     ],
     "7.2 Create user management API endpoints in auth router": [
@@ -332,6 +370,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552889
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783632658250
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635113810
       }
     ],
     "7.3 Write property test for user CRUD correctness (Property 5)": [
@@ -339,6 +387,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552904
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635119115
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635674864
       }
     ],
     "7.4 Write unit tests for session invalidation on deactivation (Property 6)": [
@@ -346,6 +404,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552922
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635120722
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635675762
       }
     ],
     "7.5 Write unit tests for no user enumeration (Property 9)": [
@@ -353,6 +421,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552937
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635121793
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635676617
       }
     ],
     "8. Checkpoint - Ensure all tests pass": [
@@ -367,6 +445,16 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783626552967
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635119942
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635677654
       }
     ],
     "9.2 Add `require_role()` dependencies to existing routers": [
@@ -496,6 +584,20 @@
         "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
         "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
         "timestamp": 1783632639092
+      }
+    ],
+    "6. Session middleware and role dependency": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635112018
+      }
+    ],
+    "7. Auth router (login/logout/user management)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783635676643
       }
     ]
   }

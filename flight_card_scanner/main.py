@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from .config import AppConfig, load_config
 from .database import create_all, init_engine
 from .exceptions import ConfigError
-from .routers import admin, reports, review, scan
+from .routers import admin, auth, reports, review, scan
 from .services.extraction_service import ExtractionMode, ExtractionService
 from .services.flier_match_service import FlierMatchService
 from .services.motor_lookup_service import MotorLookupService
@@ -207,6 +207,46 @@ async def lifespan(app: FastAPI):
         sys.exit(1)
     app.state.session_secret = session_secret
 
+    # 1c. Initialize auth database and service
+    from .auth_database import create_auth_tables, init_auth_engine
+    from .services.auth_service import AuthService
+    from .middleware.session_middleware import SessionMiddleware as AuthSessionMiddleware
+
+    auth_engine = init_auth_engine(config.auth_db_path)
+    await create_auth_tables(auth_engine)
+
+    from .auth_database import _auth_session as auth_session_factory
+    auth_service = AuthService(
+        session_factory=auth_session_factory,
+        session_secret=session_secret,
+        timeout_hours=config.session_timeout_hours,
+    )
+    app.state.auth_service = auth_service
+
+    # 1d. Initialize audit logger
+    from .services.audit_service import init_audit_logger
+    init_audit_logger(config.effective_audit_log_path)
+
+    # 1e. Auto-create default admin if no admin exists
+    from sqlalchemy import select as _auth_select
+    from .auth_models import User
+    async with auth_session_factory() as db:
+        result = await db.execute(
+            _auth_select(User).where(User.role == "admin")
+        )
+        admin_exists = result.scalar_one_or_none() is not None
+
+    if not admin_exists:
+        admin_email = os.environ.get("FCS_ADMIN_EMAIL", "")
+        admin_password = os.environ.get("FCS_ADMIN_PASSWORD", "")
+        if admin_email and admin_password:
+            await auth_service.create_user(admin_email, "Admin", admin_password, "admin")
+            logger.info("Created default admin user: %s", admin_email)
+        else:
+            logger.warning(
+                "No admin user exists and FCS_ADMIN_EMAIL/FCS_ADMIN_PASSWORD not set"
+            )
+
     # 2-4. Run startup checks (image store, DB, static assets, log endpoints)
     await startup_checks(config)
 
@@ -348,6 +388,21 @@ async def lifespan(app: FastAPI):
     )
     reports.configure(templates=templates, config=config)
 
+    # 6b. Configure auth router and session middleware
+    session_mw = AuthSessionMiddleware(
+        app=None,  # Will be set when added as middleware
+        auth_service=auth_service,
+        cookie_name="fcs_session",
+        session_secret=session_secret,
+        secure=bool(getattr(config, "ssl_certfile", None)),
+    )
+    auth.configure(
+        auth_service=auth_service,
+        templates=templates,
+        session_middleware=session_mw,
+    )
+    app.state.session_middleware = session_mw
+
     # Mount /images now that we know the path and it exists
     app.mount(
         "/images",
@@ -395,6 +450,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # and the image store directory has been verified/created.
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(scan.router)
 app.include_router(review.router)
 app.include_router(reports.router)
