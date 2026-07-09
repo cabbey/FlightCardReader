@@ -358,8 +358,8 @@
   <label for="impulseClassFilter">Impulse Class:</label>
   <select id="impulseClassFilter">
     <option value=""{{ ' selected' if not impulse_class_filter else '' }}>All</option>
-    {% for cls in ['1/4A','1/2A','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O'] %}
-    <option value="{{ cls }}"{{ ' selected' if impulse_class_filter == cls else '' }}>{{ cls | display_fractions }}</option>
+    {% for cls in ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O'] %}
+    <option value="{{ cls }}"{{ ' selected' if impulse_class_filter == cls else '' }}>{{ cls }}</option>
     {% endfor %}
   </select>
 </div>

@@ -111,7 +111,11 @@ def _matches_search(record: FlightRecord, q_lower: str) -> bool:
 
 
 def _has_impulse_class(record: FlightRecord, impulse_class_upper: str) -> bool:
-    """Return True if any motor in the record matches the given impulse class letter."""
+    """Return True if any motor in the record matches the given impulse class letter.
+
+    When filtering for 'A', also matches sub-A motors (1/2A, 1/4A) since
+    thrustcurve-db classifies them as impulse class 'A'.
+    """
     overflow = record.overflow
     if not overflow:
         return False
@@ -122,9 +126,12 @@ def _has_impulse_class(record: FlightRecord, impulse_class_upper: str) -> bool:
         if not isinstance(motor, dict):
             continue
         letter = (motor.get("letter") or "").upper()
-        # Normalize unicode fractions for comparison
+        # Normalize unicode fractions to ASCII form
         letter = letter.replace("\u00bd", "1/2").replace("\u00bc", "1/4")
         if letter == impulse_class_upper:
+            return True
+        # Sub-A motors (1/2A, 1/4A) have impulse class 'A'
+        if impulse_class_upper == "A" and letter in ("1/2A", "1/4A"):
             return True
     return False
 

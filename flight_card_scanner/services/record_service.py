@@ -7,6 +7,7 @@ dedicated columns and overflow JSON.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Optional
 
@@ -16,6 +17,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import FlightRecord
 from ..schemas import FlightCardExtraction
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -30,9 +33,11 @@ _LENGTH_TO_MM: dict[str, float] = {
     "in": 25.4,
     "inch": 25.4,
     "inches": 25.4,
+    '"': 25.4,
     "ft": 304.8,
     "feet": 304.8,
     "foot": 304.8,
+    "'": 304.8,
 }
 
 # Weight conversions → grams
@@ -60,6 +65,7 @@ def normalize_length_to_mm(value: float | None, unit: str | None) -> float | Non
         return value * 25.4
     factor = _LENGTH_TO_MM.get(unit.lower().strip())
     if factor is None:
+        logger.warning("Unknown length/diameter unit %r (value=%s), skipping normalization", unit, value)
         return None
     return value * factor
 
@@ -73,6 +79,7 @@ def normalize_weight_to_g(value: float | None, unit: str | None) -> float | None
         return value * 28.3495
     factor = _WEIGHT_TO_G.get(unit.lower().strip())
     if factor is None:
+        logger.warning("Unknown weight unit %r (value=%s), skipping normalization", unit, value)
         return None
     return value * factor
 
