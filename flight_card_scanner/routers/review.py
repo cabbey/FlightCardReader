@@ -419,9 +419,17 @@ async def list_records(
     records = []
     for r in page_records:
         rocket_name = r.overflow.get("rocket_name") if r.overflow else None
-        motor_desig = motor_designation_str(r.overflow)
-        # Motors are "verified" if all have a thrustcurve_id
+        # Enrich motors with thrustcurve_data before formatting for display
         motors = (r.overflow or {}).get("motors", [])
+        if motors and _thrustcurve_service:
+            enriched = await _thrustcurve_service.enrich_motors_for_display(motors)
+        else:
+            enriched = motors
+        # Build designation from enriched motors
+        enriched_overflow = dict(r.overflow) if r.overflow else {}
+        enriched_overflow["motors"] = enriched
+        motor_desig = motor_designation_str(enriched_overflow)
+        # Motors are "verified" if all have a thrustcurve_id
         motors_verified = bool(motors) and all(m.get("thrustcurve_id") for m in motors)
         records.append(
             RecordRow(
