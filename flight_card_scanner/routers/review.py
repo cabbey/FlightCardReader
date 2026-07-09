@@ -24,6 +24,7 @@ from ..database import get_db
 from ..models import FlightRecord
 from ..services.extraction_service import ExtractionService
 from ..services.record_service import motor_designation_str
+from ..services.record_service import normalize_length_to_mm, normalize_weight_to_g
 
 # ---------------------------------------------------------------------------
 # Module-level configuration (wired during app startup)
@@ -109,6 +110,32 @@ def _matches_search(record: FlightRecord, q_lower: str) -> bool:
     return False
 
 
+def _has_impulse_class(record: FlightRecord, impulse_class_upper: str) -> bool:
+    """Return True if any motor in the record matches the given impulse class letter.
+
+    When filtering for 'A', also matches sub-A motors (1/2A, 1/4A) since
+    thrustcurve-db classifies them as impulse class 'A'.
+    """
+    overflow = record.overflow
+    if not overflow:
+        return False
+    motors = overflow.get("motors")
+    if not motors:
+        return False
+    for motor in motors:
+        if not isinstance(motor, dict):
+            continue
+        letter = (motor.get("letter") or "").upper()
+        # Normalize unicode fractions to ASCII form
+        letter = letter.replace("\u00bd", "1/2").replace("\u00bc", "1/4")
+        if letter == impulse_class_upper:
+            return True
+        # Sub-A motors (1/2A, 1/4A) have impulse class 'A'
+        if impulse_class_upper == "A" and letter in ("1/2A", "1/4A"):
+            return True
+    return False
+
+
 def _build_event_dates(config: "AppConfig") -> list[dict[str, str]]:
     """Build a list of {value, label} dicts for every date in the event range."""
     dates = []
@@ -140,6 +167,13 @@ async def list_records(
     verified: str | None = Query(default=None),
     status: str | None = Query(default=None),
     flight_day: str | None = Query(default=None),
+    impulse_class: str | None = Query(default=None),
+    search_length: float | None = Query(default=None),
+    search_length_unit: str | None = Query(default=None),
+    search_diameter: float | None = Query(default=None),
+    search_diameter_unit: str | None = Query(default=None),
+    search_weight: float | None = Query(default=None),
+    search_weight_unit: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Render the paginated list view of flight records.
@@ -150,6 +184,8 @@ async def list_records(
     - verified: all (default), verified, unverified
     - status: extraction_status filter (pending, processing, extracted, extraction_failed)
     - flight_day: ISO date string to filter by flight_date
+    - impulse_class: filter by motor impulse class letter (e.g. 'G', 'H', 'K')
+    - search_length/search_diameter/search_weight: proximity search on rocket measurements
     """
     templates = _get_templates()
     config = _get_config()
@@ -225,6 +261,11 @@ async def list_records(
     q_stripped = q.strip() if q else None
     search_term = q_stripped if q_stripped else None
 
+    # Normalize impulse_class for comparison (handle unicode fractions)
+    impulse_class_upper = None
+    if impulse_class:
+        impulse_class_upper = impulse_class.strip().upper().replace("\u00bd", "1/2").replace("\u00bc", "1/4")
+
     if search_term:
         q_lower = search_term.lower()
         # SQL LIKE on flier_name
@@ -254,12 +295,33 @@ async def list_records(
             if record.id not in sql_match_ids and _matches_search(record, q_lower):
                 combined.append(record)
 
+        # Apply impulse_class filter (Python-side, motors are in JSON)
+        if impulse_class_upper:
+            combined = [r for r in combined if _has_impulse_class(r, impulse_class_upper)]
+
         total_records = len(combined)
         total_pages = max(1, math.ceil(total_records / effective_page_size))
         # Paginate the combined results
         start_idx = (page - 1) * effective_page_size
         end_idx = start_idx + effective_page_size
         page_records = combined[start_idx:end_idx]
+    elif impulse_class_upper:
+        # Impulse class filter requires Python-side scan (motors are in JSON)
+        all_stmt = (
+            select(FlightRecord)
+            .order_by(order_clause)
+        )
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records = list(all_result.scalars().all())
+
+        filtered = [r for r in all_records if _has_impulse_class(r, impulse_class_upper)]
+
+        total_records = len(filtered)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = filtered[start_idx:end_idx]
     else:
         # No search — straight SQL pagination
         count_all_stmt = select(func.count(FlightRecord.id))
@@ -278,6 +340,64 @@ async def list_records(
         records_stmt = _apply_filters(records_stmt)
         records_result = await db.execute(records_stmt)
         page_records = list(records_result.scalars().all())
+
+    # --- Measurement proximity search (re-sorts results if active) ---
+    # Normalize the search values to metric
+    norm_search_length = normalize_length_to_mm(search_length, search_length_unit)
+    norm_search_diameter = normalize_length_to_mm(search_diameter, search_diameter_unit)
+    norm_search_weight = normalize_weight_to_g(search_weight, search_weight_unit)
+    has_measurement_search = any(v is not None for v in (norm_search_length, norm_search_diameter, norm_search_weight))
+
+    if has_measurement_search:
+        # Measurement search requires loading all filtered records and sorting by proximity
+        all_stmt = select(FlightRecord)
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records = list(all_result.scalars().all())
+
+        # Apply impulse_class filter if set
+        if impulse_class_upper:
+            all_records = [r for r in all_records if _has_impulse_class(r, impulse_class_upper)]
+
+        # Apply text search if set
+        if search_term:
+            q_lower = search_term.lower()
+            like_lower = search_term.lower()
+            all_records = [
+                r for r in all_records
+                if (r.flier_name and like_lower in r.flier_name.lower())
+                or _matches_search(r, q_lower)
+            ]
+
+        # Filter to records that have at least one searched measurement and compute distance
+        def _measurement_distance(record):
+            dist = 0.0
+            count = 0
+            if norm_search_length is not None and record.norm_length_mm is not None:
+                dist += abs(record.norm_length_mm - norm_search_length)
+                count += 1
+            if norm_search_diameter is not None and record.norm_diameter_mm is not None:
+                dist += abs(record.norm_diameter_mm - norm_search_diameter)
+                count += 1
+            if norm_search_weight is not None and record.norm_weight_g is not None:
+                dist += abs(record.norm_weight_g - norm_search_weight)
+                count += 1
+            if count == 0:
+                return None  # no comparable measurements
+            return dist
+
+        scored = []
+        for r in all_records:
+            d = _measurement_distance(r)
+            if d is not None:
+                scored.append((d, r))
+        scored.sort(key=lambda x: x[0])
+
+        total_records = len(scored)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = [r for _, r in scored[start_idx:end_idx]]
 
     # --- Get queued IDs for status indicator ---
     queued_ids = extraction_service.queued_ids
@@ -326,6 +446,13 @@ async def list_records(
             "verified_filter": filter_verified or "all",
             "status_filter": status or "",
             "flight_day_filter": flight_day or "",
+            "impulse_class_filter": impulse_class or "",
+            "search_length": search_length,
+            "search_length_unit": search_length_unit or "",
+            "search_diameter": search_diameter,
+            "search_diameter_unit": search_diameter_unit or "",
+            "search_weight": search_weight,
+            "search_weight_unit": search_weight_unit or "",
             "event_dates": _build_event_dates(config),
         },
     )

@@ -283,7 +283,7 @@
   {% if stats.motor_counts %}
   <div class="motor-pills">
     {% for letter, count in stats.motor_counts.items() %}
-    <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
+    <a href="/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
     {% endfor %}
   </div>
   {% endif %}

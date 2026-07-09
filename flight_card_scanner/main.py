@@ -245,6 +245,40 @@ async def lifespan(app: FastAPI):
         await extraction_service.start()
         logger.info("Extraction service started.")
 
+        # Populate normalized metric columns for existing records that don't have them
+        async with session_factory() as db:
+            from sqlalchemy import select as _select, or_
+            from .models import FlightRecord as _FR
+            from .services.record_service import compute_normalized_metrics
+            stmt = (
+                _select(_FR)
+                .where(_FR.overflow.isnot(None))
+                .where(
+                    or_(
+                        _FR.norm_length_mm.is_(None),
+                        _FR.norm_diameter_mm.is_(None),
+                        _FR.norm_weight_g.is_(None),
+                    )
+                )
+            )
+            result = await db.execute(stmt)
+            candidates = list(result.scalars().all())
+            norm_count = 0
+            for record in candidates:
+                metrics = compute_normalized_metrics(record.overflow)
+                # Only update if we actually computed something
+                if any(v is not None for v in metrics.values()):
+                    record.norm_length_mm = metrics["norm_length_mm"]
+                    record.norm_diameter_mm = metrics["norm_diameter_mm"]
+                    record.norm_weight_g = metrics["norm_weight_g"]
+                    norm_count += 1
+            if norm_count:
+                await db.commit()
+                logger.info(
+                    "Populated normalized metrics for %d existing records",
+                    norm_count,
+                )
+
         # In immediate mode, enqueue any pending records (including rolled-back ones)
         if extraction_service.mode == ExtractionMode.IMMEDIATE:
             dispatched = await extraction_service.trigger_pending()

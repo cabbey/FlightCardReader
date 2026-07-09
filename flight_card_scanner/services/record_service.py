@@ -7,6 +7,7 @@ dedicated columns and overflow JSON.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Optional
 
@@ -16,6 +17,101 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import FlightRecord
 from ..schemas import FlightCardExtraction
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Unit conversion utilities for normalized metric search values
+# ---------------------------------------------------------------------------
+
+# Length/diameter conversions → millimeters
+_LENGTH_TO_MM: dict[str, float] = {
+    "mm": 1.0,
+    "cm": 10.0,
+    "m": 1000.0,
+    "in": 25.4,
+    "inch": 25.4,
+    "inches": 25.4,
+    '"': 25.4,
+    "ft": 304.8,
+    "feet": 304.8,
+    "foot": 304.8,
+    "'": 304.8,
+}
+
+# Weight conversions → grams
+_WEIGHT_TO_G: dict[str, float] = {
+    "g": 1.0,
+    "grams": 1.0,
+    "gram": 1.0,
+    "kg": 1000.0,
+    "oz": 28.3495,
+    "ounce": 28.3495,
+    "ounces": 28.3495,
+    "lb": 453.592,
+    "lbs": 453.592,
+    "pound": 453.592,
+    "pounds": 453.592,
+}
+
+
+def normalize_length_to_mm(value: float | None, unit: str | None) -> float | None:
+    """Convert a length/diameter value to millimeters. Returns None if not convertible."""
+    if value is None:
+        return None
+    if not unit:
+        # Assume inches for bare numbers (most common in US rocketry)
+        return value * 25.4
+    factor = _LENGTH_TO_MM.get(unit.lower().strip())
+    if factor is None:
+        logger.warning("Unknown length/diameter unit %r (value=%s), skipping normalization", unit, value)
+        return None
+    return value * factor
+
+
+def normalize_weight_to_g(value: float | None, unit: str | None) -> float | None:
+    """Convert a weight value to grams. Returns None if not convertible."""
+    if value is None:
+        return None
+    if not unit:
+        # Assume ounces for bare numbers (common in US rocketry)
+        return value * 28.3495
+    factor = _WEIGHT_TO_G.get(unit.lower().strip())
+    if factor is None:
+        logger.warning("Unknown weight unit %r (value=%s), skipping normalization", unit, value)
+        return None
+    return value * factor
+
+
+def compute_normalized_metrics(overflow: dict | None) -> dict[str, float | None]:
+    """Extract measurements from overflow and compute normalized metric values.
+
+    Returns a dict with keys: norm_length_mm, norm_diameter_mm, norm_weight_g.
+    Any value that cannot be computed is None.
+    """
+    result: dict[str, float | None] = {
+        "norm_length_mm": None,
+        "norm_diameter_mm": None,
+        "norm_weight_g": None,
+    }
+    if not overflow:
+        return result
+
+    measurements = overflow.get("rocket_measurements")
+    if not measurements:
+        return result
+
+    result["norm_length_mm"] = normalize_length_to_mm(
+        measurements.get("length"), measurements.get("length_unit")
+    )
+    result["norm_diameter_mm"] = normalize_length_to_mm(
+        measurements.get("diameter"), measurements.get("diameter_unit")
+    )
+    result["norm_weight_g"] = normalize_weight_to_g(
+        measurements.get("weight"), measurements.get("weight_unit")
+    )
+    return result
 
 
 async def create(
@@ -180,6 +276,12 @@ async def apply_extraction(
     record.overflow = overflow if overflow else None
     flag_modified(record, "overflow")
 
+    # --- Compute normalized metric values for search ---
+    metrics = compute_normalized_metrics(record.overflow)
+    record.norm_length_mm = metrics["norm_length_mm"]
+    record.norm_diameter_mm = metrics["norm_diameter_mm"]
+    record.norm_weight_g = metrics["norm_weight_g"]
+
     # --- Mark as extracted ---
     record.extraction_status = "extracted"
 
@@ -244,6 +346,13 @@ async def update_fields(
     # If marking as human_verified, ensure extraction_status is "extracted"
     if updates.get("human_verified") is True and record.extraction_status != "extracted":
         record.extraction_status = "extracted"
+
+    # Recompute normalized metrics if overflow was updated (measurements may have changed)
+    if "overflow" in updates:
+        metrics = compute_normalized_metrics(record.overflow)
+        record.norm_length_mm = metrics["norm_length_mm"]
+        record.norm_diameter_mm = metrics["norm_diameter_mm"]
+        record.norm_weight_g = metrics["norm_weight_g"]
 
     await db.commit()
     await db.refresh(record)
