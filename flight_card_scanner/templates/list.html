@@ -303,6 +303,7 @@
 {% block content %}
 <!-- Status bar: mode control + status counts -->
 <div class="status-bar">
+  {% if not read_only %}
   <form class="mode-control" id="modeForm">
     <label for="modeSelect">Mode:</label>
     <select id="modeSelect" name="mode">
@@ -310,6 +311,7 @@
       <option value="deferred" {% if current_mode == "deferred" %}selected{% endif %}>Deferred</option>
     </select>
   </form>
+  {% endif %}
   <div class="status-counts">
     <span class="count-item badge-pending">Pending: {{ status_counts.pending }}</span>
     <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
@@ -406,12 +408,16 @@
 
 <!-- Actions row: scan link, trigger, requeue, search -->
 <div class="actions-row">
+  {% if not read_only %}
   <a href="/scan" class="btn-scan" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#16a34a; color:#fff; text-decoration:none; font-weight:500;">📷 Scan Card</a>
+  {% endif %}
   <a href="/reports" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#7c3aed; color:#fff; text-decoration:none; font-weight:500;">📊 Reports</a>
+  {% if not read_only %}
   <a href="/queue" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#0891b2; color:#fff; text-decoration:none; font-weight:500;">📋 Queue</a>
   <button type="button" class="btn-trigger" id="btnTrigger">Trigger All Pending</button>
   {% if status_counts.extraction_failed > 0 %}
   <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
+  {% endif %}
   {% endif %}
   <form class="search-form" method="get" action="/">
     {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
