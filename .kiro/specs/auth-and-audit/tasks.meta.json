@@ -1,0 +1,370 @@
+{
+  "pbtResults": {
+    "1.3 Write property test for configuration validation (Property 10)": {
+      "status": "passed",
+      "lastRunTimestamp": 1783626855798
+    }
+  },
+  "executionHistory": {
+    "1.1 Extend AppConfig with auth fields and update config loader": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552500
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626567053
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626748971
+      }
+    ],
+    "1.2 Add session secret validation to startup": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552537
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626567943
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626749690
+      }
+    ],
+    "1.3 Write property test for configuration validation (Property 10)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552555
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626757838
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627047953
+      }
+    ],
+    "2.1 Create auth database module (`flight_card_scanner/auth_database.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552573
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626758610
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627048789
+      }
+    ],
+    "2.2 Create auth models (`flight_card_scanner/auth_models.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552593
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626759406
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627049641
+      }
+    ],
+    "3.1 Implement auth service (`flight_card_scanner/services/auth_service.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552607
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627058325
+      }
+    ],
+    "3.2 Write property test for password hashing round-trip (Property 1)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552624
+      }
+    ],
+    "3.3 Write property test for case-insensitive email identity (Property 2)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552640
+      }
+    ],
+    "3.4 Write property test for rate limiting enforcement (Property 8)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552658
+      }
+    ],
+    "3.5 Write property test for admin strict IP binding (Property 11)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552678
+      }
+    ],
+    "3.6 Write property test for data entry soft IP binding (Property 12)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552704
+      }
+    ],
+    "3.7 Write property test for hard max lifetime enforcement (Property 13)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552729
+      }
+    ],
+    "4.1 Implement audit service (`flight_card_scanner/services/audit_service.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552754
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626760372
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627050500
+      }
+    ],
+    "4.2 Write property test for audit log integrity (Property 7)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552787
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627059103
+      }
+    ],
+    "5. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552803
+      }
+    ],
+    "6.1 Implement session middleware (`flight_card_scanner/middleware/session_middleware.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552823
+      }
+    ],
+    "6.2 Implement role dependency (`flight_card_scanner/dependencies/auth.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552840
+      }
+    ],
+    "6.3 Write property test for role hierarchy access control (Property 4)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552856
+      }
+    ],
+    "7.1 Create login/logout endpoints (`flight_card_scanner/routers/auth.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552874
+      }
+    ],
+    "7.2 Create user management API endpoints in auth router": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552889
+      }
+    ],
+    "7.3 Write property test for user CRUD correctness (Property 5)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552904
+      }
+    ],
+    "7.4 Write unit tests for session invalidation on deactivation (Property 6)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552922
+      }
+    ],
+    "7.5 Write unit tests for no user enumeration (Property 9)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552937
+      }
+    ],
+    "8. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552952
+      }
+    ],
+    "9.1 Wire auth into application lifespan (`flight_card_scanner/main.py`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552967
+      }
+    ],
+    "9.2 Add `require_role()` dependencies to existing routers": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552979
+      }
+    ],
+    "9.3 Add audit logging calls to existing routers": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626552995
+      }
+    ],
+    "10.1 Create login page template (`flight_card_scanner/templates/login.html`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553008
+      }
+    ],
+    "10.2 Create user management page template (`flight_card_scanner/templates/users.html`)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553026
+      }
+    ],
+    "10.3 Update base template with auth context": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553042
+      }
+    ],
+    "10.4 Update existing templates with conditional rendering": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553060
+      }
+    ],
+    "11.1 Install argon2-cffi and itsdangerous packages": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553079
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626568935
+      },
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626750476
+      }
+    ],
+    "12. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553096
+      }
+    ],
+    "13.1 Write integration tests for full auth flow": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553113
+      }
+    ],
+    "13.2 Write integration tests for audit log output": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553130
+      }
+    ],
+    "13.3 Write property test for session lifecycle validity (Property 3)": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553147
+      }
+    ],
+    "14. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626553161
+      }
+    ],
+    "11. Install new dependencies": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783626750496
+      }
+    ],
+    "1. Configuration and foundation": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627047972
+      }
+    ],
+    "2. Auth database and models": [
+      {
+        "executionId": "274d99f6-2e44-4bd6-ad75-8fae34deac05",
+        "chatSessionId": "sess_b6b979f3-6b78-4097-9232-b1282fd575bd",
+        "timestamp": 1783627049670
+      }
+    ]
+  }
+}

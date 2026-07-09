@@ -193,6 +193,20 @@ async def lifespan(app: FastAPI):
         logger.error("Configuration error: %s", exc)
         sys.exit(1)
 
+    # 1b. Validate FCS_SESSION_SECRET environment variable
+    session_secret = os.environ.get("FCS_SESSION_SECRET", "")
+    if not session_secret or not session_secret.strip():
+        logger.error(
+            "FCS_SESSION_SECRET environment variable is required and must be non-empty"
+        )
+        sys.exit(1)
+    if len(session_secret) < 16:
+        logger.error(
+            "FCS_SESSION_SECRET must be at least 16 characters long"
+        )
+        sys.exit(1)
+    app.state.session_secret = session_secret
+
     # 2-4. Run startup checks (image store, DB, static assets, log endpoints)
     await startup_checks(config)
 

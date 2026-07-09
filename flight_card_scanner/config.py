@@ -51,6 +51,9 @@ class AppConfig:
     flier_match_model: str | None = None
     auto_accept_threshold: float = 0.95
     read_only: bool = False
+    auth_db_path: Path = field(default_factory=lambda: Path("./auth.db"))
+    session_timeout_hours: float = 8.0
+    audit_log_path: Path | None = None  # defaults to {event_data_path}/audit.log
 
     @property
     def image_store_path(self) -> Path:
@@ -61,6 +64,13 @@ class AppConfig:
     def db_path(self) -> Path:
         """Database file within the event data path."""
         return self.event_data_path / "flight_cards.db"
+
+    @property
+    def effective_audit_log_path(self) -> Path:
+        """Audit log path, defaulting to {event_data_path}/audit.log."""
+        if self.audit_log_path:
+            return self.audit_log_path
+        return self.event_data_path / "audit.log"
 
 
 def _parse_date(value: str, field_name: str) -> date:
@@ -258,6 +268,29 @@ def load_config(path: Path) -> AppConfig:
     if not isinstance(read_only, bool):
         raise ConfigError(f"Config key 'read_only' must be a boolean, got {read_only!r}.")
 
+    # --- auth_db_path (optional, default ./auth.db resolved relative to config dir) ---
+    auth_db_path = _resolve_path(
+        Path(get_with_default("auth_db_path", "./auth.db")), config_dir
+    )
+
+    # --- session_timeout_hours (optional, default 8, range [0.25, 8]) ---
+    session_timeout_hours = get_with_default("session_timeout_hours", 8)
+    if not isinstance(session_timeout_hours, (int, float)) or isinstance(session_timeout_hours, bool):
+        raise ConfigError(
+            f"Config key 'session_timeout_hours' must be a number, got {session_timeout_hours!r}."
+        )
+    session_timeout_hours = float(session_timeout_hours)
+    if session_timeout_hours < 0.25 or session_timeout_hours > 8:
+        raise ConfigError(
+            f"Config key 'session_timeout_hours' must be between 0.25 and 8 inclusive, "
+            f"got {session_timeout_hours}."
+        )
+
+    # --- audit_log_path (optional, defaults to {event_data_path}/audit.log) ---
+    audit_log_path: Path | None = None
+    if "audit_log_path" in data and data["audit_log_path"] is not None:
+        audit_log_path = _resolve_path(Path(data["audit_log_path"]), config_dir)
+
     return AppConfig(
         host=host,
         port=port,
@@ -272,4 +305,7 @@ def load_config(path: Path) -> AppConfig:
         flier_match_model=flier_match_model,
         auto_accept_threshold=auto_accept_threshold,
         read_only=read_only,
+        auth_db_path=auth_db_path,
+        session_timeout_hours=session_timeout_hours,
+        audit_log_path=audit_log_path,
     )
