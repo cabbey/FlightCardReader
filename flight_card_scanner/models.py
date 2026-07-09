@@ -71,6 +71,11 @@ class FlightRecord(Base):
     # --- JSON overflow for remaining fields ---
     overflow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # --- Normalized metric values for measurement search (never displayed) ---
+    norm_length_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    norm_diameter_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    norm_weight_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # --- Table-level indexes ---
     __table_args__ = (
         Index("ix_flight_records_created_at", created_at.desc()),

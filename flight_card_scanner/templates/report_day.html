@@ -133,7 +133,7 @@
 <h3 class="section-title">Motors by Impulse Class</h3>
 <div class="motor-pills">
   {% for letter, count in motor_counts.items() %}
-  <span class="motor-pill">{{ letter | display_fractions }}: {{ count }}</span>
+  <a href="/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
   {% endfor %}
 </div>
 {% endif %}
