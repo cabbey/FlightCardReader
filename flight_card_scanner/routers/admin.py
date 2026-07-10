@@ -527,6 +527,55 @@ async def get_queue(request: Request) -> dict:
     return {"queued_ids": queued, "count": len(queued)}
 
 
+@router.get("/stats")
+async def get_stats(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return status counts and verification stats for the site-wide header.
+
+    No auth required — just aggregate counts, no sensitive data.
+    """
+    from sqlalchemy import func, select
+
+    from ..models import FlightRecord
+
+    # Status counts
+    count_stmt = (
+        select(FlightRecord.extraction_status, func.count(FlightRecord.id))
+        .group_by(FlightRecord.extraction_status)
+    )
+    count_result = await db.execute(count_stmt)
+    status_counts = {"pending": 0, "processing": 0, "extracted": 0, "extraction_failed": 0}
+    for st, count in count_result.all():
+        if st in status_counts:
+            status_counts[st] = count
+
+    # Verified counts
+    verified_stmt = select(func.count(FlightRecord.id)).where(
+        FlightRecord.human_verified == True  # noqa: E712
+    )
+    verified_result = await db.execute(verified_stmt)
+    verified_count = verified_result.scalar() or 0
+
+    total_stmt = select(func.count(FlightRecord.id))
+    total_result = await db.execute(total_stmt)
+    total_all = total_result.scalar() or 0
+
+    verified_percent = round((verified_count / total_all * 100) if total_all > 0 else 0, 1)
+
+    # Current extraction mode
+    extraction_service = _extraction_service
+    current_mode = extraction_service.mode.value if extraction_service else "unknown"
+
+    return {
+        "status_counts": status_counts,
+        "verified_count": verified_count,
+        "total_all": total_all,
+        "verified_percent": verified_percent,
+        "current_mode": current_mode,
+    }
+
+
 @router.delete("/record/{record_id}", dependencies=[Depends(require_role(Role.ADMIN))])
 async def delete_record(
     request: Request,

@@ -29,60 +29,214 @@
       padding: 0;
     }
 
-    h1 {
-      font-size: 1.5rem;
-      margin: 1rem 0;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-
-    nav.auth-nav {
+    /* Top nav bar: login left, page links right */
+    nav.site-nav {
       display: flex;
       align-items: center;
-      gap: 1rem;
       padding: 0.5rem 0;
       font-size: 0.875rem;
       border-bottom: 1px solid #e0e0e0;
       margin-bottom: 0.5rem;
     }
 
-    nav.auth-nav .nav-spacer {
-      flex: 1;
+    nav.site-nav .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
-    nav.auth-nav a {
+    nav.site-nav .nav-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    nav.site-nav a {
       color: #0066cc;
       text-decoration: none;
     }
 
-    nav.auth-nav a:hover {
+    nav.site-nav a:hover {
       text-decoration: underline;
     }
 
-    nav.auth-nav .user-name {
+    nav.site-nav .user-name {
       color: #555;
+    }
+
+    nav.site-nav .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    nav.site-nav .nav-btn:hover {
+      text-decoration: none;
+      opacity: 0.9;
+    }
+
+    .nav-btn-cards { background: #2563eb; }
+    .nav-btn-scan { background: #16a34a; }
+    .nav-btn-reports { background: #7c3aed; }
+    .nav-btn-queue { background: #0891b2; }
+    .nav-btn-admin { background: #dc2626; }
+
+    /* Title row with stats */
+    .title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+
+    .title-row h1 {
+      font-size: 1.5rem;
+      margin: 0;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .header-stats {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      text-align: center;
+      min-width: 3rem;
+    }
+
+    .stat-item .stat-label {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: #6b7280;
+      line-height: 1.2;
+    }
+
+    .stat-item .stat-value {
+      display: block;
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+    }
+
+    .stat-pending .stat-value { color: #92400e; }
+    .stat-processing .stat-value { color: #1e40af; }
+    .stat-extracted .stat-value { color: #065f46; }
+    .stat-failed .stat-value { color: #991b1b; }
+    .stat-verified .stat-value { color: #2563eb; }
+
+    @media (max-width: 600px) {
+      nav.site-nav {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      nav.site-nav .nav-right {
+        margin-left: 0;
+        flex-wrap: wrap;
+      }
+
+      .title-row {
+        flex-direction: column;
+      }
+
+      .header-stats {
+        align-self: flex-start;
+      }
     }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
-  {# Derive current_user from session middleware. Falls back to None if not set. #}
   {%- set current_user = request.state.user if request and request.state else None %}
   <div class="container">
-    <nav class="auth-nav" aria-label="User navigation">
-      <span class="nav-spacer"></span>
-      {% if current_user %}
-        <span class="user-name">{{ current_user.display_name }}</span>
-        {% if current_user.role == "admin" %}
-          <a href="/admin/users">Users</a>
+    <nav class="site-nav" aria-label="Site navigation">
+      <div class="nav-left">
+        {% if current_user %}
+          <span class="user-name">{{ current_user.display_name }}</span>
+          <a href="/logout">Logout</a>
+        {% else %}
+          <a href="/login">Login</a>
         {% endif %}
-        <a href="/logout">Logout</a>
-      {% else %}
-        <a href="/login">Login</a>
-      {% endif %}
+      </div>
+      <div class="nav-right">
+        <a href="/" class="nav-btn nav-btn-cards">&#x1F680; Flight Cards</a>
+        {% if current_user %}
+          <a href="/scan" class="nav-btn nav-btn-scan">&#x1F4F7; Scan</a>
+          <a href="/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
+          <a href="/queue" class="nav-btn nav-btn-queue">&#x1F4CB; Queue</a>
+          {% if current_user.role == "admin" %}
+            <a href="/admin" class="nav-btn nav-btn-admin">&#x2699;&#xFE0F; Admin</a>
+          {% endif %}
+        {% else %}
+          <a href="/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
+        {% endif %}
+      </div>
     </nav>
-    <h1>{{ event_name }}</h1>
+
+    <div class="title-row">
+      <h1>{{ event_name }}</h1>
+      <div class="header-stats" id="headerStats">
+        <div class="stat-item stat-pending">
+          <span class="stat-label">Pending</span>
+          <span class="stat-value" id="statPending">—</span>
+        </div>
+        <div class="stat-item stat-processing">
+          <span class="stat-label">Processing</span>
+          <span class="stat-value" id="statProcessing">—</span>
+        </div>
+        <div class="stat-item stat-extracted">
+          <span class="stat-label">Extracted</span>
+          <span class="stat-value" id="statExtracted">—</span>
+        </div>
+        <div class="stat-item stat-failed">
+          <span class="stat-label">Failed</span>
+          <span class="stat-value" id="statFailed">—</span>
+        </div>
+        <div class="stat-item stat-verified">
+          <span class="stat-label">Verified</span>
+          <span class="stat-value" id="statVerified">—</span>
+        </div>
+      </div>
+    </div>
+
     {% block content %}{% endblock %}
   </div>
+
+  <script>
+  (function() {
+    function loadStats() {
+      fetch('/api/admin/stats')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data) return;
+          var sc = data.status_counts;
+          document.getElementById('statPending').textContent = sc.pending;
+          document.getElementById('statProcessing').textContent = sc.processing;
+          document.getElementById('statExtracted').textContent = sc.extracted;
+          document.getElementById('statFailed').textContent = sc.extraction_failed;
+          document.getElementById('statVerified').textContent =
+            data.verified_count + '/' + data.total_all + ' (' + data.verified_percent + '%)';
+        })
+        .catch(function() {});
+    }
+    loadStats();
+  })();
+  </script>
 </body>
 </html>

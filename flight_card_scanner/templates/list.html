@@ -2,51 +2,6 @@
 
 {% block head %}
 <style>
-  /* Status bar */
-  .status-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    padding: 0.75rem;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    margin-bottom: 1rem;
-  }
-
-  .status-bar .mode-control {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-right: auto;
-  }
-
-  .status-bar .mode-control label {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .status-bar .mode-control select {
-    font-size: 0.85rem;
-    padding: 0.2rem 0.4rem;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-  }
-
-  .status-counts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-  }
-
-  .status-counts .count-item {
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-weight: 500;
-  }
-
   /* Filter/sort controls */
   .filter-row {
     display: flex;
@@ -81,33 +36,6 @@
     gap: 0.5rem;
     align-items: center;
     margin-bottom: 1rem;
-  }
-
-  .actions-row button {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.75rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .btn-trigger {
-    background: #2563eb;
-    color: #fff;
-  }
-
-  .btn-trigger:hover {
-    background: #1d4ed8;
-  }
-
-  .btn-requeue {
-    background: #dc2626;
-    color: #fff;
-  }
-
-  .btn-requeue:hover {
-    background: #b91c1c;
   }
 
   /* Search */
@@ -217,6 +145,7 @@
     align-items: center;
     gap: 0.75rem;
     margin-top: 1rem;
+    padding-bottom: 2rem;
     font-size: 0.85rem;
   }
 
@@ -278,15 +207,6 @@
       width: 100%;
     }
 
-    .status-bar {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .status-bar .mode-control {
-      margin-right: 0;
-    }
-
     .filter-row {
       flex-direction: column;
       align-items: flex-start;
@@ -304,26 +224,6 @@
 {# Derive current_user from session middleware for conditional rendering #}
 {% set current_user = request.state.user if request and request.state else None %}
 {% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
-
-<!-- Status bar: mode control + status counts -->
-<div class="status-bar">
-  {% if can_mutate %}
-  <form class="mode-control" id="modeForm">
-    <label for="modeSelect">Mode:</label>
-    <select id="modeSelect" name="mode">
-      <option value="immediate" {% if current_mode == "immediate" %}selected{% endif %}>Immediate</option>
-      <option value="deferred" {% if current_mode == "deferred" %}selected{% endif %}>Deferred</option>
-    </select>
-  </form>
-  {% endif %}
-  <div class="status-counts">
-    <span class="count-item badge-pending">Pending: {{ status_counts.pending }}</span>
-    <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
-    <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
-    <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
-    <span class="count-item" style="margin-left:0.75rem; font-weight:600;">Verified: {{ verified_count }}/{{ total_all }} ({{ verified_percent }}%)</span>
-  </div>
-</div>
 
 <!-- Filter/sort controls -->
 <div class="filter-row">
@@ -410,19 +310,8 @@
   </form>
 </div>
 
-<!-- Actions row: scan link, trigger, requeue, search -->
+<!-- Actions row: search -->
 <div class="actions-row">
-  {% if can_mutate %}
-  <a href="/scan" class="btn-scan" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#16a34a; color:#fff; text-decoration:none; font-weight:500;">📷 Scan Card</a>
-  {% endif %}
-  <a href="/reports" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#7c3aed; color:#fff; text-decoration:none; font-weight:500;">📊 Reports</a>
-  {% if can_mutate %}
-  <a href="/queue" style="font-size:0.85rem; padding:0.4rem 0.75rem; border-radius:4px; background:#0891b2; color:#fff; text-decoration:none; font-weight:500;">📋 Queue</a>
-  <button type="button" class="btn-trigger" id="btnTrigger">Trigger All Pending</button>
-  {% if status_counts.extraction_failed > 0 %}
-  <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
-  {% endif %}
-  {% endif %}
   <form class="search-form" method="get" action="/">
     {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     {% if verified_filter and verified_filter != 'all' %}<input type="hidden" name="verified" value="{{ verified_filter }}">{% endif %}
@@ -523,7 +412,6 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
-      // Check TTL
       if (Date.now() - data.ts > TTL_MS) {
         localStorage.removeItem(STORAGE_KEY);
         return null;
@@ -554,7 +442,6 @@
       impulse_class: '{{ impulse_class_filter }}',
       q: '{{ q or "" }}'
     };
-    // Apply overrides
     if (overrides) {
       Object.keys(overrides).forEach(function(k) { params[k] = overrides[k]; });
     }
@@ -602,49 +489,6 @@
   if (pageJump) {
     pageJump.addEventListener('change', function() {
       window.location.href = buildListUrl({ page: this.value });
-    });
-  }
-
-  // Mode switch
-  var modeSelect = document.getElementById('modeSelect');
-  if (modeSelect) {
-    modeSelect.addEventListener('change', function() {
-      fetch('/api/admin/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: modeSelect.value })
-      }).then(function(res) {
-        if (!res.ok) { alert('Failed to switch mode.'); }
-        else { location.reload(); }
-      }).catch(function() { alert('Network error switching mode.'); });
-    });
-  }
-
-  // Trigger All Pending
-  var btnTrigger = document.getElementById('btnTrigger');
-  if (btnTrigger) {
-    btnTrigger.addEventListener('click', function() {
-      fetch('/api/admin/trigger', { method: 'POST' })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          alert('Dispatched ' + data.dispatched + ' record(s) for extraction.');
-          location.reload();
-        })
-        .catch(function() { alert('Network error triggering extraction.'); });
-    });
-  }
-
-  // Re-queue All Failed
-  var btnRequeue = document.getElementById('btnRequeue');
-  if (btnRequeue) {
-    btnRequeue.addEventListener('click', function() {
-      fetch('/api/admin/requeue', { method: 'POST' })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          alert('Re-queued ' + data.requeued + ' record(s).');
-          location.reload();
-        })
-        .catch(function() { alert('Network error re-queuing records.'); });
     });
   }
 })();

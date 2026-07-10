@@ -19,18 +19,6 @@
     color: #6b7280;
   }
 
-  .back-link {
-    display: inline-block;
-    color: #2563eb;
-    text-decoration: none;
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
-  }
-
-  .back-link:hover {
-    text-decoration: underline;
-  }
-
   .section-label {
     font-size: 0.95rem;
     font-weight: 600;
@@ -129,8 +117,6 @@
 {% endblock %}
 
 {% block content %}
-<a href="/" class="back-link" id="backToList">&larr; Back to list</a>
-
 <div class="queue-header">
   <h2>Extraction Queue</h2>
   <span class="queue-count">{{ processing_size }} processing, {{ queue_size }} queued</span>
@@ -197,27 +183,6 @@
 
 <script>
 (function() {
-  // --- Update "Back to list" link with saved filter/sort prefs ---
-  var STORAGE_KEY = 'fcs_list_prefs';
-  var TTL_MS = 60 * 60 * 1000;
-  var link = document.getElementById('backToList');
-  if (link) {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var data = JSON.parse(raw);
-        if (Date.now() - data.ts <= TTL_MS) {
-          var parts = ['/?page=1'];
-          if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
-          if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
-          if (data.status) parts.push('status=' + encodeURIComponent(data.status));
-          if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
-          if (parts.length > 1) link.href = parts[0] + '&' + parts.slice(1).join('&');
-        }
-      }
-    } catch(e) {}
-  }
-
   // --- Live duration update for processing records ---
   function updateDurations() {
     document.querySelectorAll('[data-started]').forEach(function(cell) {

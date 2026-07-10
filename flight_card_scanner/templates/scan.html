@@ -353,9 +353,6 @@
 {% set current_user = request.state.user if request and request.state else None %}
 {% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
 
-<div style="margin-bottom:0.75rem;">
-  <a href="/" style="color:#2563eb; text-decoration:none; font-size:0.85rem;">&larr; Back to list</a>
-</div>
 {% if read_only %}
 <div style="text-align:center; padding:2rem; color:#6b7280;">
   <p style="font-size:1.1rem; font-weight:500;">This event is in read-only mode.</p>

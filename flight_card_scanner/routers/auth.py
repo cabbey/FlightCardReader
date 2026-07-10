@@ -210,6 +210,31 @@ async def logout(request: Request):
 
 
 @router.get(
+    "/admin",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def admin_dashboard(request: Request):
+    """Render the admin dashboard page with extraction controls and management links."""
+    if _templates is None:
+        raise RuntimeError("Auth router not configured.")
+
+    from flight_card_scanner.routers.admin import get_extraction_service
+
+    extraction_service = get_extraction_service()
+    current_mode = extraction_service.mode.value
+
+    return _templates.TemplateResponse(
+        name="admin.html",
+        context={
+            "request": request,
+            "current_mode": current_mode,
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+@router.get(
     "/admin/users",
     response_class=HTMLResponse,
     dependencies=[Depends(require_role(Role.ADMIN))],

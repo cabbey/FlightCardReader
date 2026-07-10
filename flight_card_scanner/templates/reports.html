@@ -2,19 +2,6 @@
 
 {% block head %}
 <style>
-  .report-nav {
-    margin-bottom: 1rem;
-  }
-
-  .report-nav a {
-    color: #2563eb;
-    text-decoration: none;
-    font-size: 0.85rem;
-  }
-
-  .report-nav a:hover {
-    text-decoration: underline;
-  }
 
   .report-header {
     display: flex;
@@ -161,41 +148,6 @@
     text-decoration: underline;
   }
 
-  /* Status badges */
-  .status-counts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-    margin-bottom: 1rem;
-  }
-
-  .count-item {
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-weight: 500;
-  }
-
-  .badge-pending {
-    background: #fef3c7;
-    color: #92400e;
-  }
-
-  .badge-processing {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-
-  .badge-extracted {
-    background: #d1fae5;
-    color: #065f46;
-  }
-
-  .badge-extraction_failed {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-
   /* Failed records */
   .failed-section {
     background: #fff;
@@ -235,10 +187,6 @@
 {% endblock %}
 
 {% block content %}
-<nav class="report-nav">
-  <a href="/" id="backToList">&larr; Back to Records</a>
-</nav>
-
 <div class="report-header">
   <h2>Event Report</h2>
   <div class="day-filter">
@@ -250,14 +198,6 @@
       {% endfor %}
     </select>
   </div>
-</div>
-
-<!-- Status Counts -->
-<div class="status-counts">
-  <span class="count-item badge-pending">Pending: {{ status_counts.pending }}</span>
-  <span class="count-item badge-processing">Processing: {{ status_counts.processing }}</span>
-  <span class="count-item badge-extracted">Extracted: {{ status_counts.extracted }}</span>
-  <span class="count-item badge-extraction_failed">Failed: {{ status_counts.extraction_failed }}</span>
 </div>
 
 <!-- Summary Box -->
@@ -338,27 +278,6 @@
 
 <script>
 (function() {
-  // --- Back to list link with localStorage prefs ---
-  var STORAGE_KEY = 'fcs_list_prefs';
-  var TTL_MS = 60 * 60 * 1000;
-  var link = document.getElementById('backToList');
-  if (link) {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var data = JSON.parse(raw);
-        if (Date.now() - data.ts <= TTL_MS) {
-          var parts = ['/?page=1'];
-          if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
-          if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
-          if (data.status) parts.push('status=' + encodeURIComponent(data.status));
-          if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
-          if (parts.length > 1) link.href = parts[0] + '&' + parts.slice(1).join('&');
-        }
-      }
-    } catch(e) {}
-  }
-
   // --- Day filter ---
   document.getElementById('dayFilter').addEventListener('change', function() {
     var val = this.value;
