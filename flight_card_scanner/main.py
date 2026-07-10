@@ -14,7 +14,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -442,6 +442,43 @@ async def read_only_guard(request, call_next):
             content={"detail": "Event is in read-only mode. No modifications allowed."},
         )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def session_resolution(request: Request, call_next):
+    """Resolve session cookie and attach user to request.state."""
+    session_mw = getattr(request.app.state, "session_middleware", None)
+    if session_mw is None:
+        # Middleware not configured yet (during startup) — pass through
+        request.state.user = None
+        request.state.session_token = None
+        request.state.clear_session_cookie = False
+        return await call_next(request)
+
+    # Use the session middleware's logic to resolve the session
+    token = session_mw._get_session_token(request)
+    user = None
+    clear_cookie = False
+
+    if token:
+        client_ip = request.client.host if request.client else None
+        user = await session_mw.auth_service.validate_session(token, client_ip=client_ip)
+        if user is None:
+            clear_cookie = True
+
+    request.state.user = user
+    request.state.session_token = token
+    request.state.clear_session_cookie = clear_cookie
+
+    response = await call_next(request)
+
+    # If session was invalid, clear the cookie on the response
+    if clear_cookie:
+        clear_header = session_mw._build_clear_cookie_header()
+        response.headers.append("set-cookie", clear_header)
+
+    return response
+
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
