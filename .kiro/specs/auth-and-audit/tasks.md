@@ -210,7 +210,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - These are required for password hashing and cookie signing respectively
     - _Requirements: 1.3, 2.4_
 
-- [-] 12. Checkpoint - Ensure all tests pass
+- [x] 12. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 13. Integration tests
@@ -234,7 +234,7 @@ This plan implements session-based authentication, role-based authorization (adm
     - Generate sessions with varying activity patterns, verify validity within idle timeout AND Hard_Max_Lifetime, verify expiry after either limit
     - **Validates: Requirements 2.2, 2.7, 2.8, 2.9, 2.12, 2.13**
 
-- [-] 14. Final checkpoint - Ensure all tests pass
+- [x] 14. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

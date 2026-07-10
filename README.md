@@ -115,8 +115,47 @@ The application reads its configuration from a JSON file. By default it looks fo
 | `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Optional — enables HTTPS when paired with `ssl_certfile`. |
 | `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification. Requires `flier_match_model` to also be set. |
 | `flier_match_model` | string | *(none)* | Ollama model name used for flier name matching (e.g., `qwen2.5:7b`). Required when `known_fliers_path` is set. |
+| `auth_db_path` | string | `"./auth.db"` | Path to the auth SQLite database (user accounts, sessions). Resolved relative to config file directory. |
+| `session_timeout_hours` | number | `8` | Session idle timeout in hours. Range: [0.25, 8]. |
+| `audit_log_path` | string | `"{event_data_path}/audit.log"` | Path to the structured audit log file. |
 
 All keys are optional — defaults are applied for any missing key.
+
+## Authentication
+
+The application uses session-based authentication with three roles:
+
+- **admin** — Full access including user management and destructive operations.
+- **data_entry** — Can scan cards and edit records.
+- **public** — Unauthenticated users. Read-only access to review and reports pages.
+
+### Required Environment Variable
+
+```bash
+export FCS_SESSION_SECRET="your-secret-key-at-least-16-chars"
+```
+
+The app refuses to start if `FCS_SESSION_SECRET` is not set or is shorter than 16 characters. This secret signs session cookies.
+
+### Optional: Auto-Create Admin on First Run
+
+```bash
+export FCS_ADMIN_EMAIL="admin@example.com"
+export FCS_ADMIN_PASSWORD="a-strong-password"
+```
+
+If no admin user exists in the auth database and both variables are set, an admin account is created at startup.
+
+### Login & User Management
+
+- **`/login`** — Login page (email + password form).
+- **`/admin/users`** — User management interface (admin only).
+
+### Session Details
+
+- Cookies: `HttpOnly`, `SameSite=Lax`, `Secure` (when SSL is configured).
+- Idle timeout: configurable via `session_timeout_hours` (default 8h).
+- Rate limiting: 5 failed login attempts per email within 15 minutes → HTTP 429.
 
 ## Running the Application
 
@@ -124,6 +163,7 @@ Make sure Ollama is running, then start the server:
 
 ```bash
 source .venv/bin/activate
+export FCS_SESSION_SECRET="your-secret-key-at-least-16-chars"
 python -m flight_card_scanner
 ```
 
@@ -154,6 +194,8 @@ The app will:
 - **`/`** — Review list: paginated table of all scanned records with search.
 - **`/scan`** (browser) — Camera UI: opens the device camera for capturing flight cards. Detected card edges are highlighted in real-time using OpenCV.js. Tap to capture, then accept or retake.
 - **`/record/{id}`** — Detail view: shows the original image alongside all extracted fields.
+- **`/login`** — Login page.
+- **`/admin/users`** — User management (admin only).
 
 ### API Endpoints
 
@@ -162,6 +204,11 @@ The app will:
 - **`POST /api/admin/trigger`** — Manually trigger extraction of all pending records.
 - **`POST /api/admin/requeue`** — Reset all failed records to pending and re-enqueue.
 - **`POST /api/admin/requeue/{record_id}`** — Reset a single failed record.
+- **`POST /login`** — Authenticate and create session.
+- **`GET /logout`** — Invalidate session and redirect to login.
+- **`GET /api/admin/users`** — List all users (admin only).
+- **`POST /api/admin/users`** — Create user (admin only).
+- **`PUT /api/admin/users/{user_id}`** — Update user (admin only).
 
 ## Running Multiple Ollama Endpoints
 
@@ -265,18 +312,28 @@ FlightCardReader/
 ├── flight_card_scanner/              # Python package (FastAPI app)
 │   ├── main.py                       # App factory, lifespan, startup checks
 │   ├── config.py                     # Configuration loading and validation
-│   ├── database.py                   # SQLAlchemy async engine/session setup
+│   ├── database.py                   # SQLAlchemy async engine/session setup (event DB)
+│   ├── auth_database.py              # SQLAlchemy async engine/session for auth DB
 │   ├── models.py                     # ORM models (FlightRecord)
+│   ├── auth_models.py                # Auth ORM models (User, Session)
 │   ├── schemas.py                    # Pydantic request/response models
+│   ├── auth_schemas.py               # Pydantic schemas for auth endpoints
 │   ├── exceptions.py                 # Custom exception classes
+│   ├── dependencies/
+│   │   └── auth.py                   # Role enum, require_role() dependency
+│   ├── middleware/
+│   │   └── session_middleware.py     # Cookie-based session resolution
 │   ├── routers/
 │   │   ├── scan.py                   # POST /scan endpoint
 │   │   ├── review.py                 # GET / and GET /record/{id} (HTML)
-│   │   └── admin.py                  # Admin API (mode, trigger, requeue)
+│   │   ├── admin.py                  # Admin API (mode, trigger, requeue)
+│   │   └── auth.py                   # Login, logout, user management
 │   ├── services/
 │   │   ├── extraction_service.py     # Ollama dispatch, worker pool, date resolution
 │   │   ├── image_service.py          # Image storage utilities
-│   │   └── record_service.py         # Database CRUD for flight records
+│   │   ├── record_service.py         # Database CRUD for flight records
+│   │   ├── auth_service.py           # User CRUD, session lifecycle, rate limiting
+│   │   └── audit_service.py          # Structured JSON Lines audit logger
 │   ├── static/js/                    # Client-side JS (scanner.js, opencv.js)
 │   └── templates/                    # Jinja2 HTML templates
 ├── tests/                            # pytest test suite
