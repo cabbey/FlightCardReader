@@ -116,6 +116,18 @@ class TestLoadAppConfig:
         assert cfg.thrustcurve_cache_path == (tmp_path / "cache" / "tc").resolve()
         assert cfg.auth_db_path == (tmp_path / "db" / "auth.db").resolve()
 
+    def test_null_ssl_fields_do_not_crash(self, tmp_path):
+        """SSL fields set to JSON null should result in None, not a crash."""
+        data = {
+            "ssl_certfile": None,
+            "ssl_keyfile": None,
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(data), encoding="utf-8")
+        cfg = load_app_config(config_file)
+        assert cfg.ssl_certfile is None
+        assert cfg.ssl_keyfile is None
+
     def test_missing_file_raises_config_error(self):
         """A missing config file raises ConfigError."""
         with pytest.raises(ConfigError, match="not found"):

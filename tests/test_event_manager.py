@@ -112,15 +112,16 @@ class TestDiscoverEvents:
         assert "region/west/2026" in result
 
     def test_config_at_events_root(self, tmp_path: Path) -> None:
-        """config.json directly in events_dir gets an empty-string slug."""
+        """config.json directly in events_dir is skipped with a warning."""
         events_dir = tmp_path / "events"
         _write_event_config(events_dir / "config.json", "Root Event")
 
         mgr = EventManager(_make_server_config(events_dir))
         result = mgr.discover_events()
 
-        assert "" in result
-        assert result[""].event_config.event_name == "Root Event"
+        # Root-level configs are rejected because they produce an empty slug
+        assert "" not in result
+        assert len(result) == 0
 
     def test_invalid_config_skipped(self, tmp_path: Path) -> None:
         """An invalid config.json is skipped without crashing."""

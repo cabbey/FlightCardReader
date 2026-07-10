@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -72,6 +73,7 @@ class EventManager:
         self._events_dir = app_config.events_dir
         self._idle_timeout_minutes = app_config.event_idle_timeout_minutes
         self._events: dict[str, EventInfo] = {}
+        self._lock = asyncio.Lock()
 
     @property
     def app_config(self) -> ServerConfig:
@@ -114,6 +116,14 @@ class EventManager:
             if slug == ".":
                 slug = ""
 
+            if slug == "":
+                logger.warning(
+                    "Skipping config.json at events_dir root (%s): "
+                    "event configs must be in a subdirectory to provide a URL slug",
+                    config_path,
+                )
+                continue
+
             try:
                 event_config = load_event_config(config_path)
             except Exception as exc:
@@ -136,17 +146,10 @@ class EventManager:
     # Event lifecycle
     # ------------------------------------------------------------------
 
-    async def open_event(self, slug: str) -> EventInfo:
-        """Open an event: initialize database engine, create tables, start services.
+    async def _open_event_unlocked(self, slug: str) -> EventInfo:
+        """Internal: open an event without acquiring the lock.
 
-        Args:
-            slug: The event's URL slug (relative path within events_dir).
-
-        Returns:
-            The updated EventInfo with is_open=True.
-
-        Raises:
-            KeyError: If the slug is not found in discovered events.
+        Caller must hold self._lock before calling this method.
         """
         if slug not in self._events:
             raise KeyError(f"Event not found: {slug!r}")
@@ -211,14 +214,25 @@ class EventManager:
         logger.info("Opened event: %s (%s)", slug, event_config.event_name)
         return info
 
-    async def close_event(self, slug: str) -> None:
-        """Close an event: stop services, dispose engine, clear references.
+    async def open_event(self, slug: str) -> EventInfo:
+        """Open an event: initialize database engine, create tables, start services.
 
         Args:
-            slug: The event's URL slug.
+            slug: The event's URL slug (relative path within events_dir).
+
+        Returns:
+            The updated EventInfo with is_open=True.
 
         Raises:
             KeyError: If the slug is not found in discovered events.
+        """
+        async with self._lock:
+            return await self._open_event_unlocked(slug)
+
+    async def _close_event_unlocked(self, slug: str) -> None:
+        """Internal: close an event without acquiring the lock.
+
+        Caller must hold self._lock before calling this method.
         """
         if slug not in self._events:
             raise KeyError(f"Event not found: {slug!r}")
@@ -255,6 +269,18 @@ class EventManager:
 
         logger.info("Closed event: %s", slug)
 
+    async def close_event(self, slug: str) -> None:
+        """Close an event: stop services, dispose engine, clear references.
+
+        Args:
+            slug: The event's URL slug.
+
+        Raises:
+            KeyError: If the slug is not found in discovered events.
+        """
+        async with self._lock:
+            await self._close_event_unlocked(slug)
+
     async def get_event(self, slug: str) -> EventInfo:
         """Get an event, lazily opening it if not already open.
 
@@ -269,16 +295,16 @@ class EventManager:
         Raises:
             KeyError: If the slug is not found in discovered events.
         """
-        if slug not in self._events:
-            raise KeyError(f"Event not found: {slug!r}")
+        async with self._lock:
+            if slug not in self._events:
+                raise KeyError(f"Event not found: {slug!r}")
 
-        info = self._events[slug]
-        if not info.is_open:
-            await self.open_event(slug)
-        else:
-            info.last_accessed = datetime.now(timezone.utc)
-
-        return self._events[slug]
+            info = self._events[slug]
+            if not info.is_open:
+                return await self._open_event_unlocked(slug)
+            else:
+                info.last_accessed = datetime.now(timezone.utc)
+                return info
 
     # ------------------------------------------------------------------
     # Idle management
@@ -290,23 +316,24 @@ class EventManager:
         Returns:
             List of slugs that were closed due to idle timeout.
         """
-        now = datetime.now(timezone.utc)
-        closed: list[str] = []
+        async with self._lock:
+            now = datetime.now(timezone.utc)
+            closed: list[str] = []
 
-        for slug, info in list(self._events.items()):
-            if not info.is_open:
-                continue
-            idle_minutes = (now - info.last_accessed).total_seconds() / 60.0
-            if idle_minutes >= self._idle_timeout_minutes:
-                await self.close_event(slug)
-                closed.append(slug)
+            for slug, info in list(self._events.items()):
+                if not info.is_open:
+                    continue
+                idle_minutes = (now - info.last_accessed).total_seconds() / 60.0
+                if idle_minutes >= self._idle_timeout_minutes:
+                    await self._close_event_unlocked(slug)
+                    closed.append(slug)
 
-        if closed:
-            logger.info(
-                "Closed %d idle event(s): %s", len(closed), ", ".join(closed)
-            )
+            if closed:
+                logger.info(
+                    "Closed %d idle event(s): %s", len(closed), ", ".join(closed)
+                )
 
-        return closed
+            return closed
 
     # ------------------------------------------------------------------
     # Refresh and listing
@@ -335,6 +362,14 @@ class EventManager:
             slug = str(rel_dir).replace("\\", "/")
             if slug == ".":
                 slug = ""
+
+            if slug == "":
+                logger.warning(
+                    "Skipping config.json at events_dir root (%s): "
+                    "event configs must be in a subdirectory to provide a URL slug",
+                    config_path,
+                )
+                continue
 
             # If already known and open, keep the existing EventInfo
             if slug in self._events and self._events[slug].is_open:
@@ -401,10 +436,11 @@ class EventManager:
 
     async def shutdown(self) -> None:
         """Close all open events. Called during graceful application shutdown."""
-        open_slugs = [
-            slug for slug, info in self._events.items() if info.is_open
-        ]
-        for slug in open_slugs:
-            await self.close_event(slug)
+        async with self._lock:
+            open_slugs = [
+                slug for slug, info in self._events.items() if info.is_open
+            ]
+            for slug in open_slugs:
+                await self._close_event_unlocked(slug)
 
         logger.info("EventManager shut down: closed %d event(s)", len(open_slugs))

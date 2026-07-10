@@ -246,9 +246,9 @@ def load_config(path: Path) -> AppConfig:
     # --- ssl_certfile / ssl_keyfile (optional) ---
     ssl_certfile = None
     ssl_keyfile = None
-    if "ssl_certfile" in data:
+    if data.get("ssl_certfile") is not None:
         ssl_certfile = _resolve_path(Path(data["ssl_certfile"]), config_dir)
-    if "ssl_keyfile" in data:
+    if data.get("ssl_keyfile") is not None:
         ssl_keyfile = _resolve_path(Path(data["ssl_keyfile"]), config_dir)
 
     # --- known_fliers_path (optional) ---
@@ -475,9 +475,9 @@ def load_app_config(path: Path) -> ServerConfig:
     # --- ssl_certfile / ssl_keyfile (optional) ---
     ssl_certfile: Path | None = None
     ssl_keyfile: Path | None = None
-    if "ssl_certfile" in data:
+    if data.get("ssl_certfile") is not None:
         ssl_certfile = _resolve_path(Path(data["ssl_certfile"]), config_dir)
-    if "ssl_keyfile" in data:
+    if data.get("ssl_keyfile") is not None:
         ssl_keyfile = _resolve_path(Path(data["ssl_keyfile"]), config_dir)
 
     # --- auth_db_path ---
