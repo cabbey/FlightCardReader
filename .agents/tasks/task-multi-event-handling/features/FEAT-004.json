@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "feat",
   "description": "Restructure the FastAPI app to support multi-event routing. Move all current per-event routes under /events/{event_path:path}/ prefix. Add a top-level events listing page at /. Add an events list nav button. Update page titles to include page name and contextual info (record number, search terms, etc.). Add admin button to refresh events list. Integrate EventManager into the app lifespan and routing.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Refactor flight_card_scanner/main.py lifespan to: (a) load app config via load_app_config, (b) initialize auth DB (shared across events), (c) create EventManager with app config, (d) run initial event discovery, (e) start a background task for periodic idle-event checks (every 5 minutes), (f) store event_manager on app.state. Remove the single-event initialization logic (DB init, extraction service start, etc.) since EventManager handles that per-event.",
     "Create a new router file flight_card_scanner/routers/events.py with: (a) GET / that renders the events list page, (b) a dependency get_event_context(event_path) that calls event_manager.get_event(slug) and returns the EventInfo, providing the event's session factory, config, extraction service to downstream route handlers.",
@@ -37,5 +37,5 @@
     "Run python -c 'from flight_card_scanner.main import app; print(\"App created OK\")' to verify the app factory works"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Multi-event routing implemented successfully. Key architectural decisions: (1) Event-scoped routes use /events/{event_path:path}/ prefix with FastAPI path parameter. (2) Existing routers retained their module-level configure() pattern for backward compatibility but gained _impl() functions that accept explicit dependencies for the event-scoped routes in main.py. (3) The EventManager is stored on app.state and accessed via the get_event_info dependency. (4) Templates use event_base_url variable (empty string when not in event context) for all internal links. (5) JS files use window.FCS_EVENT_BASE_URL or eventBaseUrl template variable for API calls. (6) Auth routes remain at top level (not event-scoped). (7) The old config.json now uses the new server-level format (events_dir instead of event_data_path). (8) All 400 tests pass (390 existing + 10 new multi-event routing tests). The 2 pre-existing flaky tests (test_file_handler_uses_append_mode, test_authenticate_matches_case_insensitively) remain unrelated to this change."
 }
