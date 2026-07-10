@@ -2,7 +2,7 @@
 
 {% block head %}
 <style>
-  /* Filter/sort controls */
+  /* Filter controls */
   .filter-row {
     display: flex;
     flex-wrap: wrap;
@@ -27,38 +27,6 @@
     padding: 0.2rem 0.4rem;
     border: 1px solid #ccc;
     border-radius: 4px;
-  }
-
-  /* Actions row */
-  .actions-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-
-  /* Search */
-  .search-form {
-    margin-left: auto;
-  }
-
-  .search-form input[type="search"] {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    width: 10rem;
-    max-width: 100%;
-  }
-
-  .search-form button {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: #f3f4f6;
-    cursor: pointer;
   }
 
   /* Table */
@@ -86,6 +54,15 @@
     font-weight: 600;
     position: sticky;
     top: 0;
+    user-select: none;
+  }
+
+  .records-table th.sortable {
+    cursor: pointer;
+  }
+
+  .records-table th.sortable:hover {
+    background: #f0f4ff;
   }
 
   .records-table tbody tr:hover {
@@ -99,6 +76,26 @@
 
   .records-table td a:hover {
     text-decoration: underline;
+  }
+
+  /* Sort arrows */
+  .sort-arrows {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: middle;
+    margin-left: 0.2rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sort-arrows .arrow {
+    font-size: 0.6rem;
+    line-height: 0.7;
+    color: #ccc;
+  }
+
+  .sort-arrows .arrow.active {
+    color: #1a1a1a;
   }
 
   /* Status badges */
@@ -194,19 +191,6 @@
 
   /* Responsive */
   @media (max-width: 600px) {
-    .actions-row {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .search-form {
-      margin-left: 0;
-    }
-
-    .search-form input[type="search"] {
-      width: 100%;
-    }
-
     .filter-row {
       flex-direction: column;
       align-items: flex-start;
@@ -225,15 +209,9 @@
 {% set current_user = request.state.user if request and request.state else None %}
 {% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
 
-<!-- Filter/sort controls -->
+<!-- Filter controls -->
 <div class="filter-row">
-  <label for="sortSelect">Sort:</label>
-  <select id="sortSelect">
-    <option value="id_desc"{{ ' selected' if sort == 'id_desc' else '' }}># Descending</option>
-    <option value="id_asc"{{ ' selected' if sort == 'id_asc' else '' }}># Ascending</option>
-    <option value="flier_asc"{{ ' selected' if sort == 'flier_asc' else '' }}>Flier A→Z</option>
-    <option value="flier_desc"{{ ' selected' if sort == 'flier_desc' else '' }}>Flier Z→A</option>
-  </select>
+  <label style="font-weight:700; color:#1a1a1a; margin-right:0.25rem;">Filter:</label>
 
   <label for="verifiedFilter">Verified:</label>
   <select id="verifiedFilter">
@@ -271,6 +249,7 @@
 <!-- Measurement search -->
 <div class="filter-row" style="margin-top:0.4rem;">
   <form class="measurement-search-form" method="get" action="/">
+    <label style="font-weight:700; color:#1a1a1a; margin-right:0.25rem;">Search:</label>
     {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     {% if verified_filter and verified_filter != 'all' %}<input type="hidden" name="verified" value="{{ verified_filter }}">{% endif %}
     {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
@@ -308,18 +287,17 @@
     <a href="{{ list_url(p=1) }}" style="font-size:0.75rem; margin-left:0.3rem;">Clear</a>
     {% endif %}
   </form>
-</div>
-
-<!-- Actions row: search -->
-<div class="actions-row">
-  <form class="search-form" method="get" action="/">
-    {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
-    {% if verified_filter and verified_filter != 'all' %}<input type="hidden" name="verified" value="{{ verified_filter }}">{% endif %}
-    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-    {% if flight_day_filter %}<input type="hidden" name="flight_day" value="{{ flight_day_filter }}">{% endif %}
-    <input type="search" name="q" placeholder="Search…" value="{{ q or '' }}" aria-label="Search records">
-    <button type="submit">Search</button>
-  </form>
+  <div style="width:100%; margin-top:0.4rem; display:flex; align-items:center; gap:0.5rem;">
+    <label style="font-weight:700; color:#1a1a1a; white-space:nowrap;">Text:</label>
+    <form class="search-form" method="get" action="/" style="display:flex; align-items:center; gap:0.3rem; flex:1;">
+      {% if sort and sort != 'id_desc' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+      {% if verified_filter and verified_filter != 'all' %}<input type="hidden" name="verified" value="{{ verified_filter }}">{% endif %}
+      {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+      {% if flight_day_filter %}<input type="hidden" name="flight_day" value="{{ flight_day_filter }}">{% endif %}
+      <input type="search" name="q" placeholder="Search flier, rocket, motor…" value="{{ q or '' }}" aria-label="Search records" style="font-size:0.82rem; padding:0.35rem 0.5rem; border:1px solid #ccc; border-radius:4px; flex:1; min-width:12rem;">
+      <button type="submit" style="font-size:0.8rem; padding:0.35rem 0.6rem; border:1px solid #ccc; border-radius:4px; background:#f3f4f6; cursor:pointer;">Search</button>
+    </form>
+  </div>
 </div>
 
 <!-- Records table -->
@@ -328,13 +306,30 @@
   <table class="records-table">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Flier</th>
+        <th class="sortable" data-sort-asc="id_asc" data-sort-desc="id_desc" title="Sort by #">
+          #
+          <span class="sort-arrows">
+            <span class="arrow{{ ' active' if sort == 'id_asc' else '' }}">&#x25B2;</span>
+            <span class="arrow{{ ' active' if sort == 'id_desc' else '' }}">&#x25BC;</span>
+          </span>
+        </th>
+        <th class="sortable" data-sort-asc="flier_asc" data-sort-desc="flier_desc" title="Sort by Flier">
+          Flier
+          <span class="sort-arrows">
+            <span class="arrow{{ ' active' if sort == 'flier_asc' else '' }}">&#x25B2;</span>
+            <span class="arrow{{ ' active' if sort == 'flier_desc' else '' }}">&#x25BC;</span>
+          </span>
+        </th>
         <th>Rocket</th>
-        <th>Motor</th>
+        <th class="sortable" data-sort-asc="impulse_asc" data-sort-desc="impulse_desc" title="Sort by impulse">
+          Motor
+          <span class="sort-arrows">
+            <span class="arrow{{ ' active' if sort == 'impulse_asc' else '' }}">&#x25B2;</span>
+            <span class="arrow{{ ' active' if sort == 'impulse_desc' else '' }}">&#x25BC;</span>
+          </span>
+        </th>
         <th>Flight Date</th>
         <th>Status</th>
-        <th>Created</th>
       </tr>
     </thead>
     <tbody>
@@ -349,7 +344,6 @@
           <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
           {%- if record.is_queued %}<span class="queued-label">(queued)</span>{% endif %}
         </td>
-        <td>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -394,6 +388,7 @@
 (function() {
   var STORAGE_KEY = 'fcs_list_prefs';
   var TTL_MS = 60 * 60 * 1000; // 1 hour
+  var currentSort = '{{ sort }}';
 
   // --- Persistence helpers ---
   function savePrefs(prefs) {
@@ -455,13 +450,29 @@
     return parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
   }
 
-  // --- Filter/sort change handlers (save prefs before navigating) ---
-  document.getElementById('sortSelect').addEventListener('change', function() {
-    var newPrefs = { sort: this.value, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
-    savePrefs(newPrefs);
-    window.location.href = buildListUrl({ sort: this.value, page: '1' });
+  // --- Sortable column header click handlers ---
+  document.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var ascSort = this.dataset.sortAsc;
+      var descSort = this.dataset.sortDesc;
+      var targetSort;
+      // If this column is already active, invert direction
+      if (currentSort === ascSort) {
+        targetSort = descSort;
+      } else if (currentSort === descSort) {
+        targetSort = ascSort;
+      } else {
+        // Default: descending for #/impulse, ascending for flier
+        targetSort = descSort;
+        if (ascSort === 'flier_asc') targetSort = ascSort;
+      }
+      var newPrefs = { sort: targetSort, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
+      savePrefs(newPrefs);
+      window.location.href = buildListUrl({ sort: targetSort, page: '1' });
+    });
   });
 
+  // --- Filter change handlers (save prefs before navigating) ---
   document.getElementById('verifiedFilter').addEventListener('change', function() {
     var newPrefs = { sort: currentPrefs.sort, verified: this.value, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
     savePrefs(newPrefs);

@@ -93,6 +93,43 @@ class RecordRow:
     is_queued: bool = False
 
 
+def _record_impulse_ns(record: FlightRecord) -> float:
+    """Compute total impulse in Newton-seconds for a record.
+
+    Prefers calculated value from ThrustCurve motor data (sum of qty * totImpulseNs).
+    Falls back to the card's total_impulse_value if in Ns units.
+    Returns 0.0 if no impulse can be determined.
+    """
+    overflow = record.overflow or {}
+    motors = overflow.get("motors", [])
+    # Handle legacy nested format
+    if motors and isinstance(motors[0], list):
+        flat = []
+        for stage in motors:
+            flat.extend(stage)
+        motors = flat
+
+    if motors:
+        all_have_tc = all(
+            m.get("thrustcurve_id") and m.get("thrustcurve_data", {}).get("totImpulseNs")
+            for m in motors
+        )
+        if all_have_tc:
+            total = 0.0
+            for m in motors:
+                qty = m.get("quantity", 1) or 1
+                total += qty * m["thrustcurve_data"]["totImpulseNs"]
+            return total
+
+    # Fall back to card's total_impulse_value
+    if record.total_impulse_value and record.total_impulse_unit:
+        unit = record.total_impulse_unit.lower().replace(" ", "")
+        if unit in ("ns", "n-s", "n·s", "newton-seconds"):
+            return record.total_impulse_value
+
+    return 0.0
+
+
 def _matches_search(record: FlightRecord, q_lower: str) -> bool:
     """Return True if the record matches the search term in overflow fields.
 
@@ -230,6 +267,8 @@ async def list_records(
         "flier_asc": FlightRecord.flier_name.asc(),
         "flier_desc": FlightRecord.flier_name.desc(),
     }
+    # Impulse sorts require Python-side processing (computed from overflow JSON)
+    is_impulse_sort = sort in ("impulse_asc", "impulse_desc")
     order_clause = sort_options.get(sort, FlightRecord.id.desc())
 
     # --- Determine verified filter ---
@@ -411,6 +450,47 @@ async def list_records(
         start_idx = (page - 1) * effective_page_size
         end_idx = start_idx + effective_page_size
         page_records = [r for _, r in scored[start_idx:end_idx]]
+
+    # --- Impulse sort (Python-side, computed from overflow JSON) ---
+    if is_impulse_sort and not has_measurement_search:
+        # Impulse sort requires loading all filtered records
+        if not (search_term or impulse_class_upper):
+            # Need to fetch all filtered records for sorting
+            all_stmt = select(FlightRecord)
+            all_stmt = _apply_filters(all_stmt)
+            all_result = await db.execute(all_stmt)
+            all_records_for_sort = list(all_result.scalars().all())
+        else:
+            # Already have filtered records from search/impulse class branches above
+            # Re-fetch if needed (page_records is already sliced)
+            all_stmt = select(FlightRecord)
+            all_stmt = _apply_filters(all_stmt)
+            all_result = await db.execute(all_stmt)
+            all_records_for_sort = list(all_result.scalars().all())
+            if search_term:
+                q_lower = search_term.lower()
+                all_records_for_sort = [
+                    r for r in all_records_for_sort
+                    if (r.flier_name and q_lower in r.flier_name.lower())
+                    or _matches_search(r, q_lower)
+                ]
+            if impulse_class_upper:
+                all_records_for_sort = [
+                    r for r in all_records_for_sort
+                    if _has_impulse_class(r, impulse_class_upper)
+                ]
+
+        # Compute impulse for each record
+        all_records_for_sort.sort(
+            key=lambda r: _record_impulse_ns(r),
+            reverse=(sort == "impulse_desc"),
+        )
+
+        total_records = len(all_records_for_sort)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = all_records_for_sort[start_idx:end_idx]
 
     # --- Get queued IDs for status indicator ---
     queued_ids = extraction_service.queued_ids
