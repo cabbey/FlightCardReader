@@ -65,6 +65,12 @@ class TestBugConditionExploration:
         result = load_config(config_file)
 
         assert isinstance(result, AppConfig)
-        assert result.event_data_path == Path(config_dict["event_data_path"])
+        # load_config resolves relative paths against the config file's directory
+        raw_path = Path(config_dict["event_data_path"])
+        if raw_path.is_absolute():
+            expected_path = raw_path
+        else:
+            expected_path = (config_file.resolve().parent / raw_path).resolve()
+        assert result.event_data_path == expected_path
         assert result.image_store_path == result.event_data_path / "images"
         assert result.db_path == result.event_data_path / "flight_cards.db"

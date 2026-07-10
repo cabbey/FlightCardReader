@@ -151,7 +151,13 @@ class TestConfigLoadingFidelity:
         assert isinstance(result, AppConfig)
         assert result.host == config_dict["host"]
         assert result.port == config_dict["port"]
-        assert result.event_data_path == Path(config_dict["event_data_path"])
+        # load_config resolves relative paths against the config file's directory
+        raw_path = Path(config_dict["event_data_path"])
+        if raw_path.is_absolute():
+            expected_data_path = raw_path
+        else:
+            expected_data_path = (config_file.resolve().parent / raw_path).resolve()
+        assert result.event_data_path == expected_data_path
         assert result.image_store_path == result.event_data_path / "images"
         assert result.db_path == result.event_data_path / "flight_cards.db"
         assert result.event_name == config_dict["event_name"]
@@ -196,11 +202,18 @@ class TestConfigLoadingFidelity:
             assert result.port == config_dict["port"]
 
         if "event_data_path" not in config_dict:
-            assert result.event_data_path == Path("./data")
-            assert result.image_store_path == Path("./data/images")
-            assert result.db_path == Path("./data/flight_cards.db")
+            # Default "./data" is resolved relative to the config file's directory
+            expected_default = (config_file.resolve().parent / Path("./data")).resolve()
+            assert result.event_data_path == expected_default
+            assert result.image_store_path == expected_default / "images"
+            assert result.db_path == expected_default / "flight_cards.db"
         else:
-            assert result.event_data_path == Path(config_dict["event_data_path"])
+            raw_path = Path(config_dict["event_data_path"])
+            if raw_path.is_absolute():
+                expected_data_path = raw_path
+            else:
+                expected_data_path = (config_file.resolve().parent / raw_path).resolve()
+            assert result.event_data_path == expected_data_path
             assert result.image_store_path == result.event_data_path / "images"
             assert result.db_path == result.event_data_path / "flight_cards.db"
 
