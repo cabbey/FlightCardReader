@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Create the EventManager class that handles event discovery, lazy loading/unloading of event resources (database, extraction service), and idle timeout. The EventManager scans the events_dir tree for config.json files, constructs the URL path for each event from its relative directory path, and manages opening/closing events on demand.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Create flight_card_scanner/event_manager.py with class EventManager.",
     "EventManager.__init__ takes app_config (AppConfig) and stores the events_dir path and idle_timeout from config.",
