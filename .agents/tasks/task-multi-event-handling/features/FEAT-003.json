@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Create the EventManager class that handles event discovery, lazy loading/unloading of event resources (database, extraction service), and idle timeout. The EventManager scans the events_dir tree for config.json files, constructs the URL path for each event from its relative directory path, and manages opening/closing events on demand.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create flight_card_scanner/event_manager.py with class EventManager.",
     "EventManager.__init__ takes app_config (AppConfig) and stores the events_dir path and idle_timeout from config.",
@@ -31,5 +31,5 @@
     "Run python -m pytest tests/ -v and confirm all tests still pass"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "EventManager class created at flight_card_scanner/event_manager.py with EventInfo and EventSummary dataclasses. EventConfig is duck-type compatible with what ExtractionService expects from AppConfig (extraction_mode, extraction_endpoints, auto_accept_threshold, event_date_range, image_store_path) so it can be passed directly. MotorLookupService uses the bundled thrustcurve-db.json (no config needed from ServerConfig). All 30 tests pass. The two pre-existing flaky test failures (test_file_handler_uses_append_mode, test_authenticate_matches_case_insensitively) are still present but unrelated."
 }
