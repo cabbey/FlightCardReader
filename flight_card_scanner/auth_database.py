@@ -1,10 +1,13 @@
-"""SQLAlchemy async engine, session factory, and AuthBase for the auth database.
+"""SQLAlchemy async engine, session factory, and table creation for the auth database.
 
 Provides:
-- ``AuthBase`` — declarative base for auth ORM models (User, Session)
+- ``AuthBase`` — re-exported from ``auth_models`` for convenience
 - ``init_auth_engine(db_path)`` — configures the module-level engine and session factory
 - ``get_auth_db()`` — FastAPI async dependency yielding an ``AsyncSession``
 - ``create_auth_tables(engine)`` — creates all tables defined on ``AuthBase.metadata``
+
+Note: ``AuthBase`` is defined in ``auth_models.py`` and imported here so that
+models (User, Session) and this module share a single metadata registry.
 """
 
 from pathlib import Path
@@ -16,17 +19,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
 
-# ---------------------------------------------------------------------------
-# Declarative Base (separate from the event database Base)
-# ---------------------------------------------------------------------------
-
-
-class AuthBase(DeclarativeBase):
-    """Declarative base for auth models (User, Session)."""
-
-    pass
+from .auth_models import AuthBase  # single source of truth for auth metadata
 
 
 # ---------------------------------------------------------------------------
