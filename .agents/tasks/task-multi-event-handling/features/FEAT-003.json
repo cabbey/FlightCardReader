@@ -1,0 +1,35 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Create the EventManager class that handles event discovery, lazy loading/unloading of event resources (database, extraction service), and idle timeout. The EventManager scans the events_dir tree for config.json files, constructs the URL path for each event from its relative directory path, and manages opening/closing events on demand.",
+  "status": "pending",
+  "steps": [
+    "Create flight_card_scanner/event_manager.py with class EventManager.",
+    "EventManager.__init__ takes app_config (AppConfig) and stores the events_dir path and idle_timeout from config.",
+    "Add a discover_events() method that walks events_dir recursively looking for config.json files. For each found config.json, compute the event's URL slug from its relative path (e.g., events_dir/2026/nxrs/config.json -> '2026/nxrs'). Store the discovered events in a dict mapping slug -> EventInfo(config_path, event_config, slug, is_open=False).",
+    "Add an EventInfo dataclass that holds: slug (str), config_path (Path), event_config (EventConfig), is_open (bool), engine (AsyncEngine|None), session_factory (async_sessionmaker|None), extraction_service (ExtractionService|None), motor_lookup_service (MotorLookupService|None), flier_match_service (FlierMatchService|None), last_accessed (datetime).",
+    "Add an async open_event(slug) method that initializes the database engine, session factory, runs schema creation, starts the extraction service, and sets is_open=True. Updates last_accessed.",
+    "Add an async close_event(slug) method that stops the extraction service, disposes the engine, sets is_open=False, and clears references.",
+    "Add an async get_event(slug) method that opens the event if not already open, updates last_accessed, and returns the EventInfo.",
+    "Add an async check_idle_events() method that iterates open events and closes any that haven't been accessed in event_idle_timeout_minutes (default 60 minutes).",
+    "Add a refresh_events() method that re-runs discover_events() without closing already-open events (merges new discoveries with existing state).",
+    "Add a list_events() method returning a list of event summaries (slug, event_name, event_date_range, is_open) for the top-level page.",
+    "Add an async shutdown() method that closes all open events (for graceful app shutdown).",
+    "Write tests in tests/test_event_manager.py that test discovery with a tmp_path tree of config.json files, open/close lifecycle, idle timeout logic, and slug computation."
+  ],
+  "acceptance_criteria": [
+    "EventManager can discover config.json files in a directory tree and compute URL slugs from relative paths",
+    "open_event initializes DB engine and extraction service for an event",
+    "close_event disposes engine and stops extraction service",
+    "get_event lazily opens events on first access",
+    "check_idle_events closes events that have been idle longer than the timeout",
+    "refresh_events discovers new events without disrupting open ones",
+    "Tests pass for all above behaviors"
+  ],
+  "verification": [
+    "Run python -m pytest tests/test_event_manager.py -v and confirm all tests pass",
+    "Run python -m pytest tests/ -v and confirm all tests still pass"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

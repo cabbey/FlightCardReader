@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-002",
+  "type": "refactor",
+  "description": "Split config into AppConfig (server-level) and EventConfig (per-event). Introduce the app-level config.json format that specifies where the events directory tree lives, HTTP settings, and shared resources. Event configs are separate config.json files found within the events tree. Update config.py with both dataclasses and loaders.",
+  "status": "pending",
+  "steps": [
+    "In flight_card_scanner/config.py, rename the current AppConfig to EventConfig. EventConfig should contain: event_name, event_date_range, extraction_mode, extraction_endpoints, known_fliers_path, auto_accept_threshold, read_only, audit_log_path. Add an event_data_path property computed from where the event config is located (the directory containing the event's config.json).",
+    "Create a new AppConfig dataclass with fields: host (str, default '0.0.0.0'), port (int, default 8000), events_dir (Path - base directory where event config.json files are searched), thrustcurve_cache_path (Path), ssl_certfile (Path|None), ssl_keyfile (Path|None), auth_db_path (Path, default ./auth.db), session_timeout_hours (float, default 8.0), event_idle_timeout_minutes (int, default 60 - time before inactive event DB is closed).",
+    "Create a load_app_config(path: Path) -> AppConfig function that reads the app-level config.json. The app config no longer has event-specific fields. All paths should resolve relative to the config file directory (same pattern as current _resolve_path).",
+    "Create a load_event_config(path: Path) -> EventConfig function that reads a per-event config.json. The event_data_path should be the directory containing this config.json file. Extraction_endpoints and other event-specific settings come from this file.",
+    "Keep backward compatibility: if the old-style combined config is detected (has both 'host' and 'event_name'), log a deprecation warning and handle it gracefully by treating it as both app and single-event config.",
+    "Update the existing tests in tests/test_config_loading_fidelity.py and tests/test_config_auth_fields.py to work with the new split. Add new tests for load_app_config and load_event_config.",
+    "Run python -m pytest tests/ -v to confirm tests pass"
+  ],
+  "acceptance_criteria": [
+    "AppConfig dataclass exists with server-level fields only (host, port, events_dir, ssl, auth, thrustcurve_cache, session_timeout_hours, event_idle_timeout_minutes)",
+    "EventConfig dataclass exists with event-level fields (event_name, event_date_range, extraction_mode, extraction_endpoints, known_fliers, etc.)",
+    "load_app_config() correctly parses an app-level config.json",
+    "load_event_config() correctly parses an event-level config.json",
+    "All existing tests pass or are updated to pass with the new structure",
+    "Backward compatibility: a combined config.json (old format) still works"
+  ],
+  "verification": [
+    "Run python -m pytest tests/ -v and confirm all tests pass",
+    "Run python -c 'from flight_card_scanner.config import AppConfig, EventConfig, load_app_config, load_event_config; print(\"OK\")'"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

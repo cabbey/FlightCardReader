@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Set up the development environment: install Python 3.13 dependencies and run existing tests to confirm baseline is green.",
+  "status": "in_progress",
+  "steps": [
+    "Use pyenv to switch to Python 3.13.13",
+    "Create a virtual environment at .venv using python3.13",
+    "Install all runtime dependencies: fastapi, uvicorn[standard], sqlalchemy[asyncio], aiosqlite, httpx, pydantic, jinja2, python-multipart, Pillow, rapidfuzz, segno, argon2-cffi, itsdangerous",
+    "Install test dependencies: pytest, pytest-asyncio, hypothesis, httpx",
+    "Run pnpm install to get opencv.js and thrustcurve-db client assets",
+    "Run python -m pytest tests/ -v and confirm all tests pass"
+  ],
+  "acceptance_criteria": [
+    "All existing tests pass (python -m pytest tests/ -v returns exit code 0)",
+    "pnpm install succeeds and opencv.js is present at flight_card_scanner/static/js/node_modules/opencv.js/"
+  ],
+  "verification": [
+    "Run: pyenv shell 3.13.13 && python -m venv .venv && source .venv/bin/activate && pip install fastapi 'uvicorn[standard]' 'sqlalchemy[asyncio]' aiosqlite httpx pydantic jinja2 python-multipart Pillow rapidfuzz segno argon2-cffi itsdangerous pytest pytest-asyncio hypothesis httpx && pnpm install && python -m pytest tests/ -v"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
