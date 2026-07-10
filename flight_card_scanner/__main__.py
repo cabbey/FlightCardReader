@@ -16,10 +16,10 @@ from pathlib import Path
 
 import uvicorn
 
-from .config import load_config
+from .config import load_app_config
 
 config_path = Path(os.environ.get("CONFIG_PATH", "config.json"))
-config = load_config(config_path)
+config = load_app_config(config_path)
 
 
 def _check_ssl(config) -> dict:
@@ -37,17 +37,17 @@ def _check_ssl(config) -> dict:
 
     # Check files exist and are readable
     if not certfile.exists():
-        print(f"WARNING:  SSL disabled — certificate file not found: {certfile}")
+        print(f"WARNING:  SSL disabled - certificate file not found: {certfile}")
         return {}
     if not keyfile.exists():
-        print(f"WARNING:  SSL disabled — key file not found: {keyfile}")
+        print(f"WARNING:  SSL disabled - key file not found: {keyfile}")
         return {}
 
     if not os.access(certfile, os.R_OK):
-        print(f"WARNING:  SSL disabled — certificate file not readable: {certfile}")
+        print(f"WARNING:  SSL disabled - certificate file not readable: {certfile}")
         return {}
     if not os.access(keyfile, os.R_OK):
-        print(f"WARNING:  SSL disabled — key file not readable: {keyfile}")
+        print(f"WARNING:  SSL disabled - key file not readable: {keyfile}")
         return {}
 
     # Check certificate expiration
@@ -67,23 +67,23 @@ def _check_ssl(config) -> dict:
 
         now = datetime.now(timezone.utc)
         if now > not_after:
-            print(f"WARNING:  SSL disabled — certificate expired on {not_after.strftime('%Y-%m-%d %H:%M UTC')}")
+            print(f"WARNING:  SSL disabled - certificate expired on {not_after.strftime('%Y-%m-%d %H:%M UTC')}")
             print(f"          Run 'tailscale cert <hostname>' to renew")
             return {}
 
         days_remaining = (not_after - now).days
         if days_remaining < 7:
-            print(f"INFO:     SSL certificate expires in {days_remaining} days — consider renewing soon")
+            print(f"INFO:     SSL certificate expires in {days_remaining} days - consider renewing soon")
             print(f"          Run 'tailscale cert <hostname>' to renew")
 
     except ImportError:
-        # cryptography not installed — skip expiry check, trust the files
+        # cryptography not installed - skip expiry check, trust the files
         print("INFO:     Cannot check certificate expiry (cryptography package not installed)")
     except Exception as exc:
-        print(f"WARNING:  SSL disabled — error loading certificate: {exc}")
+        print(f"WARNING:  SSL disabled - error loading certificate: {exc}")
         return {}
 
-    print(f"INFO:     SSL enabled — using cert: {certfile}")
+    print(f"INFO:     SSL enabled - using cert: {certfile}")
     return {
         "ssl_certfile": str(certfile),
         "ssl_keyfile": str(keyfile),

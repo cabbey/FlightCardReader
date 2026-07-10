@@ -107,7 +107,7 @@
 
 {% block content %}
 <nav class="report-nav">
-  <a href="/reports">← Back to Reports</a>
+  <a href="{{ event_base_url|default('', true) }}/reports">← Back to Reports</a>
 </nav>
 
 <h2 style="margin:0 0 1rem; font-size:1.2rem;">{{ date_label }}</h2>
@@ -133,7 +133,7 @@
 <h3 class="section-title">Motors by Impulse Class</h3>
 <div class="motor-pills">
   {% for letter, count in motor_counts.items() %}
-  <a href="/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
+  <a href="{{ event_base_url|default('', true) }}/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
   {% endfor %}
 </div>
 {% endif %}

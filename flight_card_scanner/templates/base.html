@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ event_name }}</title>
+  <title>{% block title %}{{ page_title|default(event_name, true) }}{% endblock %}</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
@@ -82,6 +82,7 @@
       opacity: 0.9;
     }
 
+    .nav-btn-events { background: #64748b; }
     .nav-btn-cards { background: #2563eb; }
     .nav-btn-scan { background: #16a34a; }
     .nav-btn-reports { background: #7c3aed; }
@@ -103,6 +104,15 @@
       margin: 0;
       word-wrap: break-word;
       overflow-wrap: break-word;
+    }
+
+    .title-row h1 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .title-row h1 a:hover {
+      text-decoration: underline;
     }
 
     .header-stats {
@@ -163,7 +173,8 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  {%- set current_user = request.state.user if request and request.state else None %}
+  {%- set current_user = current_user if current_user is defined else (request.state.user if request and request.state else None) %}
+  {%- set _event_base = event_base_url|default("", true) %}
   <div class="container">
     <nav class="site-nav" aria-label="Site navigation">
       <div class="nav-left">
@@ -175,53 +186,65 @@
         {% endif %}
       </div>
       <div class="nav-right">
-        <a href="/" class="nav-btn nav-btn-cards">&#x1F680; Flight Cards</a>
-        {% if current_user %}
-          <a href="/scan" class="nav-btn nav-btn-scan">&#x1F4F7; Scan</a>
-          <a href="/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
-          <a href="/queue" class="nav-btn nav-btn-queue">&#x1F4CB; Queue</a>
-          {% if current_user.role == "admin" %}
-            <a href="/admin" class="nav-btn nav-btn-admin">&#x2699;&#xFE0F; Admin</a>
+        <a href="/" class="nav-btn nav-btn-events">&#x1F4C5; Events</a>
+        {% if _event_base %}
+          <a href="{{ _event_base }}/" class="nav-btn nav-btn-cards">&#x1F680; Flight Cards</a>
+          {% if current_user %}
+            <a href="{{ _event_base }}/scan" class="nav-btn nav-btn-scan">&#x1F4F7; Scan</a>
+            <a href="{{ _event_base }}/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
+            <a href="{{ _event_base }}/queue" class="nav-btn nav-btn-queue">&#x1F4CB; Queue</a>
+            {% if current_user.role == "admin" %}
+              <a href="{{ _event_base }}/admin" class="nav-btn nav-btn-admin">&#x2699;&#xFE0F; Admin</a>
+            {% endif %}
+          {% else %}
+            <a href="{{ _event_base }}/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
           {% endif %}
-        {% else %}
-          <a href="/reports" class="nav-btn nav-btn-reports">&#x1F4CA; Reports</a>
         {% endif %}
       </div>
     </nav>
 
     <div class="title-row">
-      <h1>{{ event_name }}</h1>
+      <h1>
+        {% if _event_base %}
+          <a href="{{ _event_base }}/">{{ event_name|default("Flight Card Scanner", true) }}</a>
+        {% else %}
+          {{ event_name|default("Flight Card Scanner", true) }}
+        {% endif %}
+      </h1>
+      {% if _event_base %}
       <div class="header-stats" id="headerStats">
         <div class="stat-item stat-pending">
           <span class="stat-label">Pending</span>
-          <span class="stat-value" id="statPending">—</span>
+          <span class="stat-value" id="statPending">&mdash;</span>
         </div>
         <div class="stat-item stat-processing">
           <span class="stat-label">Processing</span>
-          <span class="stat-value" id="statProcessing">—</span>
+          <span class="stat-value" id="statProcessing">&mdash;</span>
         </div>
         <div class="stat-item stat-extracted">
           <span class="stat-label">Extracted</span>
-          <span class="stat-value" id="statExtracted">—</span>
+          <span class="stat-value" id="statExtracted">&mdash;</span>
         </div>
         <div class="stat-item stat-failed">
           <span class="stat-label">Failed</span>
-          <span class="stat-value" id="statFailed">—</span>
+          <span class="stat-value" id="statFailed">&mdash;</span>
         </div>
         <div class="stat-item stat-verified">
           <span class="stat-label">Verified</span>
-          <span class="stat-value" id="statVerified">—</span>
+          <span class="stat-value" id="statVerified">&mdash;</span>
         </div>
       </div>
+      {% endif %}
     </div>
 
     {% block content %}{% endblock %}
   </div>
 
+  {% if _event_base %}
   <script>
   (function() {
     function loadStats() {
-      fetch('/api/admin/stats')
+      fetch('{{ _event_base }}/api/admin/stats')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data) return;
@@ -238,5 +261,6 @@
     loadStats();
   })();
   </script>
+  {% endif %}
 </body>
 </html>

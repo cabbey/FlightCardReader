@@ -1,30 +1,33 @@
 """FastAPI application factory and lifespan context manager.
 
 Handles:
-- Loading configuration from JSON
-- Startup checks (image store, database, static assets)
+- Loading server configuration from JSON
+- Startup checks (static assets)
+- Auth database initialization (shared across events)
+- EventManager lifecycle (discovery, idle checks, shutdown)
 - Mounting static file directories
-- Including all routers
-- Managing the ExtractionService lifecycle
+- Including all routers under event-scoped prefixes
 """
 
+import asyncio
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import AppConfig, load_config
-from .database import create_all, init_engine
+from .config import ServerConfig, load_app_config
+from .dependencies.auth import Role, require_role
+from .dependencies.event import get_event_db, get_event_info
+from .event_manager import EventInfo, EventManager
 from .exceptions import ConfigError
-from .routers import admin, auth, reports, review, scan
-from .services.extraction_service import ExtractionMode, ExtractionService
-from .services.flier_match_service import FlierMatchService
-from .services.motor_lookup_service import MotorLookupService
+from .routers import admin, auth, events, reports, review, scan
 from .services.record_service import display_fractions
 
 logger = logging.getLogger(__name__)
@@ -52,83 +55,6 @@ _OPENCV_JS_DIR = _STATIC_DIR / "js" / "node_modules" / "opencv.js"
 # ---------------------------------------------------------------------------
 
 
-def _check_image_store(config: AppConfig) -> None:
-    """Verify Image Store directory exists and is writable; create if absent."""
-    image_path = config.image_store_path
-    if not image_path.exists():
-        if config.read_only:
-            logger.warning(
-                "Image store directory does not exist: %s (read-only mode, skipping creation)",
-                image_path,
-            )
-            return
-        try:
-            image_path.mkdir(parents=True, exist_ok=True)
-            logger.info("Created image store directory: %s", image_path)
-        except OSError as exc:
-            logger.error(
-                "Cannot create image store directory %s: %s", image_path, exc
-            )
-            sys.exit(1)
-
-    if not config.read_only and not os.access(image_path, os.W_OK):
-        logger.error(
-            "Image store directory is not writable: %s", image_path
-        )
-        sys.exit(1)
-
-
-async def _check_database(config: AppConfig) -> None:
-    """Verify DB file is accessible; init schema if needed."""
-    db_path = config.db_path
-    if not config.read_only:
-        # Ensure the parent directory exists
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        engine = init_engine(db_path, read_only=config.read_only)
-        if not config.read_only:
-            await create_all(engine)
-            await _apply_schema_migrations(engine)
-        logger.info(
-            "Database initialised at %s%s",
-            db_path, " (read-only)" if config.read_only else ""
-        )
-    except Exception as exc:
-        logger.error(
-            "Cannot initialise database at %s: %s", db_path, exc
-        )
-        sys.exit(1)
-
-
-async def _apply_schema_migrations(engine) -> None:
-    """Add columns that may be missing from an older database schema.
-
-    SQLAlchemy's create_all() only creates new tables, not new columns.
-    This function uses ALTER TABLE to add any columns that don't exist yet.
-    """
-    from sqlalchemy import text
-
-    # Columns to ensure exist: (column_name, column_type_sql)
-    migrations = [
-        ("norm_length_mm", "FLOAT"),
-        ("norm_diameter_mm", "FLOAT"),
-        ("norm_weight_g", "FLOAT"),
-    ]
-
-    async with engine.begin() as conn:
-        # Get existing column names
-        result = await conn.execute(text("PRAGMA table_info(flight_records)"))
-        existing_columns = {row[1] for row in result.fetchall()}
-
-        for col_name, col_type in migrations:
-            if col_name not in existing_columns:
-                await conn.execute(
-                    text(f"ALTER TABLE flight_records ADD COLUMN {col_name} {col_type}")
-                )
-                logger.info("Migration: added column %s to flight_records", col_name)
-
-
 def _check_static_assets() -> None:
     """Verify required client-side assets (opencv.js) are present."""
     if not _OPENCV_JS_DIR.exists():
@@ -141,40 +67,19 @@ def _check_static_assets() -> None:
     logger.info("Static asset check passed: opencv.js found at %s", _OPENCV_JS_DIR)
 
 
-def _log_endpoints(config: AppConfig) -> None:
-    """Log configured extraction endpoints and their concurrency limits."""
-    logger.info(
-        "Extraction mode: %s", config.extraction_mode
-    )
-    for ep in config.extraction_endpoints:
-        logger.info(
-            "  Endpoint: %s (concurrency: %d)", ep.url, ep.concurrency
-        )
-
-
-def _log_config_summary(config: AppConfig) -> None:
-    """Log key configuration values at startup."""
-    logger.info("Event: %s (%s to %s)",
-                config.event_name,
-                config.event_date_range.start,
-                config.event_date_range.end)
-    logger.info("Event data: %s", config.event_data_path.resolve())
-    logger.info("Database: %s", config.db_path.resolve())
-    logger.info("Image store: %s", config.image_store_path.resolve())
-
-
 # ---------------------------------------------------------------------------
-# Startup checks orchestrator
+# Background task for idle event checks
 # ---------------------------------------------------------------------------
 
 
-async def startup_checks(config: AppConfig) -> None:
-    """Run all startup validation checks."""
-    _log_config_summary(config)
-    _check_image_store(config)
-    await _check_database(config)
-    _check_static_assets()
-    _log_endpoints(config)
+async def _idle_check_loop(event_manager: EventManager, interval_seconds: int = 300):
+    """Periodically check for idle events and close them."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            await event_manager.check_idle_events()
+        except Exception as exc:
+            logger.error("Error during idle event check: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -184,11 +89,11 @@ async def startup_checks(config: AppConfig) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: startup checks, service init, and graceful shutdown."""
-    # 1. Load config
+    """Application lifespan: startup checks, EventManager init, and graceful shutdown."""
+    # 1. Load server config
     config_path = Path(os.environ.get("CONFIG_PATH", "config.json"))
     try:
-        config = load_config(config_path)
+        app_config = load_app_config(config_path)
     except ConfigError as exc:
         logger.error("Configuration error: %s", exc)
         sys.exit(1)
@@ -207,25 +112,27 @@ async def lifespan(app: FastAPI):
         sys.exit(1)
     app.state.session_secret = session_secret
 
-    # 1c. Initialize auth database and service
+    # 1c. Initialize auth database and service (shared across all events)
     from .auth_database import create_auth_tables, init_auth_engine
     from .services.auth_service import AuthService
     from .middleware.session_middleware import SessionMiddleware as AuthSessionMiddleware
 
-    auth_engine = init_auth_engine(config.auth_db_path)
+    auth_engine = init_auth_engine(app_config.auth_db_path)
     await create_auth_tables(auth_engine)
 
     from .auth_database import _auth_session as auth_session_factory
     auth_service = AuthService(
         session_factory=auth_session_factory,
         session_secret=session_secret,
-        timeout_hours=config.session_timeout_hours,
+        timeout_hours=app_config.session_timeout_hours,
     )
     app.state.auth_service = auth_service
 
     # 1d. Initialize audit logger
     from .services.audit_service import init_audit_logger
-    init_audit_logger(config.effective_audit_log_path)
+    # Use a global audit log in the events directory
+    audit_log_path = app_config.events_dir / "audit.log"
+    init_audit_logger(audit_log_path)
 
     # 1e. Auto-create default admin if no admin exists
     from sqlalchemy import select as _auth_select
@@ -247,154 +154,40 @@ async def lifespan(app: FastAPI):
                 "No admin user exists and FCS_ADMIN_EMAIL/FCS_ADMIN_PASSWORD not set"
             )
 
-    # 2-4. Run startup checks (image store, DB, static assets, log endpoints)
-    await startup_checks(config)
+    # 2. Check static assets
+    _check_static_assets()
 
-    # 5. Instantiate and start the extraction service
-    from .database import _async_session as session_factory
-    from .services import record_service
+    # 3. Create EventManager and discover events
+    event_manager = EventManager(app_config)
+    event_manager.discover_events()
+    app.state.event_manager = event_manager
+    app.state.app_config = app_config
 
-    # 5a. Start motor lookup service
-    motor_lookup_service = MotorLookupService()
-    await motor_lookup_service.startup()
-
-    # 5b. Initialize FlierMatchService if configured
-    flier_match_service = None
-    if config.known_fliers_path:
-        flier_match_service = FlierMatchService(
-            known_fliers_path=config.known_fliers_path,
-        )
-        flier_match_service.load()
-
-    extraction_service = ExtractionService(
-        config=config,
-        session_factory=session_factory,
-        thrustcurve_service=motor_lookup_service,
-        flier_match_service=flier_match_service,
+    # 4. Start background task for idle event checks (every 5 minutes)
+    idle_task = asyncio.create_task(
+        _idle_check_loop(event_manager, interval_seconds=300)
     )
 
-    if not config.read_only:
-        # Roll back any records stuck in "processing" from a previous unclean shutdown
-        async with session_factory() as db:
-            stale_records = await record_service.get_by_status(db, "processing")
-            for record in stale_records:
-                await record_service.set_status(db, record.id, "pending")
-            if stale_records:
-                logger.info(
-                    "Rolled back %d stale 'processing' records to 'pending'",
-                    len(stale_records),
-                )
-
-        # Upgrade pending records that already have meaningful extracted data to "extracted"
-        async with session_factory() as db:
-            pending_records = await record_service.get_by_status(db, "pending")
-            upgraded_count = 0
-            for record in pending_records:
-                # Check if the record has any meaningful data beyond just
-                # the image — if so, it was already extracted at some point
-                has_flier = bool(record.flier_name)
-                has_motors = bool((record.overflow or {}).get("motors"))
-                has_rocket = bool((record.overflow or {}).get("rocket_name"))
-                has_impulse = record.total_impulse_value is not None
-                has_evaluation = bool(record.evaluation_outcome)
-                if has_flier or has_motors or has_rocket or has_impulse or has_evaluation:
-                    await record_service.set_status(db, record.id, "extracted")
-                    upgraded_count += 1
-            if upgraded_count:
-                logger.info(
-                    "Upgraded %d pending records with existing data to 'extracted'",
-                    upgraded_count,
-                )
-
-        # Fix any human_verified records that aren't in "extracted" state
-        async with session_factory() as db:
-            from sqlalchemy import select as _select
-            from .models import FlightRecord
-            stmt = (
-                _select(FlightRecord)
-                .where(FlightRecord.human_verified == True)  # noqa: E712
-                .where(FlightRecord.extraction_status != "extracted")
-            )
-            result = await db.execute(stmt)
-            mismatched = list(result.scalars().all())
-            for record in mismatched:
-                await record_service.set_status(db, record.id, "extracted")
-            if mismatched:
-                logger.info(
-                    "Fixed %d human-verified records with incorrect extraction_status",
-                    len(mismatched),
-                )
-
-        await extraction_service.start()
-        logger.info("Extraction service started.")
-
-        # Populate normalized metric columns for existing records that don't have them
-        async with session_factory() as db:
-            from sqlalchemy import select as _select, or_
-            from .models import FlightRecord as _FR
-            from .services.record_service import compute_normalized_metrics
-            stmt = (
-                _select(_FR)
-                .where(_FR.overflow.isnot(None))
-                .where(
-                    or_(
-                        _FR.norm_length_mm.is_(None),
-                        _FR.norm_diameter_mm.is_(None),
-                        _FR.norm_weight_g.is_(None),
-                    )
-                )
-            )
-            result = await db.execute(stmt)
-            candidates = list(result.scalars().all())
-            norm_count = 0
-            for record in candidates:
-                metrics = compute_normalized_metrics(record.overflow, record.id)
-                # Only update if we actually computed something
-                if any(v is not None for v in metrics.values()):
-                    record.norm_length_mm = metrics["norm_length_mm"]
-                    record.norm_diameter_mm = metrics["norm_diameter_mm"]
-                    record.norm_weight_g = metrics["norm_weight_g"]
-                    norm_count += 1
-            if norm_count:
-                await db.commit()
-                logger.info(
-                    "Populated normalized metrics for %d existing records",
-                    norm_count,
-                )
-
-        # In immediate mode, enqueue any pending records (including rolled-back ones)
-        if extraction_service.mode == ExtractionMode.IMMEDIATE:
-            dispatched = await extraction_service.trigger_pending()
-            if dispatched:
-                logger.info("Enqueued %d pending records for extraction", dispatched)
-    else:
-        logger.info("Read-only mode: extraction service and data migrations skipped.")
-
-    # 6. Configure routers with their dependencies
+    # 5. Configure templates
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-    # Register custom filter for displaying ASCII fractions as unicode
     templates.env.filters["display_fractions"] = display_fractions
-    # Make read_only available in all templates as a global
-    templates.env.globals["read_only"] = config.read_only
-    scan.configure(config=config, extraction_service=extraction_service, templates=templates)
-    admin.configure(
-        extraction_service=extraction_service,
-        flier_match_service=flier_match_service,
-        config=config,
-    )
-    review.configure(
-        templates=templates, config=config, extraction_service=extraction_service,
-        thrustcurve_service=motor_lookup_service,
-    )
-    reports.configure(templates=templates, config=config)
+    app.state.templates = templates
 
-    # 6b. Configure auth router and session middleware
+    # 6. Configure routers that need template access
+    events.configure(templates=templates)
+    auth.configure(
+        auth_service=auth_service,
+        templates=templates,
+        session_middleware=None,  # Will be set below
+    )
+
+    # 6b. Configure session middleware
     session_mw = AuthSessionMiddleware(
-        app=None,  # Will be set when added as middleware
+        app=None,
         auth_service=auth_service,
         cookie_name="fcs_session",
         session_secret=session_secret,
-        secure=bool(getattr(config, "ssl_certfile", None)),
+        secure=bool(app_config.ssl_certfile),
     )
     auth.configure(
         auth_service=auth_service,
@@ -403,25 +196,16 @@ async def lifespan(app: FastAPI):
     )
     app.state.session_middleware = session_mw
 
-    # Mount /images now that we know the path and it exists
-    app.mount(
-        "/images",
-        StaticFiles(directory=str(config.image_store_path)),
-        name="images",
-    )
-
-    # Store config on app state for potential access elsewhere
-    app.state.config = config
-    app.state.extraction_service = extraction_service
-    app.state.thrustcurve_service = motor_lookup_service
-    app.state.flier_match_service = flier_match_service
-
     yield
 
-    # 7. Graceful shutdown: stop extraction service
-    if not config.read_only:
-        await extraction_service.stop()
-        logger.info("Extraction service stopped.")
+    # 7. Graceful shutdown
+    idle_task.cancel()
+    try:
+        await idle_task
+    except asyncio.CancelledError:
+        pass
+    await event_manager.shutdown()
+    logger.info("Application shut down gracefully.")
 
 
 # ---------------------------------------------------------------------------
@@ -432,24 +216,11 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.middleware("http")
-async def read_only_guard(request, call_next):
-    """Block all mutating requests when the application is in read-only mode."""
-    config = getattr(getattr(request.app, "state", None), "config", None)
-    if config and config.read_only and request.method not in ("GET", "HEAD", "OPTIONS"):
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Event is in read-only mode. No modifications allowed."},
-        )
-    return await call_next(request)
-
-
-@app.middleware("http")
 async def session_resolution(request: Request, call_next):
     """Resolve session cookie and attach user to request.state."""
     session_mw = getattr(request.app.state, "session_middleware", None)
     if session_mw is None:
-        # Middleware not configured yet (during startup) — pass through
+        # Middleware not configured yet (during startup)
         request.state.user = None
         request.state.session_token = None
         request.state.clear_session_cookie = False
@@ -483,12 +254,457 @@ async def session_resolution(request: Request, call_next):
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-# Note: /images is mounted dynamically in the lifespan after config is loaded
-# and the image store directory has been verified/created.
-
-# Include routers
+# Include top-level routers (events list, auth)
+app.include_router(events.router)
 app.include_router(auth.router)
-app.include_router(scan.router)
-app.include_router(review.router)
-app.include_router(reports.router)
-app.include_router(admin.router)
+
+
+# ---------------------------------------------------------------------------
+# Event-scoped routes
+# ---------------------------------------------------------------------------
+
+event_router = APIRouter(prefix="/events/{event_path:path}")
+
+
+@event_router.get("/images/{filename:path}")
+async def serve_event_image(
+    request: Request,
+    event_path: str,
+    filename: str,
+    event_info: EventInfo = Depends(get_event_info),
+) -> FileResponse:
+    """Serve an image from the event's image store."""
+    image_path = event_info.event_config.image_store_path / filename
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(str(image_path))
+
+
+# --- Event-scoped review routes ---
+
+
+@event_router.get("/", response_class=HTMLResponse)
+async def event_list_records(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Render the flight cards list for an event."""
+    from fastapi import Query as Q
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    # Import needed to call the review logic
+    return await review.list_records_impl(
+        request=request,
+        db=db,
+        config=config,
+        extraction_service=event_info.extraction_service,
+        thrustcurve_service=event_info.motor_lookup_service,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+@event_router.get("/queue")
+async def event_queue_status(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Render the extraction queue page for an event."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    return await review.queue_status_impl(
+        request=request,
+        db=db,
+        config=config,
+        extraction_service=event_info.extraction_service,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+@event_router.get("/record/{record_id}")
+async def event_detail_record(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Render the detail view for a single flight record."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    return await review.detail_record_impl(
+        request=request,
+        record_id=record_id,
+        db=db,
+        config=config,
+        thrustcurve_service=event_info.motor_lookup_service,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+# --- Event-scoped scan routes ---
+
+
+@event_router.get("/scan")
+async def event_scan_page(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Serve the scanner camera UI page for an event."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    return await scan.scan_page_impl(
+        request=request,
+        config=config,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+@event_router.post(
+    "/api/scan",
+    status_code=201,
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_submit_card(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Accept a card image upload for an event."""
+    from fastapi import File, Form, UploadFile
+    # We need to handle form data manually here
+    return await scan.submit_card_impl(
+        request=request,
+        db=db,
+        config=event_info.event_config,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+# --- Event-scoped reports routes ---
+
+
+@event_router.get("/reports")
+async def event_reports_overview(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Render the reports overview for an event."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    return await reports.reports_overview_impl(
+        request=request,
+        db=db,
+        config=config,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+@event_router.get("/reports/{report_date}")
+async def event_reports_day(
+    request: Request,
+    event_path: str,
+    report_date: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Render detailed stats for a single day."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    return await reports.reports_day_impl(
+        request=request,
+        report_date=report_date,
+        db=db,
+        config=config,
+        templates=templates,
+        event_base_url=event_base_url,
+    )
+
+
+# --- Event-scoped admin routes ---
+
+
+@event_router.get(
+    "/admin",
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def event_admin_dashboard(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Render the admin dashboard for an event."""
+    templates = request.app.state.templates
+    config = event_info.event_config
+    event_base_url = f"/events/{event_path.strip('/')}"
+
+    current_mode = event_info.extraction_service.mode.value if event_info.extraction_service else "unknown"
+
+    return templates.TemplateResponse(
+        name="admin.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": f"Admin - {config.event_name}",
+            "current_mode": current_mode,
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+@event_router.post(
+    "/api/admin/mode",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_set_mode(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Switch the extraction operating mode for an event."""
+    return await admin.set_mode_impl(
+        request=request,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/trigger",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_trigger_extraction(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Manually trigger extraction of all pending records for an event."""
+    return await admin.trigger_extraction_impl(
+        request=request,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/requeue",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_requeue_all_failed(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Reset all extraction_failed records to pending for an event."""
+    return await admin.requeue_all_failed_impl(
+        request=request,
+        db=db,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/requeue/{record_id}",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_requeue_single(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Reset a single failed record to pending for an event."""
+    return await admin.requeue_single_impl(
+        request=request,
+        record_id=record_id,
+        db=db,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/extract/{record_id}",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_extract_single(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Force extraction of a single record for an event."""
+    return await admin.extract_single_impl(
+        request=request,
+        record_id=record_id,
+        db=db,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.put(
+    "/api/admin/record/{record_id}",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_update_record(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Update editable fields on a flight record for an event."""
+    return await admin.update_record_impl(
+        request=request,
+        record_id=record_id,
+        db=db,
+        config=event_info.event_config,
+        flier_match_service=event_info.flier_match_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/record/{record_id}/motor/{motor_index}/search",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_search_motor(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    motor_index: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Search ThrustCurve for a motor."""
+    return await admin.search_motor_impl(
+        request=request,
+        record_id=record_id,
+        motor_index=motor_index,
+        db=db,
+        thrustcurve_service=event_info.motor_lookup_service,
+    )
+
+
+@event_router.post(
+    "/api/admin/record/{record_id}/motor/{motor_index}/select",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def event_select_motor(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    motor_index: int,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Validate a motor selection."""
+    return await admin.select_motor_impl(
+        request=request,
+        motor_id=None,  # Will be read from body in the impl
+        thrustcurve_service=event_info.motor_lookup_service,
+    )
+
+
+@event_router.get("/api/admin/debug/record/{record_id}")
+async def event_debug_record(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Debug endpoint: dump the raw database record."""
+    return await admin.debug_record_impl(record_id=record_id, db=db)
+
+
+@event_router.get("/api/admin/debug/flier-service")
+async def event_debug_flier_service(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Debug endpoint: dump flier service state."""
+    return admin.debug_flier_service_impl(flier_match_service=event_info.flier_match_service)
+
+
+@event_router.get("/api/admin/next-unverified")
+async def event_next_unverified(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Return the ID of the next unverified record."""
+    from fastapi import Query as Q
+    after = int(request.query_params.get("after", "0"))
+    return await admin.next_unverified_impl(after=after, db=db)
+
+
+@event_router.get("/api/admin/queue")
+async def event_get_queue(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+):
+    """Return the list of record IDs in the extraction queue."""
+    return admin.get_queue_impl(extraction_service=event_info.extraction_service)
+
+
+@event_router.get("/api/admin/stats")
+async def event_get_stats(
+    request: Request,
+    event_path: str,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Return status counts for the event header."""
+    return await admin.get_stats_impl(
+        db=db,
+        extraction_service=event_info.extraction_service,
+    )
+
+
+@event_router.delete(
+    "/api/admin/record/{record_id}",
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def event_delete_record(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Delete a flight record for an event."""
+    return await admin.delete_record_impl(
+        request=request,
+        record_id=record_id,
+        db=db,
+    )
+
+
+app.include_router(event_router)

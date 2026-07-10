@@ -778,15 +778,15 @@
 {% set is_admin = current_user and current_user.role == "admin" %}
 
 <nav class="record-nav">
-  <a href="/" class="back-link" id="backToList">&larr; Back to list</a>
+  <a href="{{ event_base_url|default('', true) }}/" class="back-link" id="backToList">&larr; Back to list</a>
   <span class="prev-next">
     {% if prev_id %}
-    <a href="/record/{{ prev_id }}">&larr; Prev</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ prev_id }}">&larr; Prev</a>
     {% else %}
     <span class="disabled">&larr; Prev</span>
     {% endif %}
     {% if next_id %}
-    <a href="/record/{{ next_id }}">Next &rarr;</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ next_id }}">Next &rarr;</a>
     {% else %}
     <span class="disabled">Next &rarr;</span>
     {% endif %}
@@ -1288,21 +1288,23 @@
   function getListUrl() {
     var STORAGE_KEY = 'fcs_list_prefs';
     var TTL_MS = 60 * 60 * 1000;
+    var base = eventBaseUrl || '';
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return '/';
+      if (!raw) return base + '/';
       var data = JSON.parse(raw);
-      if (Date.now() - data.ts > TTL_MS) return '/';
-      var parts = ['/?page=1'];
+      if (Date.now() - data.ts > TTL_MS) return base + '/';
+      var parts = [base + '/?page=1'];
       if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
       if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
       if (data.status) parts.push('status=' + encodeURIComponent(data.status));
       if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
-      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : '/';
-    } catch(e) { return '/'; }
+      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : base + '/';
+    } catch(e) { return base + '/'; }
   }
 
   var recordId = {{ record.id }};
+  var eventBaseUrl = '{{ event_base_url|default("", true) }}';
   var pendingChanges = {};
   var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
 
@@ -1561,7 +1563,7 @@
       body['overflow'] = merged;
     }
 
-    fetch('/api/admin/record/' + recordId, {
+    fetch(eventBaseUrl + '/api/admin/record/' + recordId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1690,7 +1692,7 @@
         }
       }
 
-      fetch('/api/admin/record/' + recordId, {
+      fetch(eventBaseUrl + '/api/admin/record/' + recordId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -1699,11 +1701,11 @@
         if (res.ok) {
           showFeedback('Verified!', false);
           // Navigate to next unverified card, or back to list
-          fetch('/api/admin/next-unverified?after=' + recordId)
+          fetch(eventBaseUrl + '/api/admin/next-unverified?after=' + recordId)
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.id) {
-                window.location.href = '/record/' + data.id;
+                window.location.href = eventBaseUrl + '/record/' + data.id;
               } else {
                 window.location.href = getListUrl();
               }
@@ -1767,7 +1769,7 @@
   var btnRequeue = document.getElementById('btnRequeue');
   if (btnRequeue) {
     btnRequeue.addEventListener('click', function() {
-      fetch('/api/admin/requeue/' + recordId, { method: 'POST' })
+      fetch(eventBaseUrl + '/api/admin/requeue/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
@@ -1815,7 +1817,7 @@
 
       btnExtract.disabled = true;
       btnExtract.textContent = 'Extracting…';
-      fetch('/api/admin/extract/' + recordId, { method: 'POST' })
+      fetch(eventBaseUrl + '/api/admin/extract/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
@@ -1848,7 +1850,7 @@
       }
       btnRedundant.disabled = true;
       btnRedundant.textContent = 'Deleting…';
-      fetch('/api/admin/record/' + recordId, { method: 'DELETE' })
+      fetch(eventBaseUrl + '/api/admin/record/' + recordId, { method: 'DELETE' })
         .then(function(res) {
           if (res.ok) {
             window.location.href = getListUrl();

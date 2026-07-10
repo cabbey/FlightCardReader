@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "feat",
   "description": "Restructure the FastAPI app to support multi-event routing. Move all current per-event routes under /events/{event_path:path}/ prefix. Add a top-level events listing page at /. Add an events list nav button. Update page titles to include page name and contextual info (record number, search terms, etc.). Add admin button to refresh events list. Integrate EventManager into the app lifespan and routing.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "Refactor flight_card_scanner/main.py lifespan to: (a) load app config via load_app_config, (b) initialize auth DB (shared across events), (c) create EventManager with app config, (d) run initial event discovery, (e) start a background task for periodic idle-event checks (every 5 minutes), (f) store event_manager on app.state. Remove the single-event initialization logic (DB init, extraction service start, etc.) since EventManager handles that per-event.",
     "Create a new router file flight_card_scanner/routers/events.py with: (a) GET / that renders the events list page, (b) a dependency get_event_context(event_path) that calls event_manager.get_event(slug) and returns the EventInfo, providing the event's session factory, config, extraction service to downstream route handlers.",

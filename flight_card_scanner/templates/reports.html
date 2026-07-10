@@ -223,7 +223,7 @@
   {% if stats.motor_counts %}
   <div class="motor-pills">
     {% for letter, count in stats.motor_counts.items() %}
-    <a href="/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
+    <a href="{{ event_base_url|default('', true) }}/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
     {% endfor %}
   </div>
   {% endif %}
@@ -246,7 +246,7 @@
     <tbody>
       {% for name, fstats in stats.flyer_stats.items() %}
       <tr data-name="{{ name }}" data-flights="{{ fstats.flights }}" data-motors="{{ fstats.motor_total }}" data-impulse="{{ fstats.impulse_ns or 0 }}">
-        <td><a href="/?q={{ name | urlencode }}">{{ name }}</a></td>
+        <td><a href="{{ event_base_url|default('', true) }}/?q={{ name | urlencode }}">{{ name }}</a></td>
         <td class="numeric">{{ fstats.flights }}</td>
         <td class="numeric">{{ fstats.motor_total }}</td>
         <td class="numeric">{{ "%.1f"|format(fstats.impulse_ns) if fstats.impulse_ns else "—" }}</td>
@@ -270,7 +270,7 @@
   <h3>{{ failed_records | length }} Failed Extraction{{ "s" if failed_records | length != 1 else "" }}</h3>
   <div class="failed-links">
     {% for rec in failed_records %}
-    <a href="/record/{{ rec.id }}">#{{ rec.id }} {{ rec.flier_name }}</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ rec.id }}">#{{ rec.id }} {{ rec.flier_name }}</a>
     {% endfor %}
   </div>
 </div>
@@ -282,9 +282,9 @@
   document.getElementById('dayFilter').addEventListener('change', function() {
     var val = this.value;
     if (val) {
-      window.location.href = '/reports/?day=' + encodeURIComponent(val);
+      window.location.href = '{{ event_base_url|default("", true) }}/reports/?day=' + encodeURIComponent(val);
     } else {
-      window.location.href = '/reports/';
+      window.location.href = '{{ event_base_url|default("", true) }}/reports/';
     }
   });
 

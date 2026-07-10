@@ -362,7 +362,7 @@
 <div style="text-align:center; padding:2rem; color:#6b7280;">
   <p style="font-size:1.1rem; font-weight:500;">Login required.</p>
   <p>You must be logged in to scan cards.</p>
-  <a href="/login?next=/scan" style="color:#2563eb;">Login</a>
+  <a href="/login?next={{ event_base_url|default('', true) }}/scan" style="color:#2563eb;">Login</a>
 </div>
 {% else %}
 <div class="scan-container">
@@ -517,6 +517,7 @@ if (qrSelect) {
   }
 })();
 </script>
+<script>window.FCS_EVENT_BASE_URL = '{{ event_base_url|default("", true) }}';</script>
 <script src="/static/js/scanner.js"></script>
 {% endif %}
 {% endblock %}

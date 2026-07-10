@@ -344,3 +344,157 @@ async def reports_day(
             "current_user": getattr(request.state, "user", None),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Implementation functions for event-scoped routes
+# ---------------------------------------------------------------------------
+
+
+async def reports_overview_impl(
+    request: Request,
+    db: AsyncSession,
+    config,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+):
+    """Shared implementation for the reports overview page."""
+    from datetime import timedelta
+
+    # Parse day filter
+    day = request.query_params.get("day")
+    filter_date = None
+    if day:
+        try:
+            filter_date = date_type.fromisoformat(day)
+        except (ValueError, TypeError):
+            pass
+
+    # Fetch all records
+    result = await db.execute(
+        select(FlightRecord).order_by(FlightRecord.flight_date.asc())
+    )
+    all_records = list(result.scalars().all())
+
+    extracted_records: list[FlightRecord] = []
+    status_counts = {
+        "pending": 0,
+        "processing": 0,
+        "extracted": 0,
+        "extraction_failed": 0,
+    }
+
+    for r in all_records:
+        if r.extraction_status in status_counts:
+            status_counts[r.extraction_status] += 1
+        if r.extraction_status == "extracted":
+            extracted_records.append(r)
+
+    if filter_date is not None:
+        filtered_records = [r for r in extracted_records if r.flight_date == filter_date]
+    else:
+        filtered_records = extracted_records
+
+    failed_records = [
+        {"id": r.id, "flier_name": r.flier_name or "Unknown"}
+        for r in all_records
+        if r.extraction_status == "extraction_failed"
+    ]
+
+    stats = _compute_stats(filtered_records)
+
+    event_dates = []
+    current = config.event_date_range.start
+    end = config.event_date_range.end
+    while current <= end:
+        event_dates.append({
+            "value": current.isoformat(),
+            "label": current.strftime("%A %-m/%-d"),
+        })
+        current += timedelta(days=1)
+
+    page_title = f"Reports - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="reports.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "total_cards": len(filtered_records),
+            "status_counts": status_counts,
+            "stats": stats,
+            "failed_records": failed_records,
+            "event_dates": event_dates,
+            "day_filter": day or "",
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+async def reports_day_impl(
+    request: Request,
+    report_date: str,
+    db: AsyncSession,
+    config,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+):
+    """Shared implementation for the per-day reports page."""
+    try:
+        target_date = date_type.fromisoformat(report_date)
+    except ValueError:
+        return templates.TemplateResponse(
+            name="404.html",
+            request=request,
+            context={
+                "event_name": config.event_name,
+                "event_base_url": event_base_url,
+                "page_title": f"Not Found - {config.event_name}",
+                "message": f"Invalid date format: {report_date}",
+                "current_user": getattr(request.state, "user", None),
+            },
+            status_code=404,
+        )
+
+    result = await db.execute(
+        select(FlightRecord).where(
+            FlightRecord.flight_date == target_date,
+            FlightRecord.extraction_status == "extracted",
+        )
+    )
+    records = list(result.scalars().all())
+
+    if not records:
+        return templates.TemplateResponse(
+            name="404.html",
+            request=request,
+            context={
+                "event_name": config.event_name,
+                "event_base_url": event_base_url,
+                "page_title": f"Not Found - {config.event_name}",
+                "message": f"No extracted records found for {target_date.strftime('%A, %B %d, %Y')}.",
+                "current_user": getattr(request.state, "user", None),
+            },
+            status_code=404,
+        )
+
+    stats = _compute_stats(records)
+
+    page_title = f"Reports {target_date.strftime('%m/%d')} - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="report_day.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "date": target_date,
+            "date_label": target_date.strftime("%A, %B %d, %Y"),
+            "card_count": len(records),
+            **stats,
+            "current_user": getattr(request.state, "user", None),
+        },
+    )

@@ -115,7 +115,7 @@
   <h2>Management</h2>
   <ul class="admin-links">
     <li><a href="/admin/users">&#x1F465; User Management</a></li>
-    <li><a href="/queue">&#x1F4CB; Extraction Queue</a></li>
+    <li><a href="{{ event_base_url|default('', true) }}/queue">&#x1F4CB; Extraction Queue</a></li>
   </ul>
 </div>
 
@@ -131,7 +131,8 @@
 
   // Mode switch
   document.getElementById('modeSelect').addEventListener('change', function() {
-    fetch('/api/admin/mode', {
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: this.value })
@@ -143,7 +144,8 @@
 
   // Trigger All Pending
   document.getElementById('btnTrigger').addEventListener('click', function() {
-    fetch('/api/admin/trigger', { method: 'POST' })
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/trigger', { method: 'POST' })
       .then(function(res) { return res.json(); })
       .then(function(data) { showMsg('Dispatched ' + data.dispatched + ' record(s).', false); })
       .catch(function() { showMsg('Network error.', true); });
@@ -151,7 +153,8 @@
 
   // Re-queue All Failed
   document.getElementById('btnRequeue').addEventListener('click', function() {
-    fetch('/api/admin/requeue', { method: 'POST' })
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/requeue', { method: 'POST' })
       .then(function(res) { return res.json(); })
       .then(function(data) { showMsg('Re-queued ' + data.requeued + ' record(s).', false); })
       .catch(function() { showMsg('Network error.', true); });
