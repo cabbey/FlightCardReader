@@ -48,7 +48,6 @@ class AppConfig:
     ssl_certfile: Path | None = None
     ssl_keyfile: Path | None = None
     known_fliers_path: Path | None = None
-    flier_match_model: str | None = None
     auto_accept_threshold: float = 0.95
     read_only: bool = False
     auth_db_path: Path = field(default_factory=lambda: Path("./auth.db"))
@@ -245,19 +244,16 @@ def load_config(path: Path) -> AppConfig:
     if "ssl_keyfile" in data:
         ssl_keyfile = _resolve_path(Path(data["ssl_keyfile"]), config_dir)
 
-    # --- known_fliers_path / flier_match_model (optional) ---
+    # --- known_fliers_path (optional) ---
     known_fliers_path: Path | None = None
-    flier_match_model: str | None = None
     if "known_fliers_path" in data:
         known_fliers_path = _resolve_path(Path(data["known_fliers_path"]), config_dir)
-    if "flier_match_model" in data:
-        flier_match_model = data["flier_match_model"]
 
     if known_fliers_path is not None and not known_fliers_path.exists():
         raise ConfigError(
             f"Known fliers file not found: {known_fliers_path}"
         )
-    if known_fliers_path is None and flier_match_model is None:
+    if known_fliers_path is None:
         logger.info("Flier verification is disabled (no 'known_fliers_path' configured).")
 
     # --- auto_accept_threshold (optional, default 0.95) ---
@@ -302,7 +298,6 @@ def load_config(path: Path) -> AppConfig:
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
         known_fliers_path=known_fliers_path,
-        flier_match_model=flier_match_model,
         auto_accept_threshold=auto_accept_threshold,
         read_only=read_only,
         auth_db_path=auth_db_path,

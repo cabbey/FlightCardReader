@@ -113,8 +113,7 @@ The application reads its configuration from a JSON file. By default it looks fo
 | `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit (number of parallel requests). |
 | `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Optional — enables HTTPS when paired with `ssl_keyfile`. |
 | `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Optional — enables HTTPS when paired with `ssl_certfile`. |
-| `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification. Requires `flier_match_model` to also be set. |
-| `flier_match_model` | string | *(none)* | Ollama model name used for flier name matching (e.g., `qwen2.5:7b`). Required when `known_fliers_path` is set. |
+| `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification via fuzzy matching. |
 | `auth_db_path` | string | `"./auth.db"` | Path to the auth SQLite database (user accounts, sessions). Resolved relative to config file directory. |
 | `session_timeout_hours` | number | `8` | Session idle timeout in hours. Range: [0.25, 8]. |
 | `audit_log_path` | string | `"{event_data_path}/audit.log"` | Path to the structured audit log file. |
