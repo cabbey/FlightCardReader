@@ -354,26 +354,31 @@ async def scan_page_impl(
     config,
     templates: Jinja2Templates,
     event_base_url: str = "",
+    app_config=None,
 ):
     """Shared implementation for the scan page."""
     from fastapi.responses import HTMLResponse
 
-    # Determine if SSL is active
-    ssl_enabled = (
-        getattr(config, "ssl_certfile", None) is not None
-        and getattr(config, "ssl_keyfile", None) is not None
-        and hasattr(config, "ssl_certfile")
-        and config.ssl_certfile is not None
-    )
-    if ssl_enabled:
-        ssl_enabled = (
-            hasattr(config.ssl_certfile, "exists")
-            and config.ssl_certfile.exists()
-            and config.ssl_keyfile.exists()
-        )
+    # Use server-level app_config for SSL and port (these are server concerns,
+    # not per-event settings). Fall back to request.app.state.app_config if
+    # not explicitly passed.
+    if app_config is None:
+        app_config = getattr(request.app.state, "app_config", None)
 
-    # Get port from app config if available
-    port = getattr(config, "port", 8000)
+    # Determine if SSL is active from the server config
+    ssl_enabled = False
+    if app_config is not None:
+        ssl_certfile = getattr(app_config, "ssl_certfile", None)
+        ssl_keyfile = getattr(app_config, "ssl_keyfile", None)
+        if ssl_certfile is not None and ssl_keyfile is not None:
+            ssl_enabled = (
+                hasattr(ssl_certfile, "exists")
+                and ssl_certfile.exists()
+                and ssl_keyfile.exists()
+            )
+
+    # Get port from server config
+    port = getattr(app_config, "port", 8000) if app_config is not None else 8000
 
     # Generate QR codes for all available addresses
     address_list = _get_all_addresses()
@@ -395,6 +400,7 @@ async def scan_page_impl(
             "event_name": config.event_name,
             "event_base_url": event_base_url,
             "page_title": page_title,
+            "read_only": getattr(config, "read_only", False),
             "qr_entries": qr_entries,
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),

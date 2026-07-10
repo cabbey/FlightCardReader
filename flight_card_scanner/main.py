@@ -216,6 +216,51 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.middleware("http")
+async def read_only_guard(request: Request, call_next):
+    """Block mutating requests on read-only events with a 403 response."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+
+    # Only check event-scoped routes
+    path = request.url.path
+    if not path.startswith("/events/"):
+        return await call_next(request)
+
+    # Extract the event slug from the URL path
+    # Path format: /events/{slug}/...
+    # Strip "/events/" prefix and extract the slug (everything before a known route segment)
+    remainder = path[len("/events/"):]
+    # Known leaf route segments that terminate the slug
+    _ROUTE_SEGMENTS = (
+        "/api/", "/scan", "/queue", "/admin", "/reports", "/record/", "/images/"
+    )
+    slug = remainder.rstrip("/")
+    for seg in _ROUTE_SEGMENTS:
+        idx = remainder.find(seg)
+        if idx >= 0:
+            slug = remainder[:idx].rstrip("/")
+            break
+
+    if not slug:
+        return await call_next(request)
+
+    event_manager = getattr(request.app.state, "event_manager", None)
+    if event_manager is None:
+        return await call_next(request)
+
+    # Check if the event exists and is read-only (without opening it)
+    event_info = event_manager.events.get(slug)
+    if event_info is not None and event_info.event_config.read_only:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "This event is in read-only mode."},
+        )
+
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def session_resolution(request: Request, call_next):
     """Resolve session cookie and attach user to request.state."""
     session_mw = getattr(request.app.state, "session_middleware", None)
@@ -373,6 +418,7 @@ async def event_scan_page(
         config=config,
         templates=templates,
         event_base_url=event_base_url,
+        app_config=request.app.state.app_config,
     )
 
 
@@ -471,6 +517,7 @@ async def event_admin_dashboard(
             "event_name": config.event_name,
             "event_base_url": event_base_url,
             "page_title": f"Admin - {config.event_name}",
+            "read_only": config.read_only,
             "current_mode": current_mode,
             "current_user": getattr(request.state, "user", None),
         },
