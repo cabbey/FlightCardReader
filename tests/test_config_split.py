@@ -49,7 +49,10 @@ class TestServerConfigDataclass:
         assert cfg.host == "0.0.0.0"
         assert cfg.port == 8000
         assert cfg.events_dir == Path("./events")
-        assert cfg.thrustcurve_cache_path == Path("./thrustcurve_cache")
+        assert cfg.extraction_mode == "immediate"
+        assert len(cfg.extraction_endpoints) == 1
+        assert cfg.extraction_endpoints[0].url == "http://localhost:11434"
+        assert cfg.extraction_endpoints[0].concurrency == 1
         assert cfg.ssl_certfile is None
         assert cfg.ssl_keyfile is None
         assert cfg.auth_db_path == Path("./auth.db")
@@ -69,7 +72,9 @@ class TestLoadAppConfig:
         assert cfg.host == "0.0.0.0"
         assert cfg.port == 8000
         assert cfg.events_dir == (tmp_path / "events").resolve()
-        assert cfg.thrustcurve_cache_path == (tmp_path / "thrustcurve_cache").resolve()
+        assert cfg.extraction_mode == "immediate"
+        assert len(cfg.extraction_endpoints) == 1
+        assert cfg.extraction_endpoints[0].url == "http://localhost:11434"
         assert cfg.auth_db_path == (tmp_path / "auth.db").resolve()
         assert cfg.session_timeout_hours == 8.0
         assert cfg.event_idle_timeout_minutes == 60
@@ -82,7 +87,10 @@ class TestLoadAppConfig:
             "host": "127.0.0.1",
             "port": 9000,
             "events_dir": "/srv/events",
-            "thrustcurve_cache_path": "/srv/tc_cache",
+            "extraction_mode": "deferred",
+            "extraction_endpoints": [
+                {"url": "http://gpu1:11434", "concurrency": 3}
+            ],
             "ssl_certfile": "/etc/ssl/cert.pem",
             "ssl_keyfile": "/etc/ssl/key.pem",
             "auth_db_path": "/srv/auth.db",
@@ -95,7 +103,10 @@ class TestLoadAppConfig:
         assert cfg.host == "127.0.0.1"
         assert cfg.port == 9000
         assert cfg.events_dir == Path("/srv/events")
-        assert cfg.thrustcurve_cache_path == Path("/srv/tc_cache")
+        assert cfg.extraction_mode == "deferred"
+        assert len(cfg.extraction_endpoints) == 1
+        assert cfg.extraction_endpoints[0].url == "http://gpu1:11434"
+        assert cfg.extraction_endpoints[0].concurrency == 3
         assert cfg.ssl_certfile == Path("/etc/ssl/cert.pem")
         assert cfg.ssl_keyfile == Path("/etc/ssl/key.pem")
         assert cfg.auth_db_path == Path("/srv/auth.db")
@@ -106,14 +117,12 @@ class TestLoadAppConfig:
         """Relative paths are resolved against the config file directory."""
         data = {
             "events_dir": "./my_events",
-            "thrustcurve_cache_path": "cache/tc",
             "auth_db_path": "db/auth.db",
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(data), encoding="utf-8")
         cfg = load_app_config(config_file)
         assert cfg.events_dir == (tmp_path / "my_events").resolve()
-        assert cfg.thrustcurve_cache_path == (tmp_path / "cache" / "tc").resolve()
         assert cfg.auth_db_path == (tmp_path / "db" / "auth.db").resolve()
 
     def test_null_ssl_fields_do_not_crash(self, tmp_path):
@@ -188,6 +197,24 @@ class TestLoadAppConfig:
         with pytest.raises(ConfigError, match="port"):
             load_app_config(config_file)
 
+    def test_invalid_extraction_mode_raises_config_error(self, tmp_path):
+        """An invalid extraction_mode raises ConfigError."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"extraction_mode": "invalid_mode"}), encoding="utf-8"
+        )
+        with pytest.raises(ConfigError, match="extraction_mode"):
+            load_app_config(config_file)
+
+    def test_empty_extraction_endpoints_raises_config_error(self, tmp_path):
+        """An empty extraction_endpoints list raises ConfigError."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"extraction_endpoints": []}), encoding="utf-8"
+        )
+        with pytest.raises(ConfigError, match="non-empty array"):
+            load_app_config(config_file)
+
     def test_combined_format_emits_deprecation_warning(self, tmp_path):
         """A combined config (has host AND event_name) emits a DeprecationWarning."""
         data = {
@@ -219,7 +246,6 @@ class TestEventConfigDataclass:
         cfg = EventConfig()
         assert cfg.event_name == "Flight Card Scanner"
         assert cfg.event_data_path == Path(".")
-        assert cfg.extraction_mode == "immediate"
         assert cfg.auto_accept_threshold == 0.95
         assert cfg.read_only is False
         assert cfg.audit_log_path is None
@@ -260,7 +286,6 @@ class TestLoadEventConfig:
         assert isinstance(cfg, EventConfig)
         assert cfg.event_data_path == tmp_path.resolve()
         assert cfg.event_name == "Flight Card Scanner"
-        assert cfg.extraction_mode == "immediate"
         assert cfg.auto_accept_threshold == 0.95
         assert cfg.read_only is False
 
@@ -269,10 +294,6 @@ class TestLoadEventConfig:
         data = {
             "event_name": "NXRS 2026",
             "event_date_range": {"start": "2026-06-01", "end": "2026-06-03"},
-            "extraction_mode": "deferred",
-            "extraction_endpoints": [
-                {"url": "http://gpu1:11434", "concurrency": 2}
-            ],
             "auto_accept_threshold": 0.90,
             "read_only": True,
             "audit_log_path": "/var/log/nxrs_audit.log",
@@ -284,10 +305,6 @@ class TestLoadEventConfig:
         assert cfg.event_date_range == DateRange(
             start=date(2026, 6, 1), end=date(2026, 6, 3)
         )
-        assert cfg.extraction_mode == "deferred"
-        assert len(cfg.extraction_endpoints) == 1
-        assert cfg.extraction_endpoints[0].url == "http://gpu1:11434"
-        assert cfg.extraction_endpoints[0].concurrency == 2
         assert cfg.auto_accept_threshold == 0.90
         assert cfg.read_only is True
         assert cfg.audit_log_path == Path("/var/log/nxrs_audit.log")
@@ -330,14 +347,6 @@ class TestLoadEventConfig:
         cfg = load_event_config(config_file)
         assert cfg.known_fliers_path == fliers_file.resolve()
 
-    def test_invalid_extraction_mode_raises(self, tmp_path):
-        """An invalid extraction_mode raises ConfigError."""
-        data = {"extraction_mode": "invalid_mode"}
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(data), encoding="utf-8")
-        with pytest.raises(ConfigError, match="extraction_mode"):
-            load_event_config(config_file)
-
     def test_invalid_date_range_raises(self, tmp_path):
         """An invalid date range (end < start) raises ConfigError."""
         data = {
@@ -358,14 +367,6 @@ class TestLoadEventConfig:
         config_file = tmp_path / "config.json"
         config_file.write_text("{broken", encoding="utf-8")
         with pytest.raises(ConfigError, match="not valid JSON"):
-            load_event_config(config_file)
-
-    def test_empty_endpoints_list_raises(self, tmp_path):
-        """An empty extraction_endpoints list raises ConfigError."""
-        data = {"extraction_endpoints": []}
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(data), encoding="utf-8")
-        with pytest.raises(ConfigError, match="non-empty array"):
             load_event_config(config_file)
 
     def test_read_only_non_bool_raises(self, tmp_path):

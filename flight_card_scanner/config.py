@@ -330,8 +330,9 @@ class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8000
     events_dir: Path = field(default_factory=lambda: Path("./events"))
-    thrustcurve_cache_path: Path = field(
-        default_factory=lambda: Path("./thrustcurve_cache")
+    extraction_mode: str = "immediate"  # "immediate" | "deferred"
+    extraction_endpoints: list[EndpointConfig] = field(
+        default_factory=lambda: [EndpointConfig(url="http://localhost:11434", concurrency=1)]
     )
     ssl_certfile: Path | None = None
     ssl_keyfile: Path | None = None
@@ -353,12 +354,6 @@ class EventConfig:
     event_data_path: Path = field(default_factory=lambda: Path("."))
     event_date_range: DateRange = field(
         default_factory=lambda: DateRange(start=date.today(), end=date.today())
-    )
-    extraction_mode: str = "immediate"
-    extraction_endpoints: list[EndpointConfig] = field(
-        default_factory=lambda: [
-            EndpointConfig(url="http://localhost:11434", concurrency=1)
-        ]
     )
     known_fliers_path: Path | None = None
     auto_accept_threshold: float = 0.95
@@ -466,11 +461,31 @@ def load_app_config(path: Path) -> ServerConfig:
         Path(get_with_default("events_dir", "./events")), config_dir
     )
 
-    # --- thrustcurve_cache_path ---
-    thrustcurve_cache_path = _resolve_path(
-        Path(get_with_default("thrustcurve_cache_path", "./thrustcurve_cache")),
-        config_dir,
-    )
+    # --- extraction_mode ---
+    extraction_mode = get_with_default("extraction_mode", "immediate")
+    if extraction_mode not in _VALID_EXTRACTION_MODES:
+        raise ConfigError(
+            f"Config key 'extraction_mode' must be one of {sorted(_VALID_EXTRACTION_MODES)}, "
+            f"got {extraction_mode!r}."
+        )
+
+    # --- extraction_endpoints ---
+    if "extraction_endpoints" not in data:
+        default_ep = [EndpointConfig(url="http://localhost:11434", concurrency=1)]
+        logger.info(
+            "Config key 'extraction_endpoints' not found in %s; using default: %r",
+            path, default_ep,
+        )
+        extraction_endpoints = default_ep
+    else:
+        raw_endpoints = data["extraction_endpoints"]
+        if not isinstance(raw_endpoints, list) or len(raw_endpoints) == 0:
+            raise ConfigError(
+                "Config key 'extraction_endpoints' must be a non-empty array."
+            )
+        extraction_endpoints = [
+            _parse_endpoint(ep, i) for i, ep in enumerate(raw_endpoints)
+        ]
 
     # --- ssl_certfile / ssl_keyfile (optional) ---
     ssl_certfile: Path | None = None
@@ -520,7 +535,8 @@ def load_app_config(path: Path) -> ServerConfig:
         host=host,
         port=port,
         events_dir=events_dir,
-        thrustcurve_cache_path=thrustcurve_cache_path,
+        extraction_mode=extraction_mode,
+        extraction_endpoints=extraction_endpoints,
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
         auth_db_path=auth_db_path,
@@ -612,33 +628,6 @@ def load_event_config(path: Path) -> EventConfig:
             )
         event_date_range = DateRange(start=start_date, end=end_date)
 
-    # --- extraction_mode ---
-    extraction_mode = get_with_default("extraction_mode", "immediate")
-    if extraction_mode not in _VALID_EXTRACTION_MODES:
-        raise ConfigError(
-            f"Config key 'extraction_mode' must be one of {sorted(_VALID_EXTRACTION_MODES)}, "
-            f"got {extraction_mode!r}."
-        )
-
-    # --- extraction_endpoints ---
-    if "extraction_endpoints" not in data:
-        default_ep = [EndpointConfig(url="http://localhost:11434", concurrency=1)]
-        logger.info(
-            "Event config key 'extraction_endpoints' not found in %s; using default: %r",
-            path,
-            default_ep,
-        )
-        extraction_endpoints = default_ep
-    else:
-        raw_endpoints = data["extraction_endpoints"]
-        if not isinstance(raw_endpoints, list) or len(raw_endpoints) == 0:
-            raise ConfigError(
-                "Config key 'extraction_endpoints' must be a non-empty array."
-            )
-        extraction_endpoints = [
-            _parse_endpoint(ep, i) for i, ep in enumerate(raw_endpoints)
-        ]
-
     # --- known_fliers_path (optional) ---
     known_fliers_path: Path | None = None
     if "known_fliers_path" in data:
@@ -672,8 +661,6 @@ def load_event_config(path: Path) -> EventConfig:
         event_name=event_name,
         event_data_path=event_data_path,
         event_date_range=event_date_range,
-        extraction_mode=extraction_mode,
-        extraction_endpoints=extraction_endpoints,
         known_fliers_path=known_fliers_path,
         auto_accept_threshold=auto_accept_threshold,
         read_only=read_only,

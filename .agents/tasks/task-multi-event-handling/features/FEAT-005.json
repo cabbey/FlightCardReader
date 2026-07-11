@@ -1,0 +1,16 @@
+{
+  "id": "FEAT-005",
+  "title": "Move extraction fields to ServerConfig and remove thrustcurve_cache_path",
+  "status": "in_progress",
+  "description": "Remove thrustcurve_cache_path from ServerConfig (dead code). Move extraction_mode and extraction_endpoints from EventConfig to ServerConfig since Ollama extraction servers are a deployment-level resource shared across all events.",
+  "acceptance_criteria": [
+    "thrustcurve_cache_path field removed from ServerConfig dataclass",
+    "thrustcurve_cache_path parsing removed from load_app_config()",
+    "extraction_mode and extraction_endpoints fields added to ServerConfig",
+    "extraction_mode and extraction_endpoints removed from EventConfig",
+    "load_app_config() parses extraction_mode and extraction_endpoints",
+    "load_event_config() no longer parses extraction_mode and extraction_endpoints",
+    "event_manager.py passes extraction config from ServerConfig to ExtractionService",
+    "All tests pass"
+  ]
+}

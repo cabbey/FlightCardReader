@@ -197,6 +197,8 @@ class EventManager:
             session_factory=session_factory,
             thrustcurve_service=motor_lookup_service,
             flier_match_service=flier_match_service,
+            extraction_mode=self._app_config.extraction_mode,
+            extraction_endpoints=self._app_config.extraction_endpoints,
         )
 
         if not event_config.read_only:

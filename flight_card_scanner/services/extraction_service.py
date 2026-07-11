@@ -273,22 +273,28 @@ class ExtractionService:
         session_factory,
         thrustcurve_service=None,
         flier_match_service=None,
+        extraction_mode: str | None = None,
+        extraction_endpoints: list | None = None,
     ) -> None:
         """Initialise the extraction service.
 
         Args:
-            config: The application configuration (endpoints, mode, date range).
+            config: The application configuration (date range, image paths, etc.).
             session_factory: An async_sessionmaker for creating DB sessions.
             thrustcurve_service: Optional ThrustCurveService for motor lookups.
             flier_match_service: Optional FlierMatchService for known flier matching.
+            extraction_mode: Override extraction mode (defaults to config.extraction_mode).
+            extraction_endpoints: Override endpoints (defaults to config.extraction_endpoints).
         """
         self._config = config
-        self._mode = ExtractionMode(config.extraction_mode)
+        _mode = extraction_mode if extraction_mode is not None else config.extraction_mode
+        self._mode = ExtractionMode(_mode)
         self._queue: asyncio.Queue[int] = asyncio.Queue()
         self._queued_ids: set[int] = set()
         self._processing: dict[int, dict] = {}  # record_id -> {endpoint, started_at}
         self._session_factory = session_factory
-        self._endpoints = config.extraction_endpoints
+        _endpoints = extraction_endpoints if extraction_endpoints is not None else config.extraction_endpoints
+        self._endpoints = _endpoints
         self._workers: list[asyncio.Task] = []
         self._thrustcurve = thrustcurve_service
         self._flier_match_service = flier_match_service
