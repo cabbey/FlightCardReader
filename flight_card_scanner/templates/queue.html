@@ -140,7 +140,7 @@
   <tbody>
     {% for record in processing_records %}
     <tr>
-      <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
+      <td><a href="{{ event_base_url|default('', true) }}/record/{{ record.id }}">{{ record.id }}</a></td>
       <td>{{ record.flier_name or "—" }}</td>
       <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
       <td><span class="endpoint-label">{{ record.endpoint }}</span></td>
@@ -169,7 +169,7 @@
   <tbody>
     {% for record in queued_records %}
     <tr>
-      <td><a href="/record/{{ record.id }}">{{ record.id }}</a></td>
+      <td><a href="{{ event_base_url|default('', true) }}/record/{{ record.id }}">{{ record.id }}</a></td>
       <td>{{ record.flier_name or "—" }}</td>
       <td><span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span></td>
       <td>{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "—" }}</td>

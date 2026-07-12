@@ -342,3 +342,145 @@ async def submit_card(
 
     # --- 6. Return success ---
     return ScanResponse(record_id=record.id)
+
+
+# ---------------------------------------------------------------------------
+# Implementation functions for event-scoped routes
+# ---------------------------------------------------------------------------
+
+
+async def scan_page_impl(
+    request: Request,
+    config,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+    app_config=None,
+):
+    """Shared implementation for the scan page."""
+    from fastapi.responses import HTMLResponse
+
+    # Use server-level app_config for SSL and port (these are server concerns,
+    # not per-event settings). Fall back to request.app.state.app_config if
+    # not explicitly passed.
+    if app_config is None:
+        app_config = getattr(request.app.state, "app_config", None)
+
+    # Determine if SSL is active from the server config
+    ssl_enabled = False
+    if app_config is not None:
+        ssl_certfile = getattr(app_config, "ssl_certfile", None)
+        ssl_keyfile = getattr(app_config, "ssl_keyfile", None)
+        if ssl_certfile is not None and ssl_keyfile is not None:
+            ssl_enabled = (
+                hasattr(ssl_certfile, "exists")
+                and ssl_certfile.exists()
+                and ssl_keyfile.exists()
+            )
+
+    # Get port from server config
+    port = getattr(app_config, "port", 8000) if app_config is not None else 8000
+
+    # Generate QR codes for all available addresses
+    address_list = _get_all_addresses()
+    qr_entries: list[dict[str, str]] = []
+    for addr, is_ts in address_list:
+        url = _make_url(addr, port, is_tailscale=is_ts, ssl_enabled=ssl_enabled)
+        # Replace /scan with event-scoped scan path
+        if event_base_url:
+            url = url.replace("/scan", f"{event_base_url}/scan")
+        data_uri = _generate_qr_data_uri(url)
+        qr_entries.append({"url": url, "qr": data_uri})
+
+    page_title = f"Scan - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="scan.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "read_only": getattr(config, "read_only", False),
+            "qr_entries": qr_entries,
+            "event_dates": _build_event_dates(config),
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+async def submit_card_impl(
+    request: Request,
+    db: AsyncSession,
+    config,
+    extraction_service,
+):
+    """Shared implementation for the scan submit endpoint."""
+    from fastapi import UploadFile
+
+    form = await request.form()
+    card_image = form.get("card_image")
+    flight_date_str = form.get("flight_date")
+
+    if card_image is None:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="No card_image file provided.",
+        )
+
+    # Validate file type
+    ext = _resolve_extension(card_image)
+    if ext is None:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Only JPEG and PNG images are accepted.",
+        )
+
+    # Save image
+    file_bytes = await card_image.read()
+    try:
+        filename = image_service.save_image(
+            file_bytes=file_bytes,
+            ext=ext,
+            store_path=config.image_store_path,
+        )
+    except ImageStorageError as exc:
+        logger.error("Failed to save uploaded image: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to store the uploaded image.",
+        ) from exc
+
+    # Parse the optional flight_date
+    parsed_flight_date: date | None = None
+    if flight_date_str:
+        try:
+            parsed_flight_date = date.fromisoformat(flight_date_str)
+        except ValueError:
+            logger.warning("Invalid flight_date value: %r", flight_date_str)
+
+    # Create DB record
+    try:
+        record = await record_service.create(
+            db, image_path=filename, flight_date=parsed_flight_date
+        )
+    except Exception as exc:
+        logger.error("Failed to create flight record: %s", exc)
+        image_service.delete_image(config.image_store_path / filename)
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create flight record.",
+        ) from exc
+
+    # Enqueue for extraction
+    await extraction_service.enqueue(record.id)
+
+    # Audit log
+    user = getattr(request.state, "user", None)
+    actor = user.email if user else "anonymous"
+    log_action(actor, "created", "flight_record", record.id)
+
+    return ScanResponse(record_id=record.id)

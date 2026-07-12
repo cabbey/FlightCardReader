@@ -212,7 +212,7 @@ async def list_records(
     search_weight: str | None = Query(default=None),
     search_weight_unit: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
+) -> HTMLResponse:  # pragma: no cover - legacy route kept for backward compat
     """Render the paginated list view of flight records.
 
     Supports:
@@ -762,6 +762,533 @@ async def detail_record(
             "llm_thinking": llm_thinking,
             "llm_content_thinking": llm_content_thinking,
             "tc_metadata": _thrustcurve_service._metadata if _thrustcurve_service else None,
+            "enriched_motors": enriched_motors,
+            "event_dates": _build_event_dates(config),
+            "show_all_fields": True,
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Implementation functions for event-scoped routes
+# ---------------------------------------------------------------------------
+
+
+async def list_records_impl(
+    request: Request,
+    db: AsyncSession,
+    config,
+    extraction_service,
+    thrustcurve_service,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+):
+    """Shared implementation for the flight cards list page.
+
+    Called by event-scoped routes with the per-event context.
+    """
+    # Parse query params from request
+    params = request.query_params
+    page = max(1, int(params.get("page", "1")))
+    page_size = min(int(params.get("page_size", "25")), 200)
+    q = params.get("q")
+    sort = params.get("sort", "id_desc")
+    verified = params.get("verified")
+    status = params.get("status")
+    flight_day = params.get("flight_day")
+    impulse_class = params.get("impulse_class")
+    search_length = params.get("search_length")
+    search_length_unit = params.get("search_length_unit")
+    search_diameter = params.get("search_diameter")
+    search_diameter_unit = params.get("search_diameter_unit")
+    search_weight = params.get("search_weight")
+    search_weight_unit = params.get("search_weight_unit")
+
+    effective_page_size = min(page_size, _MAX_PAGE_SIZE)
+
+    # --- Compute per-status counts ---
+    count_stmt = select(
+        FlightRecord.extraction_status,
+        func.count(FlightRecord.id),
+    ).group_by(FlightRecord.extraction_status)
+    count_result = await db.execute(count_stmt)
+    status_counts = {
+        "pending": 0,
+        "processing": 0,
+        "extracted": 0,
+        "extraction_failed": 0,
+    }
+    for st, count in count_result.all():
+        if st in status_counts:
+            status_counts[st] = count
+
+    # --- Compute human_verified counts ---
+    verified_count_stmt = select(func.count(FlightRecord.id)).where(
+        FlightRecord.human_verified == True  # noqa: E712
+    )
+    verified_count_result = await db.execute(verified_count_stmt)
+    verified_count = verified_count_result.scalar() or 0
+
+    total_all_stmt = select(func.count(FlightRecord.id))
+    total_all_result = await db.execute(total_all_stmt)
+    total_all = total_all_result.scalar() or 0
+
+    verified_percent = round((verified_count / total_all * 100) if total_all > 0 else 0, 1)
+
+    # --- Determine sort order ---
+    sort_options = {
+        "id_desc": FlightRecord.id.desc(),
+        "id_asc": FlightRecord.id.asc(),
+        "flier_asc": FlightRecord.flier_name.asc(),
+        "flier_desc": FlightRecord.flier_name.desc(),
+    }
+    is_impulse_sort = sort in ("impulse_asc", "impulse_desc")
+    order_clause = sort_options.get(sort, FlightRecord.id.desc())
+
+    filter_verified = verified
+
+    # --- Parse flight_day filter ---
+    flight_day_date = None
+    if flight_day:
+        try:
+            flight_day_date = date.fromisoformat(flight_day)
+        except (ValueError, TypeError):
+            pass
+
+    # --- Build base filter conditions ---
+    def _apply_filters(stmt):
+        if filter_verified == "verified":
+            stmt = stmt.where(FlightRecord.human_verified == True)  # noqa: E712
+        elif filter_verified == "unverified":
+            stmt = stmt.where(FlightRecord.human_verified == False)  # noqa: E712
+        if status:
+            stmt = stmt.where(FlightRecord.extraction_status == status)
+        if flight_day_date:
+            stmt = stmt.where(FlightRecord.flight_date == flight_day_date)
+        return stmt
+
+    q_stripped = q.strip() if q else None
+    search_term = q_stripped if q_stripped else None
+
+    impulse_class_upper = None
+    if impulse_class:
+        impulse_class_upper = impulse_class.strip().upper().replace("\u00bd", "1/2").replace("\u00bc", "1/4")
+
+    if search_term:
+        q_lower = search_term.lower()
+        like_pattern = f"%{search_term}%"
+        sql_stmt = (
+            select(FlightRecord)
+            .where(FlightRecord.flier_name.ilike(like_pattern))
+            .order_by(order_clause)
+        )
+        sql_stmt = _apply_filters(sql_stmt)
+        sql_result = await db.execute(sql_stmt)
+        sql_matches = list(sql_result.scalars().all())
+        sql_match_ids = {r.id for r in sql_matches}
+
+        all_stmt = select(FlightRecord).order_by(order_clause)
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records = list(all_result.scalars().all())
+
+        combined: list[FlightRecord] = list(sql_matches)
+        for record in all_records:
+            if record.id not in sql_match_ids and _matches_search(record, q_lower):
+                combined.append(record)
+
+        if impulse_class_upper:
+            combined = [r for r in combined if _has_impulse_class(r, impulse_class_upper)]
+
+        total_records = len(combined)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = combined[start_idx:end_idx]
+    elif impulse_class_upper:
+        all_stmt = select(FlightRecord).order_by(order_clause)
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records = list(all_result.scalars().all())
+
+        filtered = [r for r in all_records if _has_impulse_class(r, impulse_class_upper)]
+
+        total_records = len(filtered)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = filtered[start_idx:end_idx]
+    else:
+        count_all_stmt = select(func.count(FlightRecord.id))
+        count_all_stmt = _apply_filters(count_all_stmt)
+        count_all_result = await db.execute(count_all_stmt)
+        total_records = count_all_result.scalar() or 0
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+
+        offset = (page - 1) * effective_page_size
+        records_stmt = (
+            select(FlightRecord)
+            .order_by(order_clause)
+            .offset(offset)
+            .limit(effective_page_size)
+        )
+        records_stmt = _apply_filters(records_stmt)
+        records_result = await db.execute(records_stmt)
+        page_records = list(records_result.scalars().all())
+
+    # --- Measurement proximity search ---
+    def _parse_float(val):
+        if not val or not str(val).strip():
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    search_length_val = _parse_float(search_length)
+    search_diameter_val = _parse_float(search_diameter)
+    search_weight_val = _parse_float(search_weight)
+
+    norm_search_length = normalize_length_to_mm(search_length_val, search_length_unit)
+    norm_search_diameter = normalize_length_to_mm(search_diameter_val, search_diameter_unit)
+    norm_search_weight = normalize_weight_to_g(search_weight_val, search_weight_unit)
+    has_measurement_search = any(v is not None for v in (norm_search_length, norm_search_diameter, norm_search_weight))
+
+    if has_measurement_search:
+        all_stmt = select(FlightRecord)
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records = list(all_result.scalars().all())
+
+        if impulse_class_upper:
+            all_records = [r for r in all_records if _has_impulse_class(r, impulse_class_upper)]
+        if search_term:
+            q_lower = search_term.lower()
+            all_records = [
+                r for r in all_records
+                if (r.flier_name and q_lower in r.flier_name.lower())
+                or _matches_search(r, q_lower)
+            ]
+
+        def _measurement_distance(record):
+            dist = 0.0
+            count = 0
+            if norm_search_length is not None and record.norm_length_mm is not None:
+                dist += abs(record.norm_length_mm - norm_search_length)
+                count += 1
+            if norm_search_diameter is not None and record.norm_diameter_mm is not None:
+                dist += abs(record.norm_diameter_mm - norm_search_diameter)
+                count += 1
+            if norm_search_weight is not None and record.norm_weight_g is not None:
+                dist += abs(record.norm_weight_g - norm_search_weight)
+                count += 1
+            if count == 0:
+                return None
+            return dist
+
+        scored = []
+        for r in all_records:
+            d = _measurement_distance(r)
+            if d is not None:
+                scored.append((d, r))
+        scored.sort(key=lambda x: x[0])
+
+        total_records = len(scored)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = [r for _, r in scored[start_idx:end_idx]]
+
+    if is_impulse_sort and not has_measurement_search:
+        all_stmt = select(FlightRecord)
+        all_stmt = _apply_filters(all_stmt)
+        all_result = await db.execute(all_stmt)
+        all_records_for_sort = list(all_result.scalars().all())
+        if search_term:
+            q_lower = search_term.lower()
+            all_records_for_sort = [
+                r for r in all_records_for_sort
+                if (r.flier_name and q_lower in r.flier_name.lower())
+                or _matches_search(r, q_lower)
+            ]
+        if impulse_class_upper:
+            all_records_for_sort = [
+                r for r in all_records_for_sort
+                if _has_impulse_class(r, impulse_class_upper)
+            ]
+        all_records_for_sort.sort(
+            key=lambda r: _record_impulse_ns(r),
+            reverse=(sort == "impulse_desc"),
+        )
+        total_records = len(all_records_for_sort)
+        total_pages = max(1, math.ceil(total_records / effective_page_size))
+        start_idx = (page - 1) * effective_page_size
+        end_idx = start_idx + effective_page_size
+        page_records = all_records_for_sort[start_idx:end_idx]
+
+    queued_ids = extraction_service.queued_ids if extraction_service else set()
+
+    records = []
+    for r in page_records:
+        rocket_name = r.overflow.get("rocket_name") if r.overflow else None
+        motors = (r.overflow or {}).get("motors", [])
+        if motors and thrustcurve_service:
+            enriched = await thrustcurve_service.enrich_motors_for_display(motors)
+        else:
+            enriched = motors
+        enriched_overflow = dict(r.overflow) if r.overflow else {}
+        enriched_overflow["motors"] = enriched
+        motor_desig = motor_designation_str(enriched_overflow)
+        motors_verified = bool(motors) and all(m.get("thrustcurve_id") for m in motors)
+        records.append(
+            RecordRow(
+                id=r.id,
+                flier_name=r.flier_name,
+                rocket_name=rocket_name,
+                motor_designation=motor_desig,
+                flight_date=r.flight_date,
+                extraction_status=r.extraction_status,
+                created_at=r.created_at,
+                human_verified=r.human_verified,
+                flier_verified=r.flier_verified,
+                motors_verified=motors_verified,
+                is_queued=(r.id in queued_ids),
+            )
+        )
+
+    current_mode = extraction_service.mode.value if extraction_service else "unknown"
+
+    # Build page title
+    page_title = f"Flight Cards - {config.event_name}"
+    if search_term:
+        page_title = f"Search: {search_term} - Flight Cards - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="list.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "read_only": getattr(config, "read_only", False),
+            "records": records,
+            "status_counts": status_counts,
+            "current_mode": current_mode,
+            "q": search_term,
+            "page": page,
+            "total_pages": total_pages,
+            "verified_count": verified_count,
+            "total_all": total_all,
+            "verified_percent": verified_percent,
+            "sort": sort,
+            "verified_filter": filter_verified or "all",
+            "status_filter": status or "",
+            "flight_day_filter": flight_day or "",
+            "impulse_class_filter": impulse_class or "",
+            "search_length": search_length_val,
+            "search_length_unit": search_length_unit or "",
+            "search_diameter": search_diameter_val,
+            "search_diameter_unit": search_diameter_unit or "",
+            "search_weight": search_weight_val,
+            "search_weight_unit": search_weight_unit or "",
+            "event_dates": _build_event_dates(config),
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+async def queue_status_impl(
+    request: Request,
+    db: AsyncSession,
+    config,
+    extraction_service,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+):
+    """Shared implementation for the queue status page."""
+    queued_ids = sorted(extraction_service.queued_ids) if extraction_service else []
+    processing_info = extraction_service.processing_info if extraction_service else {}
+
+    queued_records = []
+    if queued_ids:
+        result = await db.execute(
+            select(FlightRecord).where(FlightRecord.id.in_(queued_ids))
+        )
+        for r in result.scalars().all():
+            queued_records.append({
+                "id": r.id,
+                "flier_name": r.flier_name,
+                "extraction_status": r.extraction_status,
+                "created_at": r.created_at,
+            })
+        queued_records.sort(key=lambda x: x["id"])
+
+    processing_records = []
+    if processing_info:
+        proc_ids = list(processing_info.keys())
+        result = await db.execute(
+            select(FlightRecord).where(FlightRecord.id.in_(proc_ids))
+        )
+        for r in result.scalars().all():
+            info = processing_info.get(r.id, {})
+            processing_records.append({
+                "id": r.id,
+                "flier_name": r.flier_name,
+                "extraction_status": r.extraction_status,
+                "created_at": r.created_at,
+                "endpoint": info.get("endpoint", "unknown"),
+                "started_at": info.get("started_at"),
+            })
+        processing_records.sort(key=lambda x: x["id"])
+
+    page_title = f"Queue - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="queue.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "read_only": getattr(config, "read_only", False),
+            "queued_records": queued_records,
+            "processing_records": processing_records,
+            "queue_size": len(queued_ids),
+            "processing_size": len(processing_records),
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+async def detail_record_impl(
+    request: Request,
+    record_id: int,
+    db: AsyncSession,
+    config,
+    thrustcurve_service,
+    templates: Jinja2Templates,
+    event_base_url: str = "",
+):
+    """Shared implementation for the record detail page."""
+    record = await db.execute(
+        select(FlightRecord).where(FlightRecord.id == record_id)
+    )
+    record_obj = record.scalar_one_or_none()
+
+    if record_obj is None:
+        return templates.TemplateResponse(
+            name="404.html",
+            request=request,
+            context={
+                "event_name": config.event_name,
+                "event_base_url": event_base_url,
+                "page_title": f"Not Found - {config.event_name}",
+                "message": f"Flight record #{record_id} does not exist.",
+                "current_user": getattr(request.state, "user", None),
+            },
+            status_code=404,
+        )
+
+    prev_result = await db.execute(
+        select(FlightRecord.id)
+        .where(FlightRecord.id < record_id)
+        .order_by(FlightRecord.id.desc())
+        .limit(1)
+    )
+    prev_id = prev_result.scalar_one_or_none()
+
+    next_result = await db.execute(
+        select(FlightRecord.id)
+        .where(FlightRecord.id > record_id)
+        .order_by(FlightRecord.id.asc())
+        .limit(1)
+    )
+    next_id = next_result.scalar_one_or_none()
+
+    # Build image_url using event-scoped path
+    image_url = f"{event_base_url}/images/{record_obj.image_path}"
+    record_obj.image_url = image_url  # type: ignore[attr-defined]
+
+    # Load raw LLM JSON
+    llm_raw_json = None
+    llm_content_json = None
+    llm_thinking = None
+    llm_content_thinking = None
+    json_filename = Path(record_obj.image_path).stem + ".json"
+    json_path = config.image_store_path / json_filename
+    if json_path.exists():
+        try:
+            import re as _re
+            llm_raw_json = json.loads(json_path.read_text())
+            msg = llm_raw_json.get("message", {})
+
+            content_str = msg.get("content", "")
+            if content_str and content_str.strip():
+                cleaned = content_str.strip()
+                think_match = _re.search(
+                    r"<think>(.*?)</think>", cleaned, flags=_re.DOTALL
+                )
+                if think_match:
+                    llm_content_thinking = think_match.group(1).strip()
+                    cleaned = _re.sub(
+                        r"<think>.*?</think>", "", cleaned, flags=_re.DOTALL
+                    ).strip()
+                elif cleaned.startswith("<think>"):
+                    json_start = cleaned.find("{")
+                    if json_start >= 0:
+                        think_part = cleaned[:json_start]
+                        think_part = think_part.replace("<think>", "").strip()
+                        if think_part:
+                            llm_content_thinking = think_part
+                        cleaned = cleaned[json_start:]
+                if cleaned:
+                    try:
+                        llm_content_json = json.loads(cleaned)
+                    except json.JSONDecodeError:
+                        llm_content_json = cleaned
+
+            thinking_str = msg.get("thinking", "")
+            if thinking_str and thinking_str.strip():
+                thinking_str = thinking_str.strip()
+                if thinking_str.startswith("<think>"):
+                    thinking_str = thinking_str[7:]
+                if thinking_str.endswith("</think>"):
+                    thinking_str = thinking_str[:-8]
+                llm_thinking = thinking_str.strip()
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    enriched_motors = None
+    if thrustcurve_service and record_obj.overflow and record_obj.overflow.get("motors"):
+        enriched_motors = await thrustcurve_service.enrich_motors_for_display(
+            record_obj.overflow["motors"]
+        )
+        for motor in enriched_motors:
+            raw_mfr = motor.get("manufacturer")
+            if raw_mfr:
+                resolved = thrustcurve_service.resolve_manufacturer(raw_mfr)
+                if resolved:
+                    motor["_resolved_manufacturer"] = resolved
+
+    page_title = f"Record #{record_id} - {config.event_name}"
+
+    return templates.TemplateResponse(
+        name="detail.html",
+        request=request,
+        context={
+            "event_name": config.event_name,
+            "event_base_url": event_base_url,
+            "page_title": page_title,
+            "read_only": getattr(config, "read_only", False),
+            "record": record_obj,
+            "prev_id": prev_id,
+            "next_id": next_id,
+            "llm_raw_json": llm_raw_json,
+            "llm_content_json": llm_content_json,
+            "llm_thinking": llm_thinking,
+            "llm_content_thinking": llm_content_thinking,
+            "tc_metadata": thrustcurve_service._metadata if thrustcurve_service else None,
             "enriched_motors": enriched_motors,
             "event_dates": _build_event_dates(config),
             "show_all_fields": True,

@@ -1,0 +1,41 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Restructure the FastAPI app to support multi-event routing. Move all current per-event routes under /events/{event_path:path}/ prefix. Add a top-level events listing page at /. Add an events list nav button. Update page titles to include page name and contextual info (record number, search terms, etc.). Add admin button to refresh events list. Integrate EventManager into the app lifespan and routing.",
+  "status": "completed",
+  "steps": [
+    "Refactor flight_card_scanner/main.py lifespan to: (a) load app config via load_app_config, (b) initialize auth DB (shared across events), (c) create EventManager with app config, (d) run initial event discovery, (e) start a background task for periodic idle-event checks (every 5 minutes), (f) store event_manager on app.state. Remove the single-event initialization logic (DB init, extraction service start, etc.) since EventManager handles that per-event.",
+    "Create a new router file flight_card_scanner/routers/events.py with: (a) GET / that renders the events list page, (b) a dependency get_event_context(event_path) that calls event_manager.get_event(slug) and returns the EventInfo, providing the event's session factory, config, extraction service to downstream route handlers.",
+    "Refactor the existing routers (review.py, scan.py, admin.py, reports.py) to remove the module-level configure() pattern. Instead, they should accept event context (EventConfig, session_factory, extraction_service, templates) through FastAPI dependencies. Each router will be mounted under the /events/{event_path:path} prefix.",
+    "The event_path dependency should strip leading/trailing slashes and validate the slug exists in the EventManager. Return 404 if not found.",
+    "Create a new template flight_card_scanner/templates/events_list.html that extends base.html and shows a list of all discovered events with links to /events/{slug}/. Show event_name, date_range, and whether the event is currently open.",
+    "Update flight_card_scanner/templates/base.html: (a) Change the <title> tag from just {{ event_name }} to use a block pattern: {% block title %}{{ page_title }}{% endblock %} where page_title is composed of event_name + page name + context. (b) Add an 'Events' nav button (linked to /) in the nav-right area. (c) Update the h1 to link back to the event's root page.",
+    "Update all template rendering calls across routers to include a page_title variable in context. Examples: list page -> 'Flight Cards - Event Name', detail page -> 'Record #N - Event Name', scan page -> 'Scan - Event Name', reports page -> 'Reports - Event Name', queue page -> 'Queue - Event Name', admin page -> 'Admin - Event Name'. For the list page with search: 'Search: term - Flight Cards - Event Name'. For detail with record: 'Record #42 - Event Name'.",
+    "All internal links in templates (href='/scan', href='/', etc.) must be updated to use the event-scoped URL prefix (e.g., /events/2026/nxrs/scan, /events/2026/nxrs/). Use a template variable like {{ event_base_url }} that is set to /events/{slug}.",
+    "Update the /api/admin/stats endpoint to be event-scoped (under the event prefix) so the header stats JS in base.html works per-event. The base.html JS fetch should use a relative path or the event_base_url.",
+    "Add a POST /api/admin/refresh-events endpoint (admin-only) that calls event_manager.refresh_events() and returns the updated list. Add a 'Refresh Events' button on the admin page.",
+    "Update the database.py module: Since we now have multiple event databases, the module-level singleton pattern won't work. Instead, EventManager creates per-event engines. The get_db() dependency needs to be event-aware. Create a make_get_db(session_factory) factory function that returns a get_db dependency for a specific event's session factory.",
+    "The /images/ static mount needs to be event-specific. Either mount per-event image paths dynamically, or use a route that serves images from the correct event's image store based on the event_path prefix.",
+    "Ensure the auth system (login, logout, user management) remains at the top level (not event-scoped) since auth is shared across all events.",
+    "Run python -m pytest tests/ -v to confirm tests pass after all changes"
+  ],
+  "acceptance_criteria": [
+    "GET / shows a list of all discovered events with links to /events/{slug}/",
+    "All per-event pages are accessible at /events/{slug}/ prefix (e.g., /events/2026/nxrs/, /events/2026/nxrs/scan, /events/2026/nxrs/record/42, /events/2026/nxrs/reports, /events/2026/nxrs/queue, /events/2026/nxrs/admin)",
+    "Page titles include both the page name and event name (e.g., 'Record #42 - Missile Madness 2026')",
+    "An 'Events' button appears in the nav bar linking to /",
+    "Events are lazily opened on first access - not all opened at startup",
+    "Events that haven't been accessed for 1 hour have their databases closed",
+    "Admin has a 'Refresh Events' button that re-scans the events directory",
+    "Auth routes (/login, /logout, /admin/users) remain at top level",
+    "Internal template links use the correct event-scoped prefix",
+    "The stats header JS fetches stats from the correct event-scoped endpoint",
+    "Tests pass"
+  ],
+  "verification": [
+    "Run python -m pytest tests/ -v and confirm all tests pass",
+    "Run python -c 'from flight_card_scanner.main import app; print(\"App created OK\")' to verify the app factory works"
+  ],
+  "blocked_reason": null,
+  "findings": "Multi-event routing implemented successfully. Key architectural decisions: (1) Event-scoped routes use /events/{event_path:path}/ prefix with FastAPI path parameter. (2) Existing routers retained their module-level configure() pattern for backward compatibility but gained _impl() functions that accept explicit dependencies for the event-scoped routes in main.py. (3) The EventManager is stored on app.state and accessed via the get_event_info dependency. (4) Templates use event_base_url variable (empty string when not in event context) for all internal links. (5) JS files use window.FCS_EVENT_BASE_URL or eventBaseUrl template variable for API calls. (6) Auth routes remain at top level (not event-scoped). (7) The old config.json now uses the new server-level format (events_dir instead of event_data_path). (8) All 400 tests pass (390 existing + 10 new multi-event routing tests). The 2 pre-existing flaky tests (test_file_handler_uses_append_mode, test_authenticate_matches_case_insensitively) remain unrelated to this change."
+}

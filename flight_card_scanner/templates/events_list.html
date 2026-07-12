@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .events-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+  }
+
+  .event-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    transition: box-shadow 0.15s;
+  }
+
+  .event-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .event-card a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    flex: 1;
+  }
+
+  .event-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 0.25rem;
+  }
+
+  .event-dates {
+    font-size: 0.85rem;
+    color: #6b7280;
+  }
+
+  .event-status {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .event-status.open {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .event-status.closed {
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .no-events {
+    text-align: center;
+    color: #6b7280;
+    font-size: 1rem;
+    padding: 2rem;
+  }
+
+  .refresh-section {
+    margin-top: 1.5rem;
+    text-align: right;
+  }
+
+  .btn-refresh {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #fff;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  .btn-refresh:hover {
+    background: #f3f4f6;
+  }
+
+  .refresh-msg {
+    font-size: 0.8rem;
+    color: #065f46;
+    margin-top: 0.5rem;
+    display: none;
+  }
+
+  .refresh-msg.visible {
+    display: block;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if events %}
+<ul class="events-list">
+  {% for event in events %}
+  <li class="event-card">
+    <a href="/events/{{ event.slug }}/">
+      <div class="event-name">{{ event.event_name }}</div>
+      <div class="event-dates">{{ event.event_date_range.start }} to {{ event.event_date_range.end }}</div>
+    </a>
+    <span class="event-status {{ 'open' if event.is_open else 'closed' }}">
+      {{ "Active" if event.is_open else "Idle" }}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="no-events">
+  <p>No events configured. Add event directories with config.json files to the events folder.</p>
+</div>
+{% endif %}
+
+{% if current_user and current_user.role == "admin" %}
+<div class="refresh-section">
+  <button type="button" class="btn-refresh" id="btnRefreshEvents">Refresh Events</button>
+  <div class="refresh-msg" id="refreshMsg"></div>
+</div>
+
+<script>
+(function() {
+  document.getElementById('btnRefreshEvents').addEventListener('click', function() {
+    var msg = document.getElementById('refreshMsg');
+    fetch('/api/admin/refresh-events', { method: 'POST' })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        msg.textContent = data.message;
+        msg.className = 'refresh-msg visible';
+        setTimeout(function() { location.reload(); }, 1500);
+      })
+      .catch(function() {
+        msg.textContent = 'Failed to refresh events.';
+        msg.className = 'refresh-msg visible';
+      });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

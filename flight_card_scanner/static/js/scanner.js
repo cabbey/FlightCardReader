@@ -1468,7 +1468,7 @@
     }, 30000);
 
     try {
-      var response = await fetch('/api/scan', {
+      var response = await fetch((window.FCS_EVENT_BASE_URL || '') + '/api/scan', {
         method: 'POST',
         body: formData,
         signal: controller.signal
