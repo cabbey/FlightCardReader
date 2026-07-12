@@ -84,9 +84,21 @@ def _build_payload(
     b64_image: str,
     event_start: str,
     event_end: str,
+    think: bool | None = None,
 ) -> dict:
-    """Build the Ollama /api/chat payload — identical to production."""
-    return {
+    """Build the Ollama /api/chat payload.
+
+    Args:
+        model: The model name for Ollama.
+        b64_image: Base64-encoded image string.
+        event_start: Human-readable event start date.
+        event_end: Human-readable event end date.
+        think: Whether to enable thinking mode. If None, the parameter is
+            omitted from the request (safe for all models). If True, enables
+            thinking (only supported by some models). If False, explicitly
+            disables thinking.
+    """
+    payload = {
         "model": model,
         "messages": [
             {
@@ -101,8 +113,54 @@ def _build_payload(
         "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
         "stream": False,
         "options": {"temperature": 0, "num_ctx": 32768, "num_predict": 8192},
-        "think": True,
     }
+
+    # Only include think parameter if explicitly requested; non-thinking models
+    # (e.g., qwen2.5-vl, deepseek-ocr) return 400 if this field is present.
+    if think is not None:
+        payload["think"] = think
+
+    return payload
+
+
+def _probe_thinking_support(client: httpx.Client, model: str) -> bool:
+    """Probe whether a model supports the think parameter via /api/show.
+
+    Checks the model's capabilities list from Ollama's model metadata.
+    Falls back to a name-based heuristic if /api/show doesn't provide
+    capability information.
+
+    Returns True if the model likely supports thinking.
+    """
+    # Known thinking model families (prefix match)
+    THINKING_PREFIXES = (
+        "qwen3",         # qwen3, qwen3-vl, qwen3.5, qwen3.6, etc.
+        "deepseek-r1",   # DeepSeek R1 family
+        "deepseek-v3",   # DeepSeek v3.1+
+        "gpt-oss",       # GPT-OSS
+    )
+
+    try:
+        resp = client.post("/api/show", json={"model": model})
+        if resp.status_code == 200:
+            data = resp.json()
+            # Check capabilities field if available
+            capabilities = data.get("capabilities", [])
+            if capabilities:
+                return "thinking" in capabilities
+            # Check model_info for thinking capability
+            model_info = data.get("model_info", {})
+            if model_info:
+                # Some versions expose this differently
+                caps = model_info.get("capabilities", [])
+                if caps:
+                    return "thinking" in caps
+    except Exception:
+        pass
+
+    # Fallback: name-based heuristic
+    model_lower = model.lower()
+    return any(model_lower.startswith(prefix) for prefix in THINKING_PREFIXES)
 
 
 def _extract_content(response_data: dict) -> str | None:
@@ -126,19 +184,37 @@ def run_single_extraction(
     image_path: Path,
     event_start: str,
     event_end: str,
+    think: bool | None = None,
 ) -> tuple[dict | None, float, str | None]:
     """Run a single extraction and return (parsed_result, elapsed_seconds, error).
+
+    Args:
+        client: httpx client configured with Ollama base URL.
+        model: Ollama model name.
+        image_path: Path to the card image.
+        event_start: Human-readable event start date for the prompt.
+        event_end: Human-readable event end date for the prompt.
+        think: Whether to send think parameter. None omits it entirely.
 
     Returns:
         Tuple of (parsed_dict_or_None, elapsed_seconds, error_message_or_None)
     """
     b64_image = _prepare_image(image_path)
-    payload = _build_payload(model, b64_image, event_start, event_end)
+    payload = _build_payload(model, b64_image, event_start, event_end, think=think)
 
     t0 = time.monotonic()
     try:
         response = client.post("/api/chat", json=payload)
         response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        elapsed = time.monotonic() - t0
+        # Try to extract error message from response body
+        try:
+            err_body = exc.response.json()
+            err_msg = err_body.get("error", str(exc))
+        except Exception:
+            err_msg = str(exc)
+        return None, elapsed, f"HTTP {exc.response.status_code}: {err_msg}"
     except httpx.HTTPError as exc:
         elapsed = time.monotonic() - t0
         return None, elapsed, f"HTTP error: {exc}"
@@ -262,6 +338,14 @@ def run_benchmark(
         with httpx.Client(
             base_url=endpoint, timeout=httpx.Timeout(600.0)
         ) as client:
+            # Probe whether this model supports thinking
+            supports_think = _probe_thinking_support(client, model)
+            think_param = True if supports_think else None
+            if supports_think:
+                print(f"  Thinking: enabled (model supports it)")
+            else:
+                print(f"  Thinking: omitted (model does not support it)")
+
             for i, sample in enumerate(sample_list, 1):
                 record_id = sample["record_id"]
                 image_file = dataset_dir / sample["image_file"]
@@ -269,7 +353,8 @@ def run_benchmark(
                 print(f"  [{i}/{len(sample_list)}] Record {record_id}...", end=" ", flush=True)
 
                 result, elapsed, error = run_single_extraction(
-                    client, model, image_file, event_start_fmt, event_end_fmt
+                    client, model, image_file, event_start_fmt, event_end_fmt,
+                    think=think_param,
                 )
 
                 if error:
@@ -309,6 +394,7 @@ def run_benchmark(
             "total_samples": len(sample_list),
             "successes": successes,
             "failures": failures,
+            "thinking_enabled": supports_think,
             "total_time_seconds": sum(t["elapsed_seconds"] for t in model_timings),
         }
         if successful_times:
