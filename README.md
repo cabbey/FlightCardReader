@@ -43,24 +43,72 @@ Events are **lazily loaded** -- their database connections and extraction servic
 
 Events that have not been accessed for a configurable period (default: 60 minutes) are automatically **closed** to free resources. The next access will reopen the event transparently.
 
+## Deployment Options
+
+### Docker (recommended for production)
+
+The application ships with a multi-stage Alpine-based Dockerfile (~220 MB image).
+
+```bash
+docker build -t flight-card-scanner .
+docker run -d \
+  --name flight-card-scanner \
+  --restart unless-stopped \
+  -v /srv/flight-cards:/data \
+  -p 127.0.0.1:12345:80 \
+  flight-card-scanner
+```
+
+Or use Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+The container listens on port 80 internally. Mount a `/data` volume containing your `config.json` and event data. All relative paths in the config are resolved relative to the config file's directory.
+
+See **[DEPLOY.md](DEPLOY.md)** for the full deployment guide including Tailscale Funnel configuration.
+
+### Tailscale Funnel (HTTPS for public access)
+
+For serving the app over the internet with automatic TLS certificates, use Tailscale Funnel on the Docker host:
+
+```bash
+sudo tailscale funnel --bg localhost:12345
+```
+
+This provisions a certificate for your `*.ts.net` domain, terminates TLS on the host, and proxies plain HTTP to the container. The app is then reachable at `https://yourhost.tail1234.ts.net`.
+
+For tailnet-only access (no public internet):
+
+```bash
+sudo tailscale serve --bg localhost:12345
+```
+
+See **[DEPLOY.md](DEPLOY.md)** for details on requirements, Docker Compose setup, and troubleshooting.
+
+### Local Development
+
+```bash
+cd FlightCardReader
+python3 -m venv .venv
+source .venv/bin/activate
+pip install fastapi uvicorn[standard] sqlalchemy aiosqlite httpx \
+            pydantic jinja2 python-multipart pillow rapidfuzz segno
+pnpm install
+python -m flight_card_scanner
+```
+
 ## Prerequisites
 
-- **Ubuntu Linux** (22.04 or later recommended)
-- **Python 3.13+**
-- **Node.js 18+** and **pnpm** (for client-side OpenCV.js dependency)
+- **Python 3.12+** (3.10+ minimum for type annotations)
+- **Node.js 18+** and **pnpm** (for client-side OpenCV.js and thrustcurve-db)
 - **Ollama** with the `qwen3-vl` model pulled and running
 
 ### Installing Ollama
 
-Follow the official instructions at [https://ollama.com/download/linux](https://ollama.com/download/linux):
-
 ```bash
 curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-Then pull the vision model:
-
-```bash
 ollama pull qwen3-vl
 ```
 
@@ -68,18 +116,12 @@ Ollama listens on `http://localhost:11434` by default.
 
 ### Installing pnpm
 
-If you don't already have pnpm:
-
-```bash
-npm install -g pnpm
-```
-
-Or via corepack (bundled with Node.js 16.9+):
-
 ```bash
 corepack enable
 corepack prepare pnpm@latest --activate
 ```
+
+Or: `npm install -g pnpm`
 
 ## Installation
 
@@ -114,6 +156,8 @@ The application supports two configuration formats:
 
 Configuration is read from a JSON file. By default the app looks for `config.json` in the current working directory. Override with the `CONFIG_PATH` environment variable.
 
+Path values that are not absolute are resolved relative to the directory containing the config file. This allows the same config to work regardless of the process working directory (important for Docker deployments where the config lives in `/data`).
+
 ### Multi-Event Configuration
 
 #### Server Config (config.json)
@@ -146,7 +190,7 @@ The top-level `config.json` controls server settings and points to the events di
 | `events_dir` | string | `"./events"` | Base directory to scan for event config.json files. Relative paths are resolved against the config file's directory. |
 | `extraction_mode` | string | `"immediate"` | `"immediate"` or `"deferred"`. Controls whether extraction runs automatically on upload. Shared across all events. |
 | `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit. Shared across all events. |
-| `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Enables HTTPS when paired with `ssl_keyfile`. |
+| `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Enables HTTPS when paired with `ssl_keyfile`. Not needed when using Tailscale Funnel. |
 | `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Enables HTTPS when paired with `ssl_certfile`. |
 | `auth_db_path` | string | `"./auth.db"` | Path to the shared auth SQLite database (user accounts, sessions). |
 | `session_timeout_hours` | number | `8` | Session idle timeout in hours. Range: [0.25, 8]. |
@@ -179,7 +223,7 @@ The `event_data_path` is automatically set to the directory containing the event
 | `event_date_range` | object | today-today | Inclusive start/end dates (ISO 8601) for the launch event. Used to resolve day-of-week dates written on cards. |
 | `known_fliers_path` | string | *(none)* | Path to a TSV file of known fliers for post-extraction name verification via fuzzy matching. Resolved relative to the event directory. |
 | `auto_accept_threshold` | number | `0.95` | Confidence threshold for auto-accepting fuzzy name matches. |
-| `read_only` | boolean | `false` | When true, disables scanning and editing for this event. |
+| `read_only` | boolean | `false` | When true, disables scanning and editing for this event. See [Read-Only Mode](#read-only-mode). |
 | `audit_log_path` | string | `"{event_data_path}/audit.log"` | Path to the structured audit log file for this event. |
 
 ### Legacy Single-Event Configuration
@@ -189,21 +233,32 @@ For backward compatibility, the application still supports the original combined
 ```json
 {
   "host": "0.0.0.0",
-  "port": 8000,
-  "event_data_path": "./data",
-  "event_name": "My Launch Event 2025",
+  "port": 80,
+  "event_data_path": "./myevent",
+  "event_name": "My Launch Event 2026",
   "event_date_range": {
-    "start": "2025-07-18",
-    "end": "2025-07-20"
+    "start": "2026-07-04",
+    "end": "2026-07-06"
   },
   "extraction_mode": "immediate",
   "extraction_endpoints": [
-    { "url": "http://localhost:11434", "concurrency": 2 }
+    { "url": "http://host.docker.internal:11434", "concurrency": 2 }
   ]
 }
 ```
 
 All keys from both the server and per-event tables above are accepted in legacy mode.
+
+## Read-Only Mode
+
+Set `"read_only": true` in config.json to lock down a completed event:
+
+- **Database** opens in read-only mode (SQLite `?mode=ro`) -- writes are physically impossible
+- **All write APIs** return `403 Forbidden` with "Event is in read-only mode"
+- **UI editing controls** are hidden (Save, Verify, Extract, Requeue, Remove, motor editing, scan page)
+- **Extraction service** is not started; startup migrations are skipped
+
+This is useful for archiving an event after all cards have been processed and verified, preventing accidental modifications while still allowing browsing and reports.
 
 ## Authentication
 
@@ -243,8 +298,6 @@ If no admin user exists in the auth database and both variables are set, an admi
 
 ## Running the Application
 
-Make sure Ollama is running, then start the server:
-
 ```bash
 source .venv/bin/activate
 export FCS_SESSION_SECRET="your-secret-key-at-least-16-chars"
@@ -283,11 +336,11 @@ For example, if `events_dir` is `./events` and a config exists at `./events/2026
 ### Web Interface
 
 - **`/`** -- Events list: shows all discovered events with links, names, and date ranges.
-- **`/events/{slug}/`** -- Review list for a specific event: paginated table of all scanned records with search.
+- **`/events/{slug}/`** -- Review list for a specific event: paginated table of all scanned records with search, filters (verified status, extraction status, flight day, impulse class), and measurement proximity search.
 - **`/events/{slug}/scan`** -- Camera UI: opens the device camera for capturing flight cards. Detected card edges are highlighted in real-time using OpenCV.js. Tap to capture, then accept or retake.
-- **`/events/{slug}/record/{id}`** -- Detail view: shows the original image alongside all extracted fields.
-- **`/events/{slug}/reports`** -- Reports page for the event.
-- **`/events/{slug}/queue`** -- Extraction queue status for the event.
+- **`/events/{slug}/record/{id}`** -- Detail view: shows the original image alongside all extracted fields with inline editing.
+- **`/events/{slug}/reports`** -- Reports page for the event: flier counts, motor breakdown by impulse class, per-day reports.
+- **`/events/{slug}/queue`** -- Extraction queue status for the event with processing indicators.
 - **`/events/{slug}/admin`** -- Admin controls for the event.
 - **`/login`** -- Login page (shared across all events).
 - **`/admin/users`** -- User management (admin only, shared across all events).
@@ -303,6 +356,7 @@ For example, if `events_dir` is `./events` and a config exists at `./events/2026
 Per-event endpoints (prefix with `/events/{slug}`):
 
 - **`POST /events/{slug}/api/scan`** -- Upload a card image (multipart form, field name `card_image`). Accepts JPEG or PNG. Returns `201` with `{ "record_id": N }`.
+- **`PUT /events/{slug}/api/admin/record/{id}`** -- Update fields on a record (human review corrections).
 - **`POST /events/{slug}/api/admin/mode`** -- Switch extraction mode. Body: `{ "mode": "immediate" }` or `{ "mode": "deferred" }`.
 - **`POST /events/{slug}/api/admin/trigger`** -- Manually trigger extraction of all pending records.
 - **`POST /events/{slug}/api/admin/requeue`** -- Reset all failed records to pending and re-enqueue.
@@ -330,11 +384,18 @@ For faster extraction at busy launches, you can distribute work across multiple 
 
 The concurrency value controls how many images are sent to that endpoint in parallel. Total worker count equals the sum of all concurrency values. Extraction endpoints are shared across all events.
 
-## HTTPS with Tailscale
+## HTTPS with Tailscale (direct, non-Docker)
 
-Mobile browsers (especially iOS Safari) require HTTPS for camera access. The simplest way to get valid HTTPS certificates for local/home use is through Tailscale's built-in certificate provisioning.
+For local development or non-Docker deployments where the app handles TLS directly:
 
-### Prerequisites
+1. Install Tailscale on the server and mobile devices
+2. Generate certificates: `tailscale cert <hostname>`
+3. Add `ssl_certfile` and `ssl_keyfile` to config.json
+4. Start the server -- it will serve HTTPS directly
+
+For Docker deployments, use **Tailscale Funnel** instead (TLS termination happens on the host, not in the container). See [DEPLOY.md](DEPLOY.md).
+
+### Requirements
 
 - Tailscale installed on the server and on any mobile devices that will scan cards
 - All devices logged into the same Tailnet
@@ -415,7 +476,11 @@ python -m pytest tests/ -v
 
 ```
 FlightCardReader/
+├── Dockerfile                         # Multi-stage Alpine build
+├── compose.yaml                       # Docker Compose configuration
+├── DEPLOY.md                          # Full deployment guide (Docker + Tailscale Funnel)
 ├── config.json                        # Server-level configuration
+├── package.json                       # pnpm manifest (opencv.js, thrustcurve-db)
 ├── events/                            # Events directory tree
 │   └── <year>/<event>/
 │       └── config.json                # Per-event configuration
@@ -436,39 +501,41 @@ FlightCardReader/
 │   │   └── session_middleware.py     # Cookie-based session resolution
 │   ├── routers/
 │   │   ├── events.py                 # Events listing and multi-event routing
-│   │   ├── scan.py                   # POST /scan endpoint
-│   │   ├── review.py                 # GET / and GET /record/{id} (HTML)
-│   │   ├── admin.py                  # Admin API (mode, trigger, requeue)
-│   │   ├── reports.py                # Reports page
+│   │   ├── scan.py                   # Card scanning UI and image upload
+│   │   ├── review.py                 # List view, detail view, queue page
+│   │   ├── reports.py                # Event statistics and reports
+│   │   ├── admin.py                  # Admin API (mode, trigger, requeue, update)
 │   │   └── auth.py                   # Login, logout, user management
 │   ├── services/
 │   │   ├── extraction_service.py     # Ollama dispatch, worker pool, date resolution
+│   │   ├── motor_lookup_service.py   # In-memory motor DB from thrustcurve-db
+│   │   ├── flier_match_service.py    # Fuzzy name matching against known fliers
 │   │   ├── image_service.py          # Image storage utilities
-│   │   ├── record_service.py         # Database CRUD for flight records
-│   │   ├── motor_lookup_service.py   # Motor data lookup (uses bundled thrustcurve-db)
-│   │   ├── flier_match_service.py    # Known flier fuzzy matching
+│   │   ├── record_service.py         # Database CRUD, unit normalization
 │   │   ├── auth_service.py           # User CRUD, session lifecycle, rate limiting
 │   │   └── audit_service.py          # Structured JSON Lines audit logger
-│   ├── static/js/                    # Client-side JS (scanner.js, opencv.js)
+│   ├── static/js/                    # Client-side JS (scanner.js, opencv.js, thrustcurve-db)
 │   └── templates/                    # Jinja2 HTML templates
 ├── tests/                            # pytest test suite
-├── package.json                      # pnpm package manifest (opencv.js, thrustcurve-db)
-└── .venv/                            # Python virtual environment
+└── .venv/                            # Python virtual environment (local dev)
 ```
 
 ## Troubleshooting
 
 **"Required client-side asset missing: opencv.js"**
-Run `pnpm install` from the project root. This installs OpenCV.js into the static assets directory.
+Run `pnpm install` from the project root.
 
 **"Ollama returned HTTP 4xx/5xx" or records stuck in `extraction_failed`**
-Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed. Re-pull the model if needed: `ollama pull qwen3-vl`.
+Verify Ollama is running (`curl http://localhost:11434/api/tags`) and that `qwen3-vl` is listed.
 
 **Camera not working in the scan UI**
-The camera API requires HTTPS on mobile browsers (iOS, Android Chrome). If accessing from a phone on the local network, set up HTTPS via Tailscale (see the "HTTPS with Tailscale" section above). On `localhost` in a desktop browser, HTTP works fine for development.
+The camera API requires HTTPS on mobile browsers. Use Tailscale Funnel (Docker) or configure `ssl_certfile`/`ssl_keyfile` (local dev).
 
 **Database locked errors**
 SQLite supports limited concurrency. For high-volume events, consider running a single extraction worker per endpoint or tuning the `concurrency` values.
 
 **Event not appearing in the list**
 Make sure there is a valid `config.json` file in the event's directory under `events_dir`. Use the admin "Refresh Events" button or restart the server to re-scan for new events.
+
+**Container can't reach Ollama on the host**
+Use `http://host.docker.internal:11434` in `extraction_endpoints`. On Linux, add `--add-host=host.docker.internal:host-gateway` to `docker run`.
