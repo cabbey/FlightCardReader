@@ -23,12 +23,17 @@ from flight_card_scanner.event_manager import EventInfo, EventManager, EventSumm
 # ---------------------------------------------------------------------------
 
 
-def _write_event_config(path: Path, event_name: str = "Test Event") -> None:
+def _write_event_config(
+    path: Path,
+    event_name: str = "Test Event",
+    start_date: str = "2026-05-01",
+    end_date: str = "2026-05-03",
+) -> None:
     """Write a minimal valid event config.json at the given path."""
     path.parent.mkdir(parents=True, exist_ok=True)
     config = {
         "event_name": event_name,
-        "event_date_range": {"start": "2026-05-01", "end": "2026-05-03"},
+        "event_date_range": {"start": start_date, "end": end_date},
         "extraction_mode": "deferred",
         "extraction_endpoints": [
             {"url": "http://localhost:11434", "concurrency": 1}
@@ -549,10 +554,20 @@ class TestListEvents:
     """Tests for list_events."""
 
     def test_returns_summaries(self, tmp_path: Path) -> None:
-        """list_events returns EventSummary objects with correct data."""
+        """list_events returns EventSummary objects sorted most recent first."""
         events_dir = tmp_path / "events"
-        _write_event_config(events_dir / "2026" / "nxrs" / "config.json", "NXRS 2026")
-        _write_event_config(events_dir / "2025" / "balls" / "config.json", "BALLS 2025")
+        _write_event_config(
+            events_dir / "2026" / "nxrs" / "config.json",
+            "NXRS 2026",
+            start_date="2026-06-01",
+            end_date="2026-06-03",
+        )
+        _write_event_config(
+            events_dir / "2025" / "balls" / "config.json",
+            "BALLS 2025",
+            start_date="2025-09-15",
+            end_date="2025-09-17",
+        )
 
         mgr = EventManager(_make_server_config(events_dir))
         mgr.discover_events()
@@ -562,12 +577,12 @@ class TestListEvents:
         assert len(summaries) == 2
         assert all(isinstance(s, EventSummary) for s in summaries)
 
-        # Should be sorted by slug
-        assert summaries[0].slug == "2025/balls"
-        assert summaries[0].event_name == "BALLS 2025"
+        # Should be sorted chronologically, most recent first
+        assert summaries[0].slug == "2026/nxrs"
+        assert summaries[0].event_name == "NXRS 2026"
         assert summaries[0].is_open is False
-        assert summaries[1].slug == "2026/nxrs"
-        assert summaries[1].event_name == "NXRS 2026"
+        assert summaries[1].slug == "2025/balls"
+        assert summaries[1].event_name == "BALLS 2025"
 
     def test_open_status_reflected(self, tmp_path: Path) -> None:
         """list_events correctly shows is_open status."""

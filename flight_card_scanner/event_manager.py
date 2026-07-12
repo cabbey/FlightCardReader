@@ -417,11 +417,11 @@ class EventManager:
         """Return a list of event summaries for the top-level events page.
 
         Returns:
-            List of EventSummary objects sorted by slug.
+            List of EventSummary objects sorted chronologically by start date,
+            most recent first.
         """
         summaries = []
-        for slug in sorted(self._events.keys()):
-            info = self._events[slug]
+        for slug, info in self._events.items():
             summaries.append(
                 EventSummary(
                     slug=slug,
@@ -430,6 +430,9 @@ class EventManager:
                     is_open=info.is_open,
                 )
             )
+        summaries.sort(
+            key=lambda s: s.event_date_range.start, reverse=True
+        )
         return summaries
 
     # ------------------------------------------------------------------
