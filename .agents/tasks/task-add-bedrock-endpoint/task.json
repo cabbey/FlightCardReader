@@ -1,7 +1,14 @@
 {
   "task_id": "task-add-bedrock-endpoint",
   "task_description": "Add Amazon Bedrock as an additional LLM extraction endpoint type alongside the existing Ollama endpoint, using the Python SDK (boto3) to access Bedrock.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "434 tests pass (1 deselected is pre-existing failure). All 23 new bedrock tests pass. Tests cover config parsing, service initialization, mocked _call_bedrock with valid/invalid responses, think-block stripping, markdown fence extraction, and prompt verification. Docker build skipped (would require node_modules setup)."
+  }
 }

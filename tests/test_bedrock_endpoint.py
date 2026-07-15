@@ -445,6 +445,115 @@ class TestCallBedrock:
         assert "Extract every readable field" in text_block["text"]
 
 
+    @pytest.mark.asyncio
+    async def test_call_bedrock_raises_parse_error_on_invalid_json(self, tmp_path):
+        """_call_bedrock raises ExtractionParseError when response is not valid JSON."""
+        from flight_card_scanner.services.extraction_service import ExtractionService
+
+        config = self._make_service(tmp_path)
+        image_path = self._create_test_image(tmp_path)
+
+        service = ExtractionService(
+            config=config,
+            session_factory=MagicMock(),
+            extraction_endpoints=[],
+        )
+
+        mock_client = MagicMock()
+        mock_client.converse.return_value = {
+            "output": {
+                "message": {
+                    "content": [{"text": "This is not valid JSON at all"}]
+                }
+            }
+        }
+
+        with pytest.raises(ExtractionParseError, match="Invalid JSON from Bedrock"):
+            await service._call_bedrock(
+                mock_client, "some-model", image_path, 1
+            )
+
+    @pytest.mark.asyncio
+    async def test_call_bedrock_writes_request_sidecar(self, tmp_path):
+        """_call_bedrock writes a .request sidecar file with the prompt payload."""
+        from flight_card_scanner.services.extraction_service import ExtractionService
+
+        config = self._make_service(tmp_path)
+        image_path = self._create_test_image(tmp_path)
+
+        service = ExtractionService(
+            config=config,
+            session_factory=MagicMock(),
+            extraction_endpoints=[],
+        )
+
+        valid_json = json.dumps({
+            "flight_date_raw": None,
+            "flier_name": "Test",
+            "rocket_name": None,
+            "motors": [],
+        })
+
+        mock_client = MagicMock()
+        mock_client.converse.return_value = {
+            "output": {
+                "message": {
+                    "content": [{"text": valid_json}]
+                }
+            }
+        }
+
+        await service._call_bedrock(mock_client, "some-model", image_path, 1)
+
+        # Check that .request sidecar was written
+        request_path = tmp_path / "images" / "test_card.request"
+        assert request_path.exists()
+        request_content = json.loads(request_path.read_text())
+        assert request_content["modelId"] == "some-model"
+        assert "rocketry flight card" in request_content["messages"][0]["content"][1]["text"]
+
+    @pytest.mark.asyncio
+    async def test_call_bedrock_writes_json_sidecar(self, tmp_path):
+        """_call_bedrock writes a .json sidecar file with the raw response."""
+        from flight_card_scanner.services.extraction_service import ExtractionService
+
+        config = self._make_service(tmp_path)
+        image_path = self._create_test_image(tmp_path)
+
+        service = ExtractionService(
+            config=config,
+            session_factory=MagicMock(),
+            extraction_endpoints=[],
+        )
+
+        valid_json = json.dumps({
+            "flight_date_raw": None,
+            "flier_name": "Test",
+            "rocket_name": None,
+            "motors": [],
+        })
+
+        mock_client = MagicMock()
+        mock_client.converse.return_value = {
+            "output": {
+                "message": {
+                    "content": [{"text": valid_json}]
+                }
+            },
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 100, "outputTokens": 50},
+        }
+
+        await service._call_bedrock(mock_client, "some-model", image_path, 1)
+
+        # Check that .json sidecar was written
+        json_path = tmp_path / "images" / "test_card.json"
+        assert json_path.exists()
+        json_content = json.loads(json_path.read_text())
+        assert json_content["stopReason"] == "end_turn"
+        assert json_content["usage"]["inputTokens"] == 100
+
+
 # ---------------------------------------------------------------------------
 # BedrockEndpointConfig dataclass tests
 # ---------------------------------------------------------------------------

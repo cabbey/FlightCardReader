@@ -555,65 +555,7 @@ class ExtractionService:
                 await record_service.set_status(db, record_id, "extraction_failed")
             return
 
-        # Resolve flight date — failure is non-fatal; just leave date as None
-        try:
-            resolved_date = resolve_flight_date(
-                extracted.flight_date_raw, self._config.event_date_range
-            )
-        except DateResolutionError as exc:
-            logger.warning(
-                "Date resolution failed for record %d: %s", record_id, exc
-            )
-            resolved_date = None
-
-        # Apply successful extraction
-        async with self._session_factory() as db:
-            await record_service.apply_extraction(
-                db, record_id, extracted, resolved_date
-            )
-
-        # Post-extraction: look up motors via ThrustCurve
-        if self._thrustcurve and extracted.motors:
-            try:
-                async with self._session_factory() as db:
-                    record = await record_service.get(db, record_id)
-                    if record and record.overflow and record.overflow.get("motors"):
-                        import copy
-                        motors = copy.deepcopy(record.overflow["motors"])
-                        annotated = await self._thrustcurve.lookup_motors(motors)
-                        overflow = copy.deepcopy(record.overflow)
-                        overflow["motors"] = annotated
-                        await record_service.update_fields(
-                            db, record_id, {"overflow": overflow}
-                        )
-            except Exception as exc:
-                logger.warning(
-                    "ThrustCurve lookup failed for record %d: %s",
-                    record_id,
-                    exc,
-                )
-
-        # Post-extraction: flier verification via known fliers list
-        if self._flier_match_service and self._flier_match_service.enabled:
-            try:
-                async with self._session_factory() as db:
-                    record = await record_service.get(db, record_id)
-                    if record:
-                        # Extract membership info from overflow
-                        membership = (record.overflow or {}).get("membership", {})
-                        result = await self._flier_match_service.match_flier(
-                            flier_name=record.flier_name,
-                            club=membership.get("club"),
-                            member_number=membership.get("member_number"),
-                            cert_level=membership.get("cert_level"),
-                        )
-                        await self._apply_flier_match(db, record_id, result)
-            except Exception as exc:
-                logger.warning(
-                    "Flier verification failed for record %d: %s",
-                    record_id,
-                    exc,
-                )
+        await self._post_extraction(record_id, extracted)
 
     async def _apply_flier_match(
         self,
@@ -864,6 +806,75 @@ class ExtractionService:
 
         return FlightCardExtraction.model_validate_json(cleaned_content)
 
+    async def _post_extraction(
+        self, record_id: int, extracted: FlightCardExtraction
+    ) -> None:
+        """Shared post-extraction pipeline: resolve date, apply extraction, look up motors, match flier.
+
+        Called by both _process (Ollama) and _process_bedrock after a successful extraction.
+        """
+        from flight_card_scanner.services import record_service
+
+        # Resolve flight date - failure is non-fatal; just leave date as None
+        try:
+            resolved_date = resolve_flight_date(
+                extracted.flight_date_raw, self._config.event_date_range
+            )
+        except DateResolutionError as exc:
+            logger.warning(
+                "Date resolution failed for record %d: %s", record_id, exc
+            )
+            resolved_date = None
+
+        # Apply successful extraction
+        async with self._session_factory() as db:
+            await record_service.apply_extraction(
+                db, record_id, extracted, resolved_date
+            )
+
+        # Post-extraction: look up motors via ThrustCurve
+        if self._thrustcurve and extracted.motors:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record and record.overflow and record.overflow.get("motors"):
+                        import copy
+                        motors = copy.deepcopy(record.overflow["motors"])
+                        annotated = await self._thrustcurve.lookup_motors(motors)
+                        overflow = copy.deepcopy(record.overflow)
+                        overflow["motors"] = annotated
+                        await record_service.update_fields(
+                            db, record_id, {"overflow": overflow}
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "ThrustCurve lookup failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
+
+        # Post-extraction: flier verification via known fliers list
+        if self._flier_match_service and self._flier_match_service.enabled:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record:
+                        # Extract membership info from overflow
+                        membership = (record.overflow or {}).get("membership", {})
+                        result = await self._flier_match_service.match_flier(
+                            flier_name=record.flier_name,
+                            club=membership.get("club"),
+                            member_number=membership.get("member_number"),
+                            cert_level=membership.get("cert_level"),
+                        )
+                        await self._apply_flier_match(db, record_id, result)
+            except Exception as exc:
+                logger.warning(
+                    "Flier verification failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
+
     async def _process_bedrock(
         self, record_id: int, bedrock_client, endpoint: BedrockEndpointConfig
     ) -> None:
@@ -920,64 +931,7 @@ class ExtractionService:
                 await record_service.set_status(db, record_id, "extraction_failed")
             return
 
-        # Resolve flight date
-        try:
-            resolved_date = resolve_flight_date(
-                extracted.flight_date_raw, self._config.event_date_range
-            )
-        except DateResolutionError as exc:
-            logger.warning(
-                "Date resolution failed for record %d: %s", record_id, exc
-            )
-            resolved_date = None
-
-        # Apply successful extraction
-        async with self._session_factory() as db:
-            await record_service.apply_extraction(
-                db, record_id, extracted, resolved_date
-            )
-
-        # Post-extraction: look up motors via ThrustCurve
-        if self._thrustcurve and extracted.motors:
-            try:
-                async with self._session_factory() as db:
-                    record = await record_service.get(db, record_id)
-                    if record and record.overflow and record.overflow.get("motors"):
-                        import copy
-                        motors = copy.deepcopy(record.overflow["motors"])
-                        annotated = await self._thrustcurve.lookup_motors(motors)
-                        overflow = copy.deepcopy(record.overflow)
-                        overflow["motors"] = annotated
-                        await record_service.update_fields(
-                            db, record_id, {"overflow": overflow}
-                        )
-            except Exception as exc:
-                logger.warning(
-                    "ThrustCurve lookup failed for record %d: %s",
-                    record_id,
-                    exc,
-                )
-
-        # Post-extraction: flier verification via known fliers list
-        if self._flier_match_service and self._flier_match_service.enabled:
-            try:
-                async with self._session_factory() as db:
-                    record = await record_service.get(db, record_id)
-                    if record:
-                        membership = (record.overflow or {}).get("membership", {})
-                        result = await self._flier_match_service.match_flier(
-                            flier_name=record.flier_name,
-                            club=membership.get("club"),
-                            member_number=membership.get("member_number"),
-                            cert_level=membership.get("cert_level"),
-                        )
-                        await self._apply_flier_match(db, record_id, result)
-            except Exception as exc:
-                logger.warning(
-                    "Flier verification failed for record %d: %s",
-                    record_id,
-                    exc,
-                )
+        await self._post_extraction(record_id, extracted)
 
     async def _call_bedrock(
         self, bedrock_client, model_id: str, image_path: str, record_id: int
@@ -1015,6 +969,33 @@ class ExtractionService:
             event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
             event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
         )
+
+        # Build the request payload for debug sidecar
+        request_payload = {
+            "modelId": model_id,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "image": {
+                                "format": "jpeg",
+                                "source": {"bytes": f"<image: {len(resized_bytes)} bytes>"},
+                            }
+                        },
+                        {"text": prompt_text},
+                    ],
+                }
+            ],
+        }
+
+        # Save the request payload as a sidecar .request file
+        request_filename = Path(image_path).stem + ".request"
+        request_path = self._config.image_store_path / request_filename
+        try:
+            request_path.write_text(json.dumps(request_payload, indent=2, ensure_ascii=False))
+        except OSError as exc:
+            logger.warning("Failed to write request file %s: %s", request_path, exc)
 
         # Call Bedrock Converse API via boto3 (blocking, run in a thread)
         import time as _time
@@ -1058,6 +1039,21 @@ class ExtractionService:
                 f"Bedrock API call failed: {exc}"
             ) from exc
 
+        # Dump full Bedrock response to a .json file alongside the image
+        json_filename = Path(image_path).stem + ".json"
+        json_path = self._config.image_store_path / json_filename
+        try:
+            # The response may contain bytes objects that aren't JSON-serializable;
+            # serialize only the text portions for debugging.
+            debug_response = {
+                "output": response.get("output"),
+                "stopReason": response.get("stopReason"),
+                "usage": response.get("usage"),
+            }
+            json_path.write_text(json.dumps(debug_response, indent=2, ensure_ascii=False, default=str))
+        except OSError as exc:
+            logger.warning("Failed to write debug JSON %s: %s", json_path, exc)
+
         # Extract text from the Converse API response
         try:
             raw_content = response["output"]["message"]["content"][0]["text"]
@@ -1094,7 +1090,13 @@ class ExtractionService:
             cleaned_content = json_match.group(1).strip()
 
         # Pre-process: fix measurements where model merged value+unit into one field
-        parsed_json = json.loads(cleaned_content)
+        try:
+            parsed_json = json.loads(cleaned_content)
+        except json.JSONDecodeError as exc:
+            raise ExtractionParseError(
+                message=f"Invalid JSON from Bedrock: {exc}",
+                raw_response=cleaned_content[:500],
+            ) from exc
 
         if parsed_json is not None:
             measurements = parsed_json.get("measurements")
