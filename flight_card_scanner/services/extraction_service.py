@@ -775,7 +775,13 @@ class ExtractionService:
             )
 
         # Pre-process: fix measurements where model merged value+unit into one field
-        parsed_json = json.loads(cleaned_content)
+        try:
+            parsed_json = json.loads(cleaned_content)
+        except json.JSONDecodeError as exc:
+            raise ExtractionParseError(
+                message=f"Invalid JSON from Ollama: {exc}",
+                raw_response=cleaned_content[:500],
+            ) from exc
 
         if parsed_json is not None:
             measurements = parsed_json.get("measurements")
