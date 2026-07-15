@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Add Amazon Bedrock as a second extraction endpoint type alongside the existing Ollama endpoint. This involves: (1) adding a type discriminator to EndpointConfig, (2) creating a BedrockEndpointConfig dataclass, (3) updating config parsing to handle both types, (4) implementing a _call_bedrock() method in ExtractionService using boto3, (5) updating the worker to dispatch based on endpoint type, (6) adding boto3 to the Dockerfile, (7) adding a new BedrockUnavailableError exception, and (8) writing tests for the new functionality.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "In flight_card_scanner/config.py: (a) Add a 'type' field to EndpointConfig with default value 'ollama' so existing configs are backward-compatible. (b) Create a new BedrockEndpointConfig dataclass with fields: type='bedrock', region (str), model_id (str), concurrency (int, default 1). It should NOT have a 'url' field since Bedrock uses the SDK. (c) Update _parse_endpoint() to check for a 'type' field in the dict: if 'bedrock', create BedrockEndpointConfig; if 'ollama' or absent, create EndpointConfig as before. (d) Update the type annotation on extraction_endpoints fields in AppConfig and ServerConfig to 'list[EndpointConfig | BedrockEndpointConfig]'.",
     "In flight_card_scanner/exceptions.py: Add a BedrockUnavailableError exception class (parallel to OllamaUnavailableError), for when Bedrock API calls fail.",
@@ -27,5 +27,5 @@
     ".venv/bin/python -c \"from flight_card_scanner.exceptions import BedrockUnavailableError; print('OK')\""
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 23 new tests pass. Full suite: 434 passed, 1 pre-existing failure (test_file_handler_uses_append_mode - unrelated). Used asyncio.to_thread() to wrap blocking boto3 converse() call. Added markdown code fence extraction for Bedrock responses since non-structured-output models may wrap JSON in code blocks."
 }
