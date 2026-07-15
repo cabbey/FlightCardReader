@@ -1,0 +1,7 @@
+{
+  "task_id": "task-add-bedrock-endpoint",
+  "task_description": "Add Amazon Bedrock as an additional LLM extraction endpoint type alongside the existing Ollama endpoint, using the Python SDK (boto3) to access Bedrock.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

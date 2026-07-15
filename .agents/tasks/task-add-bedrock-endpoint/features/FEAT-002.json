@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Add Amazon Bedrock as a second extraction endpoint type alongside the existing Ollama endpoint. This involves: (1) adding a type discriminator to EndpointConfig, (2) creating a BedrockEndpointConfig dataclass, (3) updating config parsing to handle both types, (4) implementing a _call_bedrock() method in ExtractionService using boto3, (5) updating the worker to dispatch based on endpoint type, (6) adding boto3 to the Dockerfile, (7) adding a new BedrockUnavailableError exception, and (8) writing tests for the new functionality.",
+  "status": "pending",
+  "steps": [
+    "In flight_card_scanner/config.py: (a) Add a 'type' field to EndpointConfig with default value 'ollama' so existing configs are backward-compatible. (b) Create a new BedrockEndpointConfig dataclass with fields: type='bedrock', region (str), model_id (str), concurrency (int, default 1). It should NOT have a 'url' field since Bedrock uses the SDK. (c) Update _parse_endpoint() to check for a 'type' field in the dict: if 'bedrock', create BedrockEndpointConfig; if 'ollama' or absent, create EndpointConfig as before. (d) Update the type annotation on extraction_endpoints fields in AppConfig and ServerConfig to 'list[EndpointConfig | BedrockEndpointConfig]'.",
+    "In flight_card_scanner/exceptions.py: Add a BedrockUnavailableError exception class (parallel to OllamaUnavailableError), for when Bedrock API calls fail.",
+    "In flight_card_scanner/services/extraction_service.py: (a) Import BedrockEndpointConfig from config.py and BedrockUnavailableError from exceptions.py. (b) Update the __init__ method: the endpoint_semaphores dict should use a unique key for each endpoint - for Ollama use ep.url, for Bedrock use a string like 'bedrock:{region}:{model_id}'. (c) Update the start() method: when spawning workers, check the endpoint type. For Bedrock endpoints, spawn workers that call _call_bedrock instead of _call_ollama. (d) Create a new _worker_bedrock() method (parallel to _worker) that does NOT create an httpx client but instead creates a boto3 bedrock-runtime client and calls _call_bedrock(). (e) Implement _call_bedrock() method that: reads and resizes the image (reuse the same image prep logic as _call_ollama), uses boto3's bedrock-runtime client converse() API to send the image and EXTRACTION_PROMPT, parses the response JSON, strips any <think> blocks, and validates with FlightCardExtraction.model_validate_json(). The Bedrock Converse API accepts images as bytes with a media type. (f) Update _process() to accept an endpoint_type parameter or dispatch based on a flag so it knows whether to call _call_ollama or _call_bedrock.",
+    "In Dockerfile: Add boto3 to the pip install line in Stage 2 (python-deps).",
+    "Create tests/test_bedrock_endpoint.py: (a) Test that _parse_endpoint correctly creates BedrockEndpointConfig when type='bedrock' is present. (b) Test that _parse_endpoint still creates EndpointConfig when type is absent or 'ollama'. (c) Test that BedrockEndpointConfig requires region and model_id. (d) Test that the ExtractionService properly initializes semaphores for bedrock endpoints. (e) Mock boto3 to test _call_bedrock parses a valid response. (f) Mock boto3 to test _call_bedrock raises BedrockUnavailableError on API failure."
+  ],
+  "acceptance_criteria": [
+    "A config with type='bedrock', region, and model_id is parsed into a BedrockEndpointConfig",
+    "A config without a type field (or type='ollama') still produces the existing EndpointConfig",
+    "ExtractionService can start workers for both Ollama and Bedrock endpoints simultaneously",
+    "The _call_bedrock method uses boto3 (not raw HTTP) to call Bedrock's Converse API",
+    "The EXTRACTION_PROMPT is shared between Ollama and Bedrock paths",
+    "Response parsing (FlightCardExtraction.model_validate_json) is shared between both paths",
+    "boto3 is included in the Dockerfile",
+    "All new tests pass",
+    "All existing tests still pass"
+  ],
+  "verification": [
+    ".venv/bin/python -m pytest tests/ -v",
+    ".venv/bin/python -c \"from flight_card_scanner.config import BedrockEndpointConfig; print('OK')\"",
+    ".venv/bin/python -c \"from flight_card_scanner.exceptions import BedrockUnavailableError; print('OK')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
