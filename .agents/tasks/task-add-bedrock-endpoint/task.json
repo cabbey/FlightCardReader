@@ -9,6 +9,6 @@
     "tests": "pass",
     "test_quality": "pass",
     "docker_build": "skipped",
-    "summary": "434 tests pass (1 deselected is pre-existing failure). All 23 new bedrock tests pass. Tests cover config parsing, service initialization, mocked _call_bedrock with valid/invalid responses, think-block stripping, markdown fence extraction, and prompt verification. Docker build skipped (would require node_modules setup)."
+    "summary": "437 tests pass (1 deselected is pre-existing failure). All 26 bedrock tests pass (23 original + 3 new for review fixes). Review issues addressed: debug sidecar files added, json.loads wrapped with try/except, post-extraction logic extracted into shared method."
   }
 }
