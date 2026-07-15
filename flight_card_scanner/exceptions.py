@@ -36,6 +36,11 @@ class OllamaUnavailableError(FlightCardScannerError):
     pass
 
 
+class BedrockUnavailableError(FlightCardScannerError):
+    """Raised when an Amazon Bedrock extraction endpoint is unreachable or returns an API error."""
+    pass
+
+
 class DateResolutionError(FlightCardScannerError):
     """Raised when a flight date value cannot be resolved to a date within the Event Date Range."""
     pass

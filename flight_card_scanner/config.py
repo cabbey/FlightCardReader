@@ -29,6 +29,16 @@ class EndpointConfig:
     """Configuration for a single Ollama extraction endpoint."""
     url: str
     concurrency: int = 1
+    type: str = "ollama"
+
+
+@dataclass
+class BedrockEndpointConfig:
+    """Configuration for a single Amazon Bedrock extraction endpoint."""
+    region: str
+    model_id: str
+    concurrency: int = 1
+    type: str = "bedrock"
 
 
 @dataclass
@@ -49,7 +59,7 @@ class AppConfig:
         default_factory=lambda: DateRange(start=date.today(), end=date.today())
     )
     extraction_mode: str = "immediate"  # "immediate" | "deferred"
-    extraction_endpoints: list[EndpointConfig] = field(
+    extraction_endpoints: list[EndpointConfig | BedrockEndpointConfig] = field(
         default_factory=lambda: [EndpointConfig(url="http://localhost:11434", concurrency=1)]
     )
     ssl_certfile: Path | None = None
@@ -89,12 +99,42 @@ def _parse_date(value: str, field_name: str) -> date:
         ) from exc
 
 
-def _parse_endpoint(obj: Any, index: int) -> EndpointConfig:
+def _parse_endpoint(obj: Any, index: int) -> EndpointConfig | BedrockEndpointConfig:
     """Parse a single extraction endpoint dict, raising ConfigError on invalid values."""
     if not isinstance(obj, dict):
         raise ConfigError(
             f"extraction_endpoints[{index}] must be an object, got {type(obj).__name__!r}."
         )
+
+    endpoint_type = obj.get("type", "ollama")
+
+    if endpoint_type == "bedrock":
+        region = obj.get("region")
+        if not region or not isinstance(region, str):
+            raise ConfigError(
+                f"extraction_endpoints[{index}].region must be a non-empty string "
+                f"for bedrock endpoints."
+            )
+        model_id = obj.get("model_id")
+        if not model_id or not isinstance(model_id, str):
+            raise ConfigError(
+                f"extraction_endpoints[{index}].model_id must be a non-empty string "
+                f"for bedrock endpoints."
+            )
+        concurrency = obj.get("concurrency", 1)
+        if not isinstance(concurrency, int) or concurrency < 1:
+            raise ConfigError(
+                f"extraction_endpoints[{index}].concurrency must be a positive integer >= 1, "
+                f"got {concurrency!r}."
+            )
+        return BedrockEndpointConfig(region=region, model_id=model_id, concurrency=concurrency)
+
+    if endpoint_type != "ollama":
+        raise ConfigError(
+            f"extraction_endpoints[{index}].type must be 'ollama' or 'bedrock', "
+            f"got {endpoint_type!r}."
+        )
+
     url = obj.get("url")
     if not url or not isinstance(url, str):
         raise ConfigError(
@@ -103,7 +143,7 @@ def _parse_endpoint(obj: Any, index: int) -> EndpointConfig:
     concurrency = obj.get("concurrency", 1)
     if not isinstance(concurrency, int) or concurrency < 1:
         raise ConfigError(
-            f"extraction_endpoints[{index}].concurrency must be a positive integer ≥ 1, "
+            f"extraction_endpoints[{index}].concurrency must be a positive integer >= 1, "
             f"got {concurrency!r}."
         )
     return EndpointConfig(url=url, concurrency=concurrency)
@@ -331,7 +371,7 @@ class ServerConfig:
     port: int = 8000
     events_dir: Path = field(default_factory=lambda: Path("./events"))
     extraction_mode: str = "immediate"  # "immediate" | "deferred"
-    extraction_endpoints: list[EndpointConfig] = field(
+    extraction_endpoints: list[EndpointConfig | BedrockEndpointConfig] = field(
         default_factory=lambda: [EndpointConfig(url="http://localhost:11434", concurrency=1)]
     )
     ssl_certfile: Path | None = None

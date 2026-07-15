@@ -20,8 +20,9 @@ from pathlib import Path
 import httpx
 from pydantic import ValidationError
 
-from flight_card_scanner.config import AppConfig, DateRange, EndpointConfig
+from flight_card_scanner.config import AppConfig, BedrockEndpointConfig, DateRange, EndpointConfig
 from flight_card_scanner.exceptions import (
+    BedrockUnavailableError,
     DateResolutionError,
     ExtractionParseError,
     OllamaUnavailableError,
@@ -299,10 +300,18 @@ class ExtractionService:
         self._thrustcurve = thrustcurve_service
         self._flier_match_service = flier_match_service
         self._auto_accept_threshold = config.auto_accept_threshold
-        # One semaphore per endpoint, keyed by URL
+        # One semaphore per endpoint, keyed by a unique identifier
         self._endpoint_semaphores: dict[str, asyncio.Semaphore] = {
-            ep.url: asyncio.Semaphore(ep.concurrency) for ep in self._endpoints
+            self._endpoint_key(ep): asyncio.Semaphore(ep.concurrency)
+            for ep in self._endpoints
         }
+
+    @staticmethod
+    def _endpoint_key(ep: EndpointConfig | BedrockEndpointConfig) -> str:
+        """Return a unique string key for an endpoint."""
+        if isinstance(ep, BedrockEndpointConfig):
+            return f"bedrock:{ep.region}:{ep.model_id}"
+        return ep.url
 
     @property
     def mode(self) -> ExtractionMode:
@@ -325,13 +334,22 @@ class ExtractionService:
         Spawns one worker Task per concurrency slot per endpoint.
         """
         for ep in self._endpoints:
-            sem = self._endpoint_semaphores[ep.url]
-            for i in range(ep.concurrency):
-                task = asyncio.create_task(
-                    self._worker(ep, sem),
-                    name=f"extractor-{ep.url}-{i}",
-                )
-                self._workers.append(task)
+            key = self._endpoint_key(ep)
+            sem = self._endpoint_semaphores[key]
+            if isinstance(ep, BedrockEndpointConfig):
+                for i in range(ep.concurrency):
+                    task = asyncio.create_task(
+                        self._worker_bedrock(ep, sem),
+                        name=f"extractor-bedrock-{ep.region}-{i}",
+                    )
+                    self._workers.append(task)
+            else:
+                for i in range(ep.concurrency):
+                    task = asyncio.create_task(
+                        self._worker(ep, sem),
+                        name=f"extractor-{ep.url}-{i}",
+                    )
+                    self._workers.append(task)
         logger.info(
             "Extraction service started: %d workers across %d endpoints",
             len(self._workers),
@@ -410,7 +428,7 @@ class ExtractionService:
     async def _worker(
         self, endpoint: EndpointConfig, sem: asyncio.Semaphore
     ) -> None:
-        """Infinite worker loop for a single endpoint concurrency slot.
+        """Infinite worker loop for a single Ollama endpoint concurrency slot.
 
         Pulls record IDs from the queue, acquires the endpoint semaphore,
         processes the record, then releases and marks the task done.
@@ -443,6 +461,47 @@ class ExtractionService:
                     )
                 finally:
                     self._queue.task_done()
+
+    async def _worker_bedrock(
+        self, endpoint: BedrockEndpointConfig, sem: asyncio.Semaphore
+    ) -> None:
+        """Infinite worker loop for a single Bedrock endpoint concurrency slot.
+
+        Pulls record IDs from the queue, acquires the endpoint semaphore,
+        calls Bedrock via boto3, then releases and marks the task done.
+        """
+        import boto3
+
+        bedrock_client = boto3.client("bedrock-runtime", region_name=endpoint.region)
+        endpoint_label = f"bedrock:{endpoint.region}:{endpoint.model_id}"
+
+        while True:
+            record_id = await self._queue.get()
+            self._queued_ids.discard(record_id)
+            try:
+                async with sem:
+                    import datetime as _dt
+                    self._processing[record_id] = {
+                        "endpoint": endpoint_label,
+                        "started_at": _dt.datetime.now(_dt.timezone.utc),
+                    }
+                    try:
+                        await self._process_bedrock(
+                            record_id, bedrock_client, endpoint
+                        )
+                    finally:
+                        self._processing.pop(record_id, None)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error(
+                    "Unexpected error processing record %d on %s: %s",
+                    record_id,
+                    endpoint_label,
+                    exc,
+                )
+            finally:
+                self._queue.task_done()
 
     async def _process(
         self, record_id: int, client: httpx.AsyncClient, endpoint_url: str
@@ -805,10 +864,262 @@ class ExtractionService:
 
         return FlightCardExtraction.model_validate_json(cleaned_content)
 
+    async def _process_bedrock(
+        self, record_id: int, bedrock_client, endpoint: BedrockEndpointConfig
+    ) -> None:
+        """Process a single record via Bedrock: set processing, call Bedrock, apply results.
 
-# ---------------------------------------------------------------------------
-# Compound measurement parsing
-# ---------------------------------------------------------------------------
+        On success, applies extraction and sets status to 'extracted'.
+        On failure (parse error, unavailable endpoint, date resolution error),
+        sets status to 'extraction_failed'.
+        """
+        from flight_card_scanner.services import record_service
+
+        endpoint_label = f"bedrock:{endpoint.region}:{endpoint.model_id}"
+
+        # Fetch record and set status to processing
+        async with self._session_factory() as db:
+            record = await record_service.get(db, record_id)
+            if record is None:
+                logger.warning("Record %d not found; skipping", record_id)
+                return
+            await record_service.set_status(db, record_id, "processing")
+
+        try:
+            extracted = await self._call_bedrock(
+                bedrock_client, endpoint.model_id, record.image_path, record_id
+            )
+        except BedrockUnavailableError as exc:
+            logger.error(
+                "Endpoint %s unreachable for record %d: %s — returning to pending",
+                endpoint_label,
+                record_id,
+                exc,
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "pending")
+            return
+        except ExtractionParseError as exc:
+            logger.error(
+                "Bad JSON from LLM for record %d: %s (raw: %s)",
+                record_id,
+                exc.message,
+                exc.raw_response[:200],
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "extraction_failed")
+            return
+        except Exception as exc:
+            logger.error(
+                "Extraction failed for record %d: %s: %s",
+                record_id,
+                type(exc).__name__,
+                exc,
+            )
+            async with self._session_factory() as db:
+                await record_service.set_status(db, record_id, "extraction_failed")
+            return
+
+        # Resolve flight date
+        try:
+            resolved_date = resolve_flight_date(
+                extracted.flight_date_raw, self._config.event_date_range
+            )
+        except DateResolutionError as exc:
+            logger.warning(
+                "Date resolution failed for record %d: %s", record_id, exc
+            )
+            resolved_date = None
+
+        # Apply successful extraction
+        async with self._session_factory() as db:
+            await record_service.apply_extraction(
+                db, record_id, extracted, resolved_date
+            )
+
+        # Post-extraction: look up motors via ThrustCurve
+        if self._thrustcurve and extracted.motors:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record and record.overflow and record.overflow.get("motors"):
+                        import copy
+                        motors = copy.deepcopy(record.overflow["motors"])
+                        annotated = await self._thrustcurve.lookup_motors(motors)
+                        overflow = copy.deepcopy(record.overflow)
+                        overflow["motors"] = annotated
+                        await record_service.update_fields(
+                            db, record_id, {"overflow": overflow}
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "ThrustCurve lookup failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
+
+        # Post-extraction: flier verification via known fliers list
+        if self._flier_match_service and self._flier_match_service.enabled:
+            try:
+                async with self._session_factory() as db:
+                    record = await record_service.get(db, record_id)
+                    if record:
+                        membership = (record.overflow or {}).get("membership", {})
+                        result = await self._flier_match_service.match_flier(
+                            flier_name=record.flier_name,
+                            club=membership.get("club"),
+                            member_number=membership.get("member_number"),
+                            cert_level=membership.get("cert_level"),
+                        )
+                        await self._apply_flier_match(db, record_id, result)
+            except Exception as exc:
+                logger.warning(
+                    "Flier verification failed for record %d: %s",
+                    record_id,
+                    exc,
+                )
+
+    async def _call_bedrock(
+        self, bedrock_client, model_id: str, image_path: str, record_id: int
+    ) -> FlightCardExtraction:
+        """Submit card image to Amazon Bedrock and return parsed extraction.
+
+        Reads the image, resizes it, then uses the boto3 Bedrock Converse API
+        to send the image and EXTRACTION_PROMPT. Parses the response into a
+        FlightCardExtraction model.
+
+        Raises:
+            BedrockUnavailableError: If the Bedrock API call fails.
+            ExtractionParseError: If the LLM response cannot be validated.
+        """
+        from io import BytesIO
+        from PIL import Image
+
+        # Read image, resize to 1600px tall for LLM context efficiency
+        full_path = self._config.image_store_path / image_path
+        image_bytes = full_path.read_bytes()
+
+        img = Image.open(BytesIO(image_bytes))
+        target_height = 1600
+        if img.height > target_height:
+            scale = target_height / img.height
+            new_width = int(img.width * scale)
+            img = img.resize((new_width, target_height), Image.LANCZOS)
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            resized_bytes = buf.getvalue()
+        else:
+            resized_bytes = image_bytes
+
+        prompt_text = EXTRACTION_PROMPT.format(
+            event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
+            event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
+        )
+
+        # Call Bedrock Converse API via boto3 (blocking, run in a thread)
+        import time as _time
+
+        def _invoke():
+            return bedrock_client.converse(
+                modelId=model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "image": {
+                                    "format": "jpeg",
+                                    "source": {"bytes": resized_bytes},
+                                }
+                            },
+                            {"text": prompt_text},
+                        ],
+                    }
+                ],
+            )
+
+        try:
+            logger.info(
+                "sending record %d to Bedrock model %s",
+                record_id,
+                model_id,
+            )
+            _t0 = _time.monotonic()
+            response = await asyncio.to_thread(_invoke)
+            _elapsed = _time.monotonic() - _t0
+            logger.info(
+                "Bedrock model %s responded for record %d in %.1fs",
+                model_id,
+                record_id,
+                _elapsed,
+            )
+        except Exception as exc:
+            raise BedrockUnavailableError(
+                f"Bedrock API call failed: {exc}"
+            ) from exc
+
+        # Extract text from the Converse API response
+        try:
+            raw_content = response["output"]["message"]["content"][0]["text"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ExtractionParseError(
+                message=f"Unexpected Bedrock response structure: {exc}",
+                raw_response=str(response)[:500],
+            ) from exc
+
+        if not raw_content or not raw_content.strip():
+            raise ExtractionParseError(
+                message="Bedrock returned empty content",
+                raw_response=raw_content or "(empty)",
+            )
+
+        # Strip any <think>...</think> block
+        cleaned_content = raw_content.strip()
+        if "think>" in cleaned_content:
+            logger.warning("found junk, trimming content")
+            cleaned_content = re.sub(
+                r".*?</think>", "", cleaned_content, flags=re.DOTALL
+            ).strip()
+
+        if not cleaned_content:
+            raise ExtractionParseError(
+                message="LLM content was only a think block with no JSON",
+                raw_response=raw_content,
+            )
+
+        # Try to extract JSON from the response (Bedrock models may wrap in markdown)
+        # Look for JSON block in markdown code fence
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", cleaned_content, re.DOTALL)
+        if json_match:
+            cleaned_content = json_match.group(1).strip()
+
+        # Pre-process: fix measurements where model merged value+unit into one field
+        parsed_json = json.loads(cleaned_content)
+
+        if parsed_json is not None:
+            measurements = parsed_json.get("measurements")
+            if measurements and isinstance(measurements, dict):
+                for dim in ("diameter", "length", "weight"):
+                    val = measurements.get(dim)
+                    unit_key = f"{dim}_unit"
+                    if isinstance(val, str):
+                        match = re.match(r"^([0-9]*\.?[0-9]+)\s*([a-zA-Z\"\']+)$", val)
+                        if match:
+                            measurements[dim] = float(match.group(1))
+                            if not measurements.get(unit_key):
+                                measurements[unit_key] = match.group(2)
+                        else:
+                            try:
+                                measurements[dim] = float(val)
+                            except ValueError:
+                                parsed = _parse_compound_measurement(val)
+                                if parsed is not None:
+                                    measurements[dim] = parsed[0]
+                                    if not measurements.get(unit_key):
+                                        measurements[unit_key] = parsed[1]
+            cleaned_content = json.dumps(parsed_json)
+
+        return FlightCardExtraction.model_validate_json(cleaned_content)
 
 # Conversion factors: sub-unit per major unit
 _COMPOUND_UNITS: dict[str, tuple[str, float]] = {

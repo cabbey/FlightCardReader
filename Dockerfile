@@ -59,7 +59,8 @@ RUN pip install --no-cache-dir \
         rapidfuzz \
         segno \
         argon2-cffi \
-        itsdangerous
+        itsdangerous \
+        boto3
 
 
 # =====  Stage 3: Final minimal runtime image  =====
