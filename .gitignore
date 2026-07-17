@@ -1,3 +1,5 @@
 **/__pycache__
 events/
+auth.db
+config.json
 **/node_modules/
