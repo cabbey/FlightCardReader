@@ -2,10 +2,12 @@
   "host": "0.0.0.0",
   "port": 8000,
   "events_dir": "./events",
-  "thrustcurve_cache_path": "./thrustcurve_cache",
-  "ssl_certfile": null,
-  "ssl_keyfile": null,
+  "ssl_certfile": "./events/cheshire.neon-tegus.ts.net.crt",
+  "ssl_keyfile": "./events/cheshire.neon-tegus.ts.net.key",
   "auth_db_path": "./auth.db",
   "session_timeout_hours": 8,
-  "event_idle_timeout_minutes": 60
+  "event_idle_timeout_minutes": 60,
+  "extraction_endpoints": [
+    {"type": "bedrock", "region": "us-west-2", "model_id": "qwen.qwen3-vl-235b-a22b", "concurrency": 1 }
+  ]
 }

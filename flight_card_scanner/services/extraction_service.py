@@ -976,6 +976,15 @@ class ExtractionService:
             event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
         )
 
+        # Append the JSON schema to the prompt (Bedrock doesn't have Ollama's native
+        # structured output "format" parameter, so we include it as instructions)
+        schema = _simplify_schema(FlightCardExtraction.model_json_schema())
+        prompt_text += (
+            "\n\nYou MUST respond with a single JSON object conforming to this schema:\n"
+            + json.dumps(schema)
+            + "\n\nRespond ONLY with valid JSON. No markdown fences, no explanation."
+        )
+
         # Build the request payload for debug sidecar
         request_payload = {
             "modelId": model_id,
@@ -993,6 +1002,10 @@ class ExtractionService:
                     ],
                 }
             ],
+            "inferenceConfig": {
+                "temperature": 0.0,
+                "maxTokens": 8192,
+            },
         }
 
         # Save the request payload as a sidecar .request file
@@ -1023,6 +1036,10 @@ class ExtractionService:
                         ],
                     }
                 ],
+                inferenceConfig={
+                    "temperature": 0.0,
+                    "maxTokens": 8192,
+                },
             )
 
         try:
@@ -1061,8 +1078,15 @@ class ExtractionService:
             logger.warning("Failed to write debug JSON %s: %s", json_path, exc)
 
         # Extract text from the Converse API response
+        # With thinking enabled, the response content may include both "thinking"
+        # blocks and "text" blocks. We want only the text block(s).
         try:
-            raw_content = response["output"]["message"]["content"][0]["text"]
+            content_blocks = response["output"]["message"]["content"]
+            text_parts = []
+            for block in content_blocks:
+                if "text" in block:
+                    text_parts.append(block["text"])
+            raw_content = "\n".join(text_parts) if text_parts else ""
         except (KeyError, IndexError, TypeError) as exc:
             raise ExtractionParseError(
                 message=f"Unexpected Bedrock response structure: {exc}",
