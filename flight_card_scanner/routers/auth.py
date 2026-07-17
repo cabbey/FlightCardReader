@@ -86,6 +86,7 @@ async def login_page(request: Request, next: str | None = None):
         raise RuntimeError("Auth router not configured.")
     return _templates.TemplateResponse(
         name="login.html",
+        request=request,
         context={
             "request": request,
             "next": next or "/",
@@ -119,6 +120,7 @@ async def login_submit(request: Request):
             )
         return _templates.TemplateResponse(
             name="login.html",
+            request=request,
             context={
                 "request": request,
                 "next": next_url,
@@ -143,6 +145,7 @@ async def login_submit(request: Request):
         )
         return _templates.TemplateResponse(
             name="login.html",
+            request=request,
             context={
                 "request": request,
                 "next": next_url,
@@ -226,6 +229,7 @@ async def admin_dashboard(request: Request):
 
     return _templates.TemplateResponse(
         name="admin.html",
+        request=request,
         context={
             "request": request,
             "current_mode": current_mode,
@@ -250,6 +254,7 @@ async def users_page(request: Request):
 
     return _templates.TemplateResponse(
         name="users.html",
+        request=request,
         context={
             "request": request,
             "users": users,
