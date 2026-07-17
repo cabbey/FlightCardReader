@@ -94,7 +94,8 @@ cd FlightCardReader
 python3 -m venv .venv
 source .venv/bin/activate
 pip install fastapi uvicorn[standard] sqlalchemy aiosqlite httpx \
-            pydantic jinja2 python-multipart pillow rapidfuzz segno
+            pydantic jinja2 python-multipart pillow rapidfuzz segno \
+            itsdangerous argon2-cffi
 pnpm install
 python -m flight_card_scanner
 ```
@@ -136,7 +137,8 @@ source .venv/bin/activate
 
 # Install Python dependencies
 pip install fastapi uvicorn[standard] sqlalchemy aiosqlite httpx \
-            pydantic jinja2 python-multipart
+            pydantic jinja2 python-multipart pillow rapidfuzz segno \
+            itsdangerous argon2-cffi
 ```
 
 Install the client-side JavaScript dependencies (OpenCV.js and motor database):
