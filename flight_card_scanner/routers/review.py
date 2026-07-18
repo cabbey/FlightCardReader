@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import AppConfig
 from ..database import get_db
 from ..models import FlightRecord
+from ..services.card_history_service import read_history, render_history_html
 from ..services.extraction_service import ExtractionService
 from ..services.record_service import motor_designation_str
 from ..services.record_service import normalize_length_to_mm, normalize_weight_to_g
@@ -766,6 +767,9 @@ async def detail_record(
             "event_dates": _build_event_dates(config),
             "show_all_fields": True,
             "current_user": getattr(request.state, "user", None),
+            "card_history_html": render_history_html(
+                read_history(record_obj.image_path, config.image_store_path)
+            ),
         },
     )
 
@@ -1293,5 +1297,8 @@ async def detail_record_impl(
             "event_dates": _build_event_dates(config),
             "show_all_fields": True,
             "current_user": getattr(request.state, "user", None),
+            "card_history_html": render_history_html(
+                read_history(record_obj.image_path, config.image_store_path)
+            ),
         },
     )

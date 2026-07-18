@@ -27,6 +27,7 @@ from ..exceptions import ImageStorageError
 from ..schemas import ScanResponse
 from ..services import image_service, record_service
 from ..services.audit_service import log_action
+from ..services.card_history_service import ACTION_CAPTURED, append_history
 from ..services.extraction_service import ExtractionService
 
 logger = logging.getLogger(__name__)
@@ -340,6 +341,14 @@ async def submit_card(
     actor = user.email if user else "anonymous"
     log_action(actor, "created", "flight_record", record.id)
 
+    # --- 5b. Card history log ---
+    append_history(
+        image_path=filename,
+        store_path=config.image_store_path,
+        who=actor,
+        what=ACTION_CAPTURED,
+    )
+
     # --- 6. Return success ---
     return ScanResponse(record_id=record.id)
 
@@ -482,5 +491,13 @@ async def submit_card_impl(
     user = getattr(request.state, "user", None)
     actor = user.email if user else "anonymous"
     log_action(actor, "created", "flight_record", record.id)
+
+    # Card history log
+    append_history(
+        image_path=filename,
+        store_path=config.image_store_path,
+        who=actor,
+        what=ACTION_CAPTURED,
+    )
 
     return ScanResponse(record_id=record.id)
