@@ -154,6 +154,12 @@ async def lifespan(app: FastAPI):
                 "No admin user exists and FCS_ADMIN_EMAIL/FCS_ADMIN_PASSWORD not set"
             )
 
+    # 1f. Initialize display name service (email → display name cache)
+    from .services.display_name_service import DisplayNameService
+    display_name_service = DisplayNameService(auth_session_factory)
+    await display_name_service.refresh()
+    app.state.display_name_service = display_name_service
+
     # 2. Check static assets
     _check_static_assets()
 

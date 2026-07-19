@@ -16,8 +16,9 @@ from __future__ import annotations
 import html
 import json
 import logging
-from datetime import datetime, timezone
+import time
 from pathlib import Path
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def append_history(
         history_path = _history_path_for_image(image_path, store_path)
 
         entry = {
-            "when": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "when": time.time(),
             "who": who,
             "what": what,
             "how": how,
@@ -127,15 +128,24 @@ def read_history(image_path: str, store_path: Path) -> list[dict]:
         return []
 
 
-def render_history_html(entries: list[dict]) -> str:
+def render_history_html(
+    entries: list[dict],
+    resolve_display_name: Callable[[str], str] | None = None,
+) -> str:
     """Render history entries as HTML for display.
 
     Each entry becomes a <div class="history-entry"> containing spans for
-    when, who, what, and how. The "how" field may contain <br> separators
-    which are preserved for multi-line details.
+    when, who, what, and how. The "when" field is stored as an epoch timestamp
+    and rendered to local time via a small inline script. The "who" field is
+    translated from an email address to a display name using the resolver
+    (if provided). The "how" field may contain <br> separators which are
+    preserved for multi-line details.
 
     Args:
         entries: List of history entry dicts from read_history().
+        resolve_display_name: Optional callable that maps an email string to
+            a display name. If None or if the email is not a user (e.g. LLM
+            actor strings), the raw value is shown.
 
     Returns:
         HTML string with all entries rendered as divs.
@@ -145,25 +155,59 @@ def render_history_html(entries: list[dict]) -> str:
 
     parts: list[str] = []
     for entry in entries:
-        when = html.escape(entry.get("when", ""))
-        who = html.escape(entry.get("who", ""))
-        what = html.escape(entry.get("what", ""))
+        when_raw = entry.get("when", 0)
+        # Support both epoch (float/int) and legacy ISO string timestamps
+        if isinstance(when_raw, (int, float)):
+            epoch_val = when_raw
+        else:
+            # Legacy ISO string — pass through as a data attribute for JS to ignore
+            epoch_val = when_raw
+
+        who_raw = entry.get("who", "")
+        # Resolve display name for email-style actors; LLM actors pass through
+        if resolve_display_name and "@" in who_raw:
+            who_display = resolve_display_name(who_raw)
+        else:
+            who_display = who_raw
+
+        who_escaped = html.escape(who_display)
+        what_escaped = html.escape(entry.get("what", ""))
         # For "how", preserve <br> tags but escape everything else
         how_raw = entry.get("how", "")
         how_escaped = "<br>".join(
             html.escape(segment) for segment in how_raw.split("<br>")
         )
 
+        # Render the timestamp span with a data-epoch attribute for JS rendering
+        if isinstance(epoch_val, (int, float)):
+            when_span = (
+                f'<span class="when" data-epoch="{epoch_val}"></span>'
+            )
+        else:
+            # Legacy ISO string fallback
+            when_span = f'<span class="when">{html.escape(str(epoch_val))}</span>'
+
         div = (
             f'<div class="history-entry">'
-            f'<span class="when">{when}</span> '
-            f'<span class="who">{who}</span> '
-            f'<span class="what">{what}</span>'
+            f'{when_span} '
+            f'<span class="who">{who_escaped}</span> '
+            f'<span class="what">{what_escaped}</span>'
         )
         if how_escaped:
             div += f' <span class="how">{how_escaped}</span>'
         div += '</div>'
         parts.append(div)
+
+    # Append a small inline script to render epoch timestamps to local time
+    parts.append(
+        '<script>'
+        'document.querySelectorAll(".history-entry .when[data-epoch]").forEach(function(el){'
+        'var ts=parseFloat(el.getAttribute("data-epoch"));'
+        'if(ts){var d=new Date(ts*1000);'
+        'el.textContent=d.toLocaleString();}'
+        '});'
+        '</script>'
+    )
 
     return "\n".join(parts)
 

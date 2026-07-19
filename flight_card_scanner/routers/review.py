@@ -768,7 +768,11 @@ async def detail_record(
             "show_all_fields": True,
             "current_user": getattr(request.state, "user", None),
             "card_history_html": render_history_html(
-                read_history(record_obj.image_path, config.image_store_path)
+                read_history(record_obj.image_path, config.image_store_path),
+                resolve_display_name=getattr(
+                    getattr(request.app.state, "display_name_service", None),
+                    "resolve", None,
+                ),
             ),
         },
     )
@@ -1298,7 +1302,11 @@ async def detail_record_impl(
             "show_all_fields": True,
             "current_user": getattr(request.state, "user", None),
             "card_history_html": render_history_html(
-                read_history(record_obj.image_path, config.image_store_path)
+                read_history(record_obj.image_path, config.image_store_path),
+                resolve_display_name=getattr(
+                    getattr(request.app.state, "display_name_service", None),
+                    "resolve", None,
+                ),
             ),
         },
     )
