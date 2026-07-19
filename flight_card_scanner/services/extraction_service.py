@@ -28,6 +28,11 @@ from flight_card_scanner.exceptions import (
     OllamaUnavailableError,
 )
 from flight_card_scanner.schemas import FlightCardExtraction
+from flight_card_scanner.services.card_history_service import (
+    ACTION_EXTRACTED,
+    append_history,
+    format_extraction_details,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -744,6 +749,19 @@ class ExtractionService:
         except OSError as exc:
             logger.warning("Failed to write debug JSON %s: %s", json_path, exc)
 
+        # Log card history for extraction
+        input_tokens = data.get("prompt_eval_count")
+        output_tokens = data.get("eval_count")
+        how_details = format_extraction_details(_elapsed, input_tokens, output_tokens)
+        who_label = f"Ollama qwen3-vl at {client.base_url}"
+        append_history(
+            image_path=image_path,
+            store_path=self._config.image_store_path,
+            who=who_label,
+            what=ACTION_EXTRACTED,
+            how=how_details,
+        )
+
         # Parse the response
         raw_content = data["message"]["content"]
 
@@ -1076,6 +1094,20 @@ class ExtractionService:
             json_path.write_text(json.dumps(debug_response, indent=2, ensure_ascii=False, default=str))
         except OSError as exc:
             logger.warning("Failed to write debug JSON %s: %s", json_path, exc)
+
+        # Log card history for Bedrock extraction
+        usage = response.get("usage", {})
+        input_tokens = usage.get("inputTokens")
+        output_tokens = usage.get("outputTokens")
+        how_details = format_extraction_details(_elapsed, input_tokens, output_tokens)
+        who_label = f"Bedrock {model_id}"
+        append_history(
+            image_path=image_path,
+            store_path=self._config.image_store_path,
+            who=who_label,
+            what=ACTION_EXTRACTED,
+            how=how_details,
+        )
 
         # Extract text from the Converse API response
         # With thinking enabled, the response content may include both "thinking"

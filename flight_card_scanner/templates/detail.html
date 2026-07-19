@@ -1225,6 +1225,62 @@
   </div>
 </div>
 
+{% if card_history_html %}
+<details class="card-history-section" open>
+  <summary>Card History</summary>
+  <div class="card-history-entries">
+    {{ card_history_html | safe }}
+  </div>
+</details>
+<style>
+.card-history-section {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.card-history-section summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+}
+.card-history-entries {
+  margin-top: 0.5rem;
+}
+.card-history-entries .history-entry {
+  border-bottom: 1px solid #e0e0e0;
+  padding: 6px 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.card-history-entries .history-entry:last-child {
+  border-bottom: none;
+}
+.card-history-entries .when {
+  color: #6b7280;
+  font-size: 12px;
+}
+.card-history-entries .who {
+  font-weight: 600;
+  color: #1f2937;
+}
+.card-history-entries .what {
+  color: #1a73e8;
+  font-style: italic;
+}
+.card-history-entries .how {
+  color: #4b5563;
+  font-size: 12px;
+  display: block;
+  margin-top: 2px;
+  padding-left: 1rem;
+}
+</style>
+{% endif %}
+
 {% if llm_content_json or llm_thinking or llm_content_thinking %}
 <details class="raw-json-section">
   <summary>Interpreted LLM Output</summary>
