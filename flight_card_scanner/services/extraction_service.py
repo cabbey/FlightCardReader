@@ -753,7 +753,7 @@ class ExtractionService:
         input_tokens = data.get("prompt_eval_count")
         output_tokens = data.get("eval_count")
         how_details = format_extraction_details(_elapsed, input_tokens, output_tokens)
-        who_label = f"Ollama qwen3-vl @ {client.base_url}"
+        who_label = f"Ollama qwen3-vl at {client.base_url}"
         append_history(
             image_path=image_path,
             store_path=self._config.image_store_path,
