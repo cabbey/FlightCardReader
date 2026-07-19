@@ -1,0 +1,24 @@
+{
+  "project_type": "Python FastAPI web application for digitizing rocketry flight cards using LLM vision models",
+  "language": "Python 3.12",
+  "build_system": "pip (no requirements.txt - deps listed in Dockerfile), pnpm for JS assets",
+  "test_framework": "pytest with hypothesis for property-based tests, located in tests/",
+  "build_command": "docker build -t flight-card-scanner .",
+  "test_command": "cd /projects/sandbox/FlightCardReader && .venv/bin/python -m pytest tests/ -v",
+  "verification_instructions": "1. Create .venv with Python 3.12 (pyenv shell 3.12.13 && python -m venv .venv). 2. Install deps. 3. Run pytest. 4. Optionally run docker build.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "pyenv shell 3.12.13 && python -m venv .venv && .venv/bin/pip install fastapi[standard] uvicorn[standard] 'sqlalchemy[asyncio]' aiosqlite httpx pydantic jinja2 Pillow rapidfuzz segno argon2-cffi itsdangerous pytest hypothesis boto3",
+  "environment_constraints": "No .venv currently exists - must be created. pyenv has Python 3.12.13 available. Network is open for installing packages.",
+  "contribution_requirements": "No CONTRIBUTING.md found. Follow existing patterns in the codebase.",
+  "key_patterns": "EndpointConfig is a dataclass in config.py with url and concurrency fields. _parse_endpoint() parses JSON dicts into EndpointConfig. ExtractionService._worker() creates httpx.AsyncClient with base_url=endpoint.url and calls _call_ollama(). The endpoint_semaphores dict is keyed by ep.url. The event_manager passes app_config.extraction_endpoints to ExtractionService.",
+  "relevant_files": [
+    "flight_card_scanner/config.py",
+    "flight_card_scanner/services/extraction_service.py",
+    "flight_card_scanner/exceptions.py",
+    "flight_card_scanner/event_manager.py",
+    "Dockerfile",
+    "tests/test_config_loading_fidelity.py",
+    "tests/test_preservation_non_path_keys.py"
+  ],
+  "directory_structure": "flight_card_scanner/ is the Python package with main.py, config.py, services/, routers/, etc. tests/ contains pytest test files. No requirements.txt - deps are only in the Dockerfile pip install line."
+}

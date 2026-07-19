@@ -57,7 +57,10 @@ RUN pip install --no-cache-dir \
         jinja2 \
         Pillow \
         rapidfuzz \
-        segno
+        segno \
+        argon2-cffi \
+        itsdangerous \
+        boto3
 
 
 # =====  Stage 3: Final minimal runtime image  =====

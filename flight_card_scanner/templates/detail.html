@@ -763,20 +763,30 @@
     color: #4b5563;
     font-size: 0.85rem;
   }
+
+  /* Bottom spacing */
+  .detail-bottom-spacer {
+    height: 3rem;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+{# Derive current_user from session middleware for conditional rendering #}
+{% set current_user = request.state.user if request and request.state else None %}
+{% set can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry") %}
+{% set is_admin = current_user and current_user.role == "admin" %}
+
 <nav class="record-nav">
-  <a href="/" class="back-link" id="backToList">&larr; Back to list</a>
+  <a href="{{ event_base_url|default('', true) }}/" class="back-link" id="backToList">&larr; Back to list</a>
   <span class="prev-next">
     {% if prev_id %}
-    <a href="/record/{{ prev_id }}">&larr; Prev</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ prev_id }}">&larr; Prev</a>
     {% else %}
     <span class="disabled">&larr; Prev</span>
     {% endif %}
     {% if next_id %}
-    <a href="/record/{{ next_id }}">Next &rarr;</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ next_id }}">Next &rarr;</a>
     {% else %}
     <span class="disabled">Next &rarr;</span>
     {% endif %}
@@ -788,8 +798,11 @@
     <h2>Record #{{ record.id }}</h2>
     <span class="badge badge-{{ record.extraction_status }}">{{ record.extraction_status.replace("_", " ") }}</span>
     <span class="header-meta">{{ record.created_at.strftime("%Y-%m-%d %H:%M") if record.created_at else "" }}</span>
+    {% if can_mutate %}
     <span class="edit-hint">(click any value to edit)</span>
+    {% endif %}
   </div>
+  {% if can_mutate %}
   <div class="header-actions">
     <button type="button" class="btn-save" id="btnSave" disabled>Save Changes</button>
     <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">Cancel</button>
@@ -805,8 +818,11 @@
     {% if not record.human_verified %}
     <button type="button" class="btn-extract" id="btnExtract">Extract</button>
     {% endif %}
+    {% if is_admin %}
     <button type="button" class="btn-redundant" id="btnRedundant" style="font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #dc2626; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:0.5rem;">Remove (Redundant)</button>
+    {% endif %}
   </div>
+  {% endif %}
 </div>
 
 <div class="detail-layout">
@@ -973,17 +989,17 @@
                 <span class="motor-qty-display" data-motor-index="{{ loop.index0 }}" data-value="{{ motor.quantity or 1 }}" title="Click to edit quantity">{{ motor.quantity or 1 }}×</span>
                 {% if motor.thrustcurve_id and motor.thrustcurve_data %}
                 <span class="motor-designation">
-                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
+                  <a href="{{ motor.thrustcurve_data.source_url or ('https://www.thrustcurve.org/motors/' ~ motor.thrustcurve_data.manufacturerAbbrev ~ '/' ~ motor.thrustcurve_data.designation | replace('/', '%2F') ~ '/') }}" target="_blank" rel="noopener" class="tc-motor-link">{{ motor.thrustcurve_data.manufacturerAbbrev }} {{ motor.thrustcurve_data.commonName | display_fractions }}{% if motor.thrustcurve_data.propInfo %} ({{ motor.thrustcurve_data.propInfo }}){% endif %}</a>
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% elif motor.thrustcurve_id %}
                 <span class="motor-designation">
-                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ (motor.letter ~ motor.number) | display_fractions }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
                 </span>
                 <span class="tc-status tc-resolved" title="ThrustCurve ID: {{ motor.thrustcurve_id }}">✓</span>
                 {% else %}
                 <span class="motor-designation">
-                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ motor.letter }}{{ motor.number }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
+                  {{ motor.manufacturer or "" }}{{ " " if motor.manufacturer else "" }}{{ (motor.leading_number ~ "-") if motor.leading_number else "" }}{{ (motor.letter ~ motor.number) | display_fractions }}{{ (" - " ~ motor.suffix) if motor.suffix else "" }}
                 </span>
                 {% endif %}
                 {% if motor.thrustcurve_candidates %}
@@ -992,7 +1008,7 @@
                   <select class="tc-candidate-select" data-motor-index="{{ loop.index0 }}">
                     <option value="">— Select motor —</option>
                     {% for candidate in motor.thrustcurve_candidates %}
-                    <option value="{{ candidate.motorId }}">{{ candidate.manufacturer or "" }} {{ candidate.commonName or candidate.designation or "" }}{% if candidate.propInfo %} ({{ candidate.propInfo }}){% endif %}{% if candidate.totImpulseNs %} {{ "%.1f"|format(candidate.totImpulseNs) }}Ns{% endif %}{% if candidate.diameter %} {{ candidate.diameter }}mm{% endif %}</option>
+                    <option value="{{ candidate.motorId }}">{{ candidate.manufacturer or "" }} {{ (candidate.commonName or candidate.designation or "") | display_fractions }}{% if candidate.propInfo %} ({{ candidate.propInfo }}){% endif %}{% if candidate.totImpulseNs %} {{ "%.1f"|format(candidate.totImpulseNs) }}Ns{% endif %}{% if candidate.diameter %} {{ candidate.diameter }}mm{% endif %}</option>
                     {% endfor %}
                   </select>
                 </div>
@@ -1001,6 +1017,7 @@
                 {% elif not motor.thrustcurve_id %}
                 <span class="tc-status tc-pending">? Not looked up</span>
                 {% endif %}
+                {% if can_mutate %}
                 <div class="tc-search-form" data-motor-index="{{ loop.index0 }}">
                   <button type="button" class="btn-tc-search" data-motor-index="{{ loop.index0 }}" title="Search ThrustCurve">🔍</button>
                   <button type="button" class="btn-tc-select" data-motor-index="{{ loop.index0 }}" style="{{ '' if motor.thrustcurve_candidates else 'display:none;' }}">Select</button>
@@ -1052,6 +1069,7 @@
                     </div>
                   </div>
                 </div>
+                {% endif %}
               </div>
               {% else %}
                 {# Legacy nested format #}
@@ -1060,16 +1078,22 @@
                 {% endfor %}{% if not loop.last %} / {% endif %}
               {% endif %}
             {% endfor %}
+            {% if can_mutate %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
+            {% endif %}
           </dd>
           {% else %}
           <dt>Motors</dt>
           <dd>
+            {% if can_mutate %}
             <div class="motor-add-row">
               <button type="button" class="btn-motor-add" id="btnAddMotor" title="Add a motor">+ Add Motor</button>
             </div>
+            {% else %}
+            <span>—</span>
+            {% endif %}
           </dd>
           {% endif %}
 
@@ -1231,6 +1255,8 @@
   <img id="lightboxImg" src="" alt="Full size flight card">
 </div>
 
+<div class="detail-bottom-spacer"></div>
+
 <script>
 (function() {
   // --- Update "Back to list" link with saved filter/sort prefs ---
@@ -1262,26 +1288,47 @@
   function getListUrl() {
     var STORAGE_KEY = 'fcs_list_prefs';
     var TTL_MS = 60 * 60 * 1000;
+    var base = eventBaseUrl || '';
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return '/';
+      if (!raw) return base + '/';
       var data = JSON.parse(raw);
-      if (Date.now() - data.ts > TTL_MS) return '/';
-      var parts = ['/?page=1'];
+      if (Date.now() - data.ts > TTL_MS) return base + '/';
+      var parts = [base + '/?page=1'];
       if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
       if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
       if (data.status) parts.push('status=' + encodeURIComponent(data.status));
       if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
-      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : '/';
-    } catch(e) { return '/'; }
+      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : base + '/';
+    } catch(e) { return base + '/'; }
   }
 
   var recordId = {{ record.id }};
+  var eventBaseUrl = '{{ event_base_url|default("", true) }}';
   var pendingChanges = {};
   var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
 
+  // Convert ASCII fraction prefixes to unicode for display
+  function displayFractions(s) {
+    if (!s) return s;
+    return s.replace(/1\/2A/g, '\u00bdA').replace(/1\/4A/g, '\u00bcA');
+  }
+
+  var isReadOnly = {{ 'true' if not can_mutate else 'false' }};
+
   // --- Inline editing logic ---
 
+  if (isReadOnly) {
+    // In read-only mode, remove cursor styling from editable fields
+    document.querySelectorAll('.editable-field .field-display').forEach(function(el) {
+      el.style.cursor = 'default';
+    });
+    document.querySelectorAll('.motor-qty-display').forEach(function(el) {
+      el.style.cursor = 'default';
+    });
+  }
+
+  if (!isReadOnly) {
   document.querySelectorAll('.editable-field').forEach(function(wrapper) {
     var display = wrapper.querySelector('.field-display');
     display.addEventListener('click', function() {
@@ -1516,7 +1563,7 @@
       body['overflow'] = merged;
     }
 
-    fetch('/api/admin/record/' + recordId, {
+    fetch(eventBaseUrl + '/api/admin/record/' + recordId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1645,7 +1692,7 @@
         }
       }
 
-      fetch('/api/admin/record/' + recordId, {
+      fetch(eventBaseUrl + '/api/admin/record/' + recordId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -1654,11 +1701,11 @@
         if (res.ok) {
           showFeedback('Verified!', false);
           // Navigate to next unverified card, or back to list
-          fetch('/api/admin/next-unverified?after=' + recordId)
+          fetch(eventBaseUrl + '/api/admin/next-unverified?after=' + recordId)
             .then(function(r) { return r.json(); })
             .then(function(data) {
               if (data.id) {
-                window.location.href = '/record/' + data.id;
+                window.location.href = eventBaseUrl + '/record/' + data.id;
               } else {
                 window.location.href = getListUrl();
               }
@@ -1722,7 +1769,7 @@
   var btnRequeue = document.getElementById('btnRequeue');
   if (btnRequeue) {
     btnRequeue.addEventListener('click', function() {
-      fetch('/api/admin/requeue/' + recordId, { method: 'POST' })
+      fetch(eventBaseUrl + '/api/admin/requeue/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
@@ -1770,7 +1817,7 @@
 
       btnExtract.disabled = true;
       btnExtract.textContent = 'Extracting…';
-      fetch('/api/admin/extract/' + recordId, { method: 'POST' })
+      fetch(eventBaseUrl + '/api/admin/extract/' + recordId, { method: 'POST' })
         .then(function(res) {
           if (res.ok) {
             location.reload();
@@ -1803,7 +1850,7 @@
       }
       btnRedundant.disabled = true;
       btnRedundant.textContent = 'Deleting…';
-      fetch('/api/admin/record/' + recordId, { method: 'DELETE' })
+      fetch(eventBaseUrl + '/api/admin/record/' + recordId, { method: 'DELETE' })
         .then(function(res) {
           if (res.ok) {
             window.location.href = getListUrl();
@@ -1970,7 +2017,7 @@
       var html = '<select class="tc-candidate-select" data-motor-index="' + idx + '">';
       html += '<option value="">— Select motor (' + results.length + ' found) —</option>';
       results.forEach(function(c) {
-        html += '<option value="' + c.motorId + '">' + (c.manufacturerAbbrev || '') + ' ' + (c.commonName || c.designation || '');
+        html += '<option value="' + c.motorId + '">' + (c.manufacturerAbbrev || '') + ' ' + displayFractions(c.commonName || c.designation || '');
         if (c.propInfo) html += ' (' + c.propInfo + ')';
         if (c.totImpulseNs) html += ' ' + c.totImpulseNs.toFixed(1) + 'Ns';
         if (c.diameter) html += ' ' + c.diameter + 'mm';
@@ -2055,7 +2102,10 @@
       var entry = document.querySelector('.motor-entry[data-motor-index="' + idx + '"]');
 
       // Extract letter/number from the query for search context
-      var match = query.match(/^(1\/[248]A|[A-O])(\d+)/i);
+      var normalizedQuery = query.toUpperCase()
+        .replace(/½/g, '1/2')
+        .replace(/¼/g, '1/4');
+      var match = normalizedQuery.match(/^(1\/[24]A|[A-O])(\d+)/);
       var searchContext = {};
       if (match) {
         searchContext.letter = match[1].toUpperCase();
@@ -2185,7 +2235,8 @@
     // Update the motor designation span to show TC info with link
     var desig = entry.querySelector('.motor-designation');
     if (desig && motorData && motorData.commonName) {
-      var label = (motorData.manufacturerAbbrev || '') + ' ' + motorData.commonName;
+      var displayName = displayFractions(motorData.commonName);
+      var label = (motorData.manufacturerAbbrev || '') + ' ' + displayName;
       if (motorData.propInfo) label += ' (' + motorData.propInfo + ')';
       if (motorData.source_url) {
         desig.innerHTML = '<a href="' + motorData.source_url + '" target="_blank" rel="noopener" class="tc-motor-link">' + label + '</a>';
@@ -2417,6 +2468,7 @@
       updateSaveButton();
     });
   }
+  } // end if (!isReadOnly)
 })();
 </script>
 {% endblock %}

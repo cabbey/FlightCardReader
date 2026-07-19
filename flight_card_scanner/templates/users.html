@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .users-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+  }
+  .users-table th,
+  .users-table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .users-table th {
+    font-weight: 600;
+    background: #f5f5f5;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+  }
+  .badge-admin { background: #e3f2fd; color: #1565c0; }
+  .badge-data-entry { background: #e8f5e9; color: #2e7d32; }
+  .badge-active { background: #e8f5e9; color: #2e7d32; }
+  .badge-inactive { background: #fbe9e7; color: #c62828; }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    color: #1565c0;
+    text-decoration: none;
+  }
+  .back-link:hover { text-decoration: underline; }
+  .create-form {
+    max-width: 500px;
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .create-form h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  .create-form label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+  .create-form input,
+  .create-form select {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  .btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: #1565c0;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #0d47a1; }
+  .btn-secondary {
+    background: #e0e0e0;
+    color: #333;
+  }
+  .btn-secondary:hover { background: #bdbdbd; }
+  .btn-small {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  .actions-cell {
+    white-space: nowrap;
+  }
+  .actions-cell button {
+    margin-right: 0.25rem;
+  }
+  .message {
+    padding: 0.5rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+    font-size: 0.9rem;
+  }
+  .message-success { background: #e8f5e9; color: #2e7d32; }
+  .message-error { background: #fbe9e7; color: #c62828; }
+  .edit-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .edit-modal-overlay.active {
+    display: flex;
+  }
+  .edit-modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .edit-modal h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  .edit-modal label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+  .edit-modal input,
+  .edit-modal select {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  .edit-modal .btn-row {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>User Management</h2>
+
+<div id="message-area"></div>
+
+{% if current_user and current_user.role == "admin" %}
+<table class="users-table">
+  <thead>
+    <tr>
+      <th>Email</th>
+      <th>Display Name</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr data-user-id="{{ user.id }}">
+      <td>{{ user.email }}</td>
+      <td>{{ user.display_name }}</td>
+      <td>
+        {% if user.role == "admin" %}
+          <span class="badge badge-admin">admin</span>
+        {% else %}
+          <span class="badge badge-data-entry">data_entry</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if user.active %}
+          <span class="badge badge-active">active</span>
+        {% else %}
+          <span class="badge badge-inactive">inactive</span>
+        {% endif %}
+      </td>
+      <td class="actions-cell">
+        <button class="btn btn-secondary btn-small" onclick="openEditModal({{ user.id }}, '{{ user.display_name | e }}', '{{ user.role }}', {{ 'true' if user.active else 'false' }})">Edit</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<details>
+  <summary><strong>Create New User</strong></summary>
+  <div class="create-form">
+    <form id="create-user-form" onsubmit="createUser(event)">
+      <label for="new-email">Email</label>
+      <input type="email" id="new-email" name="email" maxlength="254" required>
+
+      <label for="new-display-name">Display Name</label>
+      <input type="text" id="new-display-name" name="display_name" maxlength="100" required>
+
+      <label for="new-password">Password</label>
+      <input type="password" id="new-password" name="password" minlength="8" maxlength="128" required>
+
+      <label for="new-role">Role</label>
+      <select id="new-role" name="role" required>
+        <option value="data_entry">data_entry</option>
+        <option value="admin">admin</option>
+      </select>
+
+      <button type="submit" class="btn btn-primary">Create User</button>
+    </form>
+  </div>
+</details>
+
+<!-- Edit User Modal -->
+<div class="edit-modal-overlay" id="edit-modal-overlay">
+  <div class="edit-modal">
+    <h3>Edit User</h3>
+    <form id="edit-user-form" onsubmit="saveEditUser(event)">
+      <input type="hidden" id="edit-user-id">
+
+      <label for="edit-display-name">Display Name</label>
+      <input type="text" id="edit-display-name" name="display_name" maxlength="100">
+
+      <label for="edit-role">Role</label>
+      <select id="edit-role" name="role">
+        <option value="data_entry">data_entry</option>
+        <option value="admin">admin</option>
+      </select>
+
+      <label for="edit-active">Status</label>
+      <select id="edit-active" name="active">
+        <option value="true">active</option>
+        <option value="false">inactive</option>
+      </select>
+
+      <label for="edit-password">New Password (leave blank to keep current)</label>
+      <input type="password" id="edit-password" name="password" minlength="8" maxlength="128" placeholder="Leave blank to keep current">
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function showMessage(text, type) {
+  var area = document.getElementById('message-area');
+  area.innerHTML = '<div class="message message-' + type + '">' + text + '</div>';
+  setTimeout(function() { area.innerHTML = ''; }, 5000);
+}
+
+function createUser(e) {
+  e.preventDefault();
+  var body = {
+    email: document.getElementById('new-email').value,
+    display_name: document.getElementById('new-display-name').value,
+    password: document.getElementById('new-password').value,
+    role: document.getElementById('new-role').value
+  };
+  fetch('/api/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(resp) {
+    if (resp.ok) {
+      showMessage('User created successfully.', 'success');
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      return resp.json().then(function(data) {
+        showMessage(data.detail || 'Failed to create user.', 'error');
+      });
+    }
+  }).catch(function() {
+    showMessage('Network error. Please try again.', 'error');
+  });
+}
+
+function openEditModal(userId, displayName, role, active) {
+  document.getElementById('edit-user-id').value = userId;
+  document.getElementById('edit-display-name').value = displayName;
+  document.getElementById('edit-role').value = role;
+  document.getElementById('edit-active').value = active ? 'true' : 'false';
+  document.getElementById('edit-password').value = '';
+  document.getElementById('edit-modal-overlay').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal-overlay').classList.remove('active');
+}
+
+function saveEditUser(e) {
+  e.preventDefault();
+  var userId = document.getElementById('edit-user-id').value;
+  var body = {};
+  var displayName = document.getElementById('edit-display-name').value;
+  var role = document.getElementById('edit-role').value;
+  var active = document.getElementById('edit-active').value === 'true';
+  var password = document.getElementById('edit-password').value;
+
+  if (displayName) body.display_name = displayName;
+  body.role = role;
+  body.active = active;
+  if (password) body.password = password;
+
+  fetch('/api/admin/users/' + userId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(resp) {
+    if (resp.ok) {
+      showMessage('User updated successfully.', 'success');
+      closeEditModal();
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      return resp.json().then(function(data) {
+        showMessage(data.detail || 'Failed to update user.', 'error');
+      });
+    }
+  }).catch(function() {
+    showMessage('Network error. Please try again.', 'error');
+  });
+}
+
+// Close modal on overlay click
+document.getElementById('edit-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+</script>
+{% else %}
+<p>You do not have permission to view this page.</p>
+{% endif %}
+{% endblock %}

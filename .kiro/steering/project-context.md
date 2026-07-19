@@ -21,6 +21,60 @@ This is a FastAPI web application that scans physical flight cards from model ro
 - **Templates:** Jinja2 in `flight_card_scanner/templates/`
 - **Static:** OpenCV.js + thrustcurve-db in `flight_card_scanner/static/js/`
 
+### Authentication & Authorization
+
+**Auth Service (`services/auth_service.py`):**
+- `AuthService` class: user CRUD, session management, rate limiting
+- Password hashing: Argon2id via `argon2-cffi`, timing-safe authentication (always runs verify even for non-existent users)
+- Session creation: `secrets.token_urlsafe(32)`, stored in auth DB
+- Session validation: idle timeout (configurable, default 8h), hard max lifetime (8h admin / 120h data_entry)
+- IP binding: strict for admin (invalidate on IP change), soft for data_entry (log and continue)
+- Rate limiting: in-memory, 5 attempts per 15-min sliding window, resets on success
+
+**Auth Database (`auth_database.py`):**
+- Separate SQLite DB (not event DB) — persists across event DB rotations
+- Two tables: `users` (id, email, display_name, password_hash, role, active, created_at) and `sessions` (id, user_id, created_at, last_active, is_valid, client_ip)
+- `AuthBase` is separate from event DB's `Base`
+
+**Session Middleware (`middleware/session_middleware.py`):**
+- ASGI middleware wrapping the app
+- Decodes signed cookie (itsdangerous `URLSafeSerializer`)
+- Calls `auth_service.validate_session()` with client_ip
+- Attaches user (or `None`) to `request.state.user`
+- Clears cookie on invalid/expired session
+
+**Role Dependency (`dependencies/auth.py`):**
+- `Role` IntEnum: PUBLIC=0, DATA_ENTRY=1, ADMIN=2
+- `require_role(min_role)` dependency factory
+- API heuristic: `/api/` prefix or `Accept: application/json`
+
+**Audit Service (`services/audit_service.py`):**
+- JSON Lines format to a dedicated file (Python logging module, "audit" logger)
+- `log_action(actor, action, object_type, object_id, details)`
+- Fire-and-forget: catches all exceptions, logs to app logger
+- Actions: created, updated, deleted, extracted, requeued, login, logout, login_failed, ip_changed
+- Never logs plaintext passwords
+
+**Auth Router (`routers/auth.py`):**
+- `GET /login`, `POST /login`, `GET /logout`
+- `GET /admin/users` (HTML), `GET /api/admin/users`, `POST /api/admin/users`, `PUT /api/admin/users/{id}`
+- Self-demotion/self-deactivation prevention
+- Session invalidation on user deactivation
+
+**Protected Endpoints:**
+- `scan.py`: `POST /api/scan` → DATA_ENTRY
+- `admin.py`: all mutating → DATA_ENTRY; DELETE → ADMIN
+- `review.py`, `reports.py`: all GET → PUBLIC (no auth required)
+
+**Template Conditional Rendering:**
+- `can_mutate = (not read_only) and current_user and current_user.role in ("admin", "data_entry")`
+- `is_admin = current_user and current_user.role == "admin"`
+- Server-side exclusion via Jinja2 `{% if %}` blocks
+
+**Default Admin Creation:**
+- On startup: if no admin exists and `FCS_ADMIN_EMAIL` + `FCS_ADMIN_PASSWORD` env vars are set → create admin
+- If env vars missing → log warning, continue
+
 ### Database
 
 SQLite via SQLAlchemy async (`aiosqlite`). Single table `flight_records` with:
@@ -125,6 +179,8 @@ In `_call_ollama` → `_parse_response`:
 - httpx (for Ollama calls)
 - Pillow (image resizing)
 - rapidfuzz (flier matching)
+- argon2-cffi (password hashing)
+- itsdangerous (cookie signing)
 
 ### Key Dependencies (JS/Static)
 
@@ -135,6 +191,8 @@ In `_call_ollama` → `_parse_response`:
 
 - `config.json` at project root
 - Key fields: `event_name`, `event_date_range` (start/end), `extraction_endpoints[]` (url, concurrency), `extraction_mode`, `known_fliers_path`, `auto_accept_threshold`, `image_store_path`, `db_path`
+- Auth config: `auth_db_path` (default `./auth.db`), `session_timeout_hours` (default 8, range [0.25, 8]), `audit_log_path` (default `{event_data_path}/audit.log`)
+- Environment: `FCS_SESSION_SECRET` (required, ≥16 chars), `FCS_ADMIN_EMAIL`, `FCS_ADMIN_PASSWORD`
 
 ## Known Issues / TODOs
 

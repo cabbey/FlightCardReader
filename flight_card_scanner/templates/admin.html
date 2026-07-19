@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .admin-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .admin-section h2 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  .mode-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .mode-control label {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .mode-control select {
+    font-size: 0.9rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+
+  .admin-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .admin-actions button {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .btn-trigger { background: #2563eb; }
+  .btn-trigger:hover { background: #1d4ed8; }
+  .btn-requeue { background: #dc2626; }
+  .btn-requeue:hover { background: #b91c1c; }
+
+  .admin-links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .admin-links li {
+    margin-bottom: 0.5rem;
+  }
+
+  .admin-links a {
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .admin-links a:hover {
+    text-decoration: underline;
+  }
+
+  .status-msg {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: #065f46;
+    display: none;
+  }
+
+  .status-msg.visible {
+    display: block;
+  }
+
+  .status-msg.error {
+    color: #991b1b;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-section">
+  <h2>Extraction Control</h2>
+  <div class="mode-control">
+    <label for="modeSelect">Extraction Mode:</label>
+    <select id="modeSelect" name="mode">
+      <option value="immediate" {% if current_mode == "immediate" %}selected{% endif %}>Immediate</option>
+      <option value="deferred" {% if current_mode == "deferred" %}selected{% endif %}>Deferred</option>
+    </select>
+  </div>
+  <div class="admin-actions">
+    <button type="button" class="btn-trigger" id="btnTrigger">Trigger All Pending</button>
+    <button type="button" class="btn-requeue" id="btnRequeue">Re-queue All Failed</button>
+  </div>
+  <div class="status-msg" id="statusMsg"></div>
+</div>
+
+<div class="admin-section">
+  <h2>Management</h2>
+  <ul class="admin-links">
+    <li><a href="/admin/users">&#x1F465; User Management</a></li>
+    <li><a href="{{ event_base_url|default('', true) }}/queue">&#x1F4CB; Extraction Queue</a></li>
+  </ul>
+</div>
+
+<script>
+(function() {
+  var statusMsg = document.getElementById('statusMsg');
+
+  function showMsg(text, isError) {
+    statusMsg.textContent = text;
+    statusMsg.className = 'status-msg visible' + (isError ? ' error' : '');
+    setTimeout(function() { statusMsg.className = 'status-msg'; }, 4000);
+  }
+
+  // Mode switch
+  document.getElementById('modeSelect').addEventListener('change', function() {
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: this.value })
+    }).then(function(res) {
+      if (res.ok) { showMsg('Mode updated.', false); }
+      else { showMsg('Failed to switch mode.', true); }
+    }).catch(function() { showMsg('Network error.', true); });
+  });
+
+  // Trigger All Pending
+  document.getElementById('btnTrigger').addEventListener('click', function() {
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/trigger', { method: 'POST' })
+      .then(function(res) { return res.json(); })
+      .then(function(data) { showMsg('Dispatched ' + data.dispatched + ' record(s).', false); })
+      .catch(function() { showMsg('Network error.', true); });
+  });
+
+  // Re-queue All Failed
+  document.getElementById('btnRequeue').addEventListener('click', function() {
+    var baseUrl = '{{ event_base_url|default("", true) }}';
+    fetch(baseUrl + '/api/admin/requeue', { method: 'POST' })
+      .then(function(res) { return res.json(); })
+      .then(function(data) { showMsg('Re-queued ' + data.requeued + ' record(s).', false); })
+      .catch(function() { showMsg('Network error.', true); });
+  });
+})();
+</script>
+{% endblock %}
