@@ -82,13 +82,15 @@ def generate_markdown_report(
     # --- Timing Comparison ---
     lines.append("## Timing Comparison")
     lines.append("")
-    lines.append("| Model | Total Time | Avg Time | Min Time | Max Time | Median Time |")
-    lines.append("|-------|------------|----------|----------|----------|-------------|")
+    lines.append("| Model | Backend | Total Time | Avg Time | Min Time | Max Time | Median Time |")
+    lines.append("|-------|---------|------------|----------|----------|----------|-------------|")
 
     for sc in scorecards:
         timing = run_metadata.get("model_results", {}).get(sc.model_name, {})
+        backend = timing.get("backend", "ollama")
         lines.append(
             f"| {sc.model_name} | "
+            f"{backend} | "
             f"{_sec(timing.get('total_time_seconds', 0))} | "
             f"{_sec(timing.get('avg_time_seconds', 0))} | "
             f"{_sec(timing.get('min_time_seconds', 0))} | "
@@ -97,6 +99,34 @@ def generate_markdown_report(
         )
 
     lines.append("")
+
+    # --- Token Usage Comparison ---
+    # Only show if any model has token data
+    has_token_data = any(
+        run_metadata.get("model_results", {}).get(sc.model_name, {}).get("total_tokens", 0) > 0
+        for sc in scorecards
+    )
+    if has_token_data:
+        lines.append("## Token Usage")
+        lines.append("")
+        lines.append("| Model | Total Tokens | Avg Input | Avg Output | Avg Total |")
+        lines.append("|-------|--------------|-----------|------------|-----------|")
+
+        for sc in scorecards:
+            timing = run_metadata.get("model_results", {}).get(sc.model_name, {})
+            total_tok = timing.get("total_tokens", 0)
+            avg_in = timing.get("avg_input_tokens", 0)
+            avg_out = timing.get("avg_output_tokens", 0)
+            avg_tot = timing.get("avg_total_tokens", 0)
+            lines.append(
+                f"| {sc.model_name} | "
+                f"{total_tok:,} | "
+                f"{avg_in:,.0f} | "
+                f"{avg_out:,.0f} | "
+                f"{avg_tot:,.0f} |"
+            )
+
+        lines.append("")
 
     # --- Category Breakdown ---
     lines.append("## Accuracy by Category")
@@ -223,6 +253,14 @@ def generate_json_report(
                 "max_seconds": timing.get("max_time_seconds"),
                 "total_seconds": timing.get("total_time_seconds"),
             },
+            "tokens": {
+                "total_input": timing.get("total_input_tokens"),
+                "total_output": timing.get("total_output_tokens"),
+                "total": timing.get("total_tokens"),
+                "avg_input": timing.get("avg_input_tokens"),
+                "avg_output": timing.get("avg_output_tokens"),
+                "avg_total": timing.get("avg_total_tokens"),
+            },
             "field_accuracy": {
                 name: round(score, 4)
                 for name, score in sorted(sc.field_averages.items())
@@ -309,19 +347,21 @@ def main() -> None:
 
     # Print summary to console
     print()
-    print("=" * 60)
+    print("=" * 72)
     print("BENCHMARK SUMMARY")
-    print("=" * 60)
-    print(f"{'Model':<25} {'Weighted':<12} {'Avg Time':<10} {'Success':<10}")
-    print("-" * 60)
+    print("=" * 72)
+    print(f"{'Model':<25} {'Weighted':<12} {'Avg Time':<10} {'Avg Tokens':<12} {'Success':<10}")
+    print("-" * 72)
     for sc in scorecards:
         timing = run_metadata.get("model_results", {}).get(sc.model_name, {})
         avg_time = timing.get("avg_time_seconds", 0)
+        avg_tokens = timing.get("avg_total_tokens", 0)
+        tokens_str = f"{avg_tokens:,.0f}" if avg_tokens else "N/A"
         print(
             f"{sc.model_name:<25} {_pct(sc.overall_weighted):<12} "
-            f"{_sec(avg_time):<10} {_pct(sc.extraction_success_rate):<10}"
+            f"{_sec(avg_time):<10} {tokens_str:<12} {_pct(sc.extraction_success_rate):<10}"
         )
-    print("=" * 60)
+    print("=" * 72)
 
 
 if __name__ == "__main__":
