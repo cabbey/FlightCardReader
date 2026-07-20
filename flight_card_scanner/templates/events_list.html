@@ -61,6 +61,23 @@
     color: #6b7280;
   }
 
+  .event-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-right: 0.75rem;
+    font-size: 0.8rem;
+    color: #4b5563;
+  }
+
+  .event-stats .stat {
+    white-space: nowrap;
+  }
+
+  .event-stats .stat-value {
+    font-weight: 600;
+  }
+
   .no-events {
     text-align: center;
     color: #6b7280;
@@ -110,6 +127,10 @@
       <div class="event-name">{{ event.event_name }}</div>
       <div class="event-dates">{{ event.event_date_range.start }} to {{ event.event_date_range.end }}</div>
     </a>
+    <div class="event-stats">
+      <span class="stat"><span class="stat-value">{{ event.card_count }}</span> cards</span>
+      <span class="stat"><span class="stat-value">{{ "%.0f"|format(event.verified_pct) }}%</span> verified</span>
+    </div>
     <span class="event-status {{ 'open' if event.is_open else 'closed' }}">
       {{ "Active" if event.is_open else "Idle" }}
     </span>

@@ -160,6 +160,7 @@ async def lifespan(app: FastAPI):
     # 3. Create EventManager and discover events
     event_manager = EventManager(app_config)
     event_manager.discover_events()
+    await event_manager.gather_all_stats()
     app.state.event_manager = event_manager
     app.state.app_config = app_config
 

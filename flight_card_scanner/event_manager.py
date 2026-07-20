@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import (
 
 from .config import EventConfig, ServerConfig, load_event_config
 from .database import Base, create_all
+from .models import FlightRecord
 from .services.extraction_service import ExtractionService
 from .services.flier_match_service import FlierMatchService
 from .services.motor_lookup_service import MotorLookupService
@@ -48,6 +50,9 @@ class EventInfo:
     last_accessed: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    # Cached card stats (populated at discovery without fully opening the event)
+    card_count: int = 0
+    verified_pct: float = 0.0
 
 
 @dataclass
@@ -58,6 +63,8 @@ class EventSummary:
     event_name: str
     event_date_range: Any  # DateRange
     is_open: bool
+    card_count: int = 0
+    verified_pct: float = 0.0
 
 
 class EventManager:
@@ -141,6 +148,87 @@ class EventManager:
         self._events = discovered
         logger.info("Discovered %d event(s) in %s", len(discovered), self._events_dir)
         return discovered
+
+    # ------------------------------------------------------------------
+    # Read-only stats gathering
+    # ------------------------------------------------------------------
+
+    async def _query_event_stats(self, info: EventInfo) -> None:
+        """Query card count and verified % from an event's DB in read-only mode.
+
+        Opens a temporary read-only connection, runs the query, then disposes
+        the engine immediately. If the database file does not exist or the
+        table is missing (migration needed), stats remain at their defaults
+        (0 cards, 0% verified).
+        """
+        db_path = info.event_config.db_path
+        if not db_path.exists():
+            logger.debug("No database for event %s; skipping stats.", info.slug)
+            return
+
+        # Open in read-only mode so we never trigger a migration
+        uri_path = str(db_path).replace("?", "%3f").replace("#", "%23")
+        url = f"sqlite+aiosqlite:///file:{uri_path}?mode=ro&uri=true"
+
+        engine = create_async_engine(url, echo=False)
+        try:
+            async with engine.connect() as conn:
+                # Check if the flight_records table exists before querying
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(
+                        sync_conn, "flight_records"
+                    )
+                )
+                if not table_exists:
+                    logger.debug(
+                        "Table flight_records missing for event %s; "
+                        "migration will run when event is opened.",
+                        info.slug,
+                    )
+                    return
+
+                # Count total records with extraction_status = 'extracted'
+                total_result = await conn.execute(
+                    select(func.count()).select_from(FlightRecord)
+                )
+                total = total_result.scalar() or 0
+
+                # Count verified records (human_verified = true)
+                verified_result = await conn.execute(
+                    select(func.count())
+                    .select_from(FlightRecord)
+                    .where(FlightRecord.human_verified == True)  # noqa: E712
+                )
+                verified = verified_result.scalar() or 0
+
+            info.card_count = total
+            info.verified_pct = (verified / total * 100.0) if total > 0 else 0.0
+            logger.debug(
+                "Event %s stats: %d cards, %.1f%% verified",
+                info.slug,
+                total,
+                info.verified_pct,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to query stats for event %s: %s", info.slug, exc
+            )
+        finally:
+            await engine.dispose()
+
+    async def gather_all_stats(self) -> None:
+        """Query card stats for all discovered events.
+
+        Called after discover_events() or refresh_events() to populate
+        card_count and verified_pct on each EventInfo without fully
+        opening the events.
+        """
+        for slug, info in self._events.items():
+            # Skip events that are already open -- their stats will be
+            # live from the active database session anyway.
+            if info.is_open:
+                continue
+            await self._query_event_stats(info)
 
     # ------------------------------------------------------------------
     # Event lifecycle
@@ -428,6 +516,8 @@ class EventManager:
                     event_name=info.event_config.event_name,
                     event_date_range=info.event_config.event_date_range,
                     is_open=info.is_open,
+                    card_count=info.card_count,
+                    verified_pct=info.verified_pct,
                 )
             )
         return summaries

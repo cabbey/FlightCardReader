@@ -60,6 +60,7 @@ async def refresh_events(request: Request) -> dict:
     """
     event_manager = request.app.state.event_manager
     event_manager.refresh_events()
+    await event_manager.gather_all_stats()
     events = event_manager.list_events()
 
     return {
