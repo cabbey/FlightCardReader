@@ -90,8 +90,9 @@ def _motor_total_quantity(motors: list[dict[str, Any]]) -> int:
     return total
 
 
-# Standard motor class order: ¼A, ½A, then A through P
-_MOTOR_CLASS_ORDER = ["¼A", "½A"] + list("ABCDEFGHIJKLMNOP")
+# Standard motor class order: 1/4A, 1/2A, then A through P
+# Motor letter values are stored in ASCII fraction form (1/4A, 1/2A) in the DB.
+_MOTOR_CLASS_ORDER = ["1/4A", "1/2A"] + list("ABCDEFGHIJKLMNOP")
 
 
 def _motor_class_sort_key(letter: str) -> int:
