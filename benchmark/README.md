@@ -1,6 +1,7 @@
 # Flight Card Extraction — Model Benchmark Suite
 
-Evaluate and compare Ollama vision models on flight card data extraction accuracy and speed.
+Evaluate and compare Ollama and Amazon Bedrock vision models on flight card data extraction
+accuracy, speed, and token cost.
 
 This benchmark uses the **exact same prompt, schema, and image preprocessing** as the production
 application, ensuring results directly reflect real-world performance.
@@ -10,14 +11,15 @@ application, ensuring results directly reflect real-world performance.
 The benchmark has three stages:
 
 1. **Export** — Extract human-verified records from the project database into a portable dataset
-2. **Run** — Send each image to multiple Ollama models and collect raw outputs + timing
+2. **Run** — Send each image to multiple models (Ollama or Bedrock) and collect raw outputs, timing, and token usage
 3. **Score** — Compare model outputs against ground truth and generate a report
 
 ## Prerequisites
 
 - Python 3.11+
 - The project's dependencies installed (`httpx`, `Pillow`, `pydantic`)
-- An Ollama instance running with the models you want to benchmark already pulled
+- For Ollama models: an Ollama instance running with models already pulled
+- For Bedrock models: `boto3` installed, AWS credentials configured (via environment, profile, or IAM role)
 - A database with human-verified records (records where `human_verified = 1`)
 
 ## Quick Start
@@ -91,6 +93,7 @@ The dataset is self-contained and portable — you can copy it to another machin
 ### Step 2: Run Benchmark
 
 ```bash
+# Ollama models
 python -m benchmark run \
     --dataset <dataset-directory> \
     --models <model1> [model2] ... \
@@ -98,41 +101,68 @@ python -m benchmark run \
     --output <results-directory> \
     [--event-start "2026-04-24"] \
     [--event-end "2026-04-26"] \
-    [--samples N]
+    [--samples N] \
+    [--save-thinking]
+
+# Bedrock models (prefix with bedrock:<region>:<model_id>)
+python -m benchmark run \
+    --dataset <dataset-directory> \
+    --models "bedrock:us-east-1:us.amazon.nova-pro-v1:0" \
+    --output <results-directory>
+
+# Mix of Ollama and Bedrock
+python -m benchmark run \
+    --dataset <dataset-directory> \
+    --models qwen3-vl "bedrock:us-east-1:us.amazon.nova-pro-v1:0" \
+    --endpoint http://localhost:11434 \
+    --output <results-directory>
 ```
 
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `--dataset` | Yes | Path to exported dataset (from step 1) |
-| `--models` | Yes | Space-separated list of Ollama model names |
-| `--endpoint` | No | Ollama API URL (default: `http://localhost:11434`) |
+| `--models` | Yes | Space-separated model identifiers (see below) |
+| `--endpoint` | No | Ollama API URL (default: `http://localhost:11434`). Ignored for Bedrock models. |
 | `--output` | Yes | Results output directory |
 | `--event-start` | No | Override event start date (default: read from dataset manifest) |
 | `--event-end` | No | Override event end date (default: read from dataset manifest) |
 | `--samples` | No | Limit to N samples (useful for quick testing) |
+| `--save-thinking` | No | Save model thinking/reasoning traces for analysis |
+
+**Model identifier formats:**
+- **Ollama:** Plain model name, e.g., `qwen3-vl`, `gemma3:27b`, `minicpm-v`
+- **Bedrock:** `bedrock:<region>:<model_id>`, e.g., `bedrock:us-east-1:us.amazon.nova-pro-v1:0`
 
 **Output structure:**
 ```
 results/
-├── run_metadata.json          # Run configuration, timing summaries
+├── run_metadata.json          # Run configuration, timing summaries, token usage
 ├── qwen3-vl/                  # One directory per model
-│   ├── timings.json           # Per-sample timing data
-│   └── raw_outputs/           # Raw extraction JSON per sample
-│       ├── 1.json
+│   ├── timings.json           # Per-sample timing + token data
+│   ├── raw_outputs/           # Raw extraction JSON per sample
+│   │   ├── 1.json
+│   │   └── ...
+│   └── thinking/              # Reasoning traces (only with --save-thinking)
+│       ├── 1.txt
 │       └── ...
-├── gemma3_27b/
+├── bedrock_us-east-1_us.amazon.nova-pro-v1_0/
 │   ├── timings.json
-│   └── raw_outputs/
+│   ├── raw_outputs/
+│   │   └── ...
+│   └── thinking/
 │       └── ...
 └── ...
 ```
 
 **Tips:**
 - Use `--samples 5` for a quick sanity check before a full run
-- Models must already be pulled in Ollama (`ollama pull <model>`)
+- Ollama models must already be pulled (`ollama pull <model>`)
+- Bedrock models require valid AWS credentials (environment variables, ~/.aws/credentials, or IAM role)
 - The benchmark uses a 10-minute timeout per extraction (vision models can be slow)
 - Run on the same hardware for fair timing comparisons
+- Use `--save-thinking` during initial evaluation to understand model reasoning
+- Omit `--save-thinking` for pure performance benchmarks (reduces I/O overhead)
 
 ### Step 3: Score & Report
 
@@ -182,15 +212,16 @@ type-appropriate comparison strategies:
 ### Report Sections
 
 1. **Overall Model Comparison** — Ranked table with accuracy and timing
-2. **Timing Comparison** — Detailed timing statistics per model
-3. **Accuracy by Category** — Scores grouped by field category (identity, technical, operational, etc.)
-4. **Accuracy by Field** — Every field compared across all models
-5. **Per-Model Weak Points** — Fields where each model scores below 80%
+2. **Timing Comparison** — Detailed timing statistics per model (with backend type)
+3. **Token Usage** — Input/output/total token counts per model (relevant for cost estimation)
+4. **Accuracy by Category** — Scores grouped by field category (identity, technical, operational, etc.)
+5. **Accuracy by Field** — Every field compared across all models
+6. **Per-Model Weak Points** — Fields where each model scores below 80%
 
 ## Example Workflow
 
 ```bash
-# Pull models you want to test
+# Pull Ollama models you want to test
 ollama pull qwen3-vl
 ollama pull gemma3:27b
 ollama pull minicpm-v
@@ -201,17 +232,18 @@ python -m benchmark export \
     --image-dir /home/user/events/2026/march/images \
     --output /home/user/benchmarks/dataset
 
-# Quick test with 3 samples
+# Quick test with 3 samples, saving thinking for analysis
 python -m benchmark run \
     --dataset /home/user/benchmarks/dataset \
-    --models qwen3-vl gemma3:27b minicpm-v \
+    --models qwen3-vl "bedrock:us-east-1:us.amazon.nova-pro-v1:0" \
     --output /home/user/benchmarks/results \
-    --samples 3
+    --samples 3 \
+    --save-thinking
 
-# Full benchmark (may take a while depending on hardware and sample count)
+# Full benchmark (omit --save-thinking for performance measurement)
 python -m benchmark run \
     --dataset /home/user/benchmarks/dataset \
-    --models qwen3-vl gemma3:27b minicpm-v \
+    --models qwen3-vl gemma3:27b "bedrock:us-east-1:us.amazon.nova-pro-v1:0" \
     --output /home/user/benchmarks/results
 
 # Generate comparison report
