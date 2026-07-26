@@ -27,6 +27,13 @@ from ..schemas import (
 )
 from ..services import record_service
 from ..services.audit_service import log_action
+from ..services.card_history_service import (
+    ACTION_EDITED,
+    ACTION_REQUEUED,
+    ACTION_VERIFIED,
+    append_history,
+    format_edit_details,
+)
 from ..services.extraction_service import ExtractionMode, ExtractionService
 from ..services.flier_match_service import FlierMatchService
 
@@ -156,6 +163,15 @@ async def requeue_single(
     actor = user.email if user else "anonymous"
     log_action(actor, "requeued", "flight_record", record_id)
 
+    # Card history log
+    if _config:
+        append_history(
+            image_path=record.image_path,
+            store_path=_config.image_store_path,
+            who=actor,
+            what=ACTION_REQUEUED,
+        )
+
     return RequeueResponse(requeued=1)
 
 
@@ -223,6 +239,28 @@ async def update_record(
             changes[field_name] = {"old": old_value, "new": new_value}
     if changes:
         log_action(actor, "updated", "flight_record", record_id, details={"changes": changes})
+
+    # Card history log
+    if _config and record.image_path:
+        # Determine if this is a verification action or an edit
+        if updates.get("human_verified") is True:
+            append_history(
+                image_path=record.image_path,
+                store_path=_config.image_store_path,
+                who=actor,
+                what=ACTION_VERIFIED,
+            )
+        if changes and not (len(changes) == 1 and "human_verified" in changes):
+            # Log edits (exclude pure verification-only updates)
+            edit_changes = {k: v for k, v in changes.items() if k != "human_verified"}
+            if edit_changes:
+                append_history(
+                    image_path=record.image_path,
+                    store_path=_config.image_store_path,
+                    who=actor,
+                    what=ACTION_EDITED,
+                    how=format_edit_details(edit_changes),
+                )
 
     # Re-run flier verification if flier_name or membership fields changed
     should_reverify = "flier_name" in updates
@@ -658,6 +696,16 @@ async def requeue_single_impl(request: Request, record_id: int, db: AsyncSession
     user = getattr(request.state, "user", None)
     actor = user.email if user else "anonymous"
     log_action(actor, "requeued", "flight_record", record_id)
+
+    # Card history log — need config for store_path; get from app state
+    if _config and record.image_path:
+        append_history(
+            image_path=record.image_path,
+            store_path=_config.image_store_path,
+            who=actor,
+            what=ACTION_REQUEUED,
+        )
+
     return {"requeued": 1}
 
 
@@ -702,6 +750,27 @@ async def update_record_impl(request: Request, record_id: int, db: AsyncSession,
             changes[field_name] = {"old": old_value, "new": new_value}
     if changes:
         log_action(actor, "updated", "flight_record", record_id, details={"changes": changes})
+
+    # Card history log
+    if config and record.image_path:
+        store_path = config.image_store_path
+        if updates.get("human_verified") is True:
+            append_history(
+                image_path=record.image_path,
+                store_path=store_path,
+                who=actor,
+                what=ACTION_VERIFIED,
+            )
+        if changes and not (len(changes) == 1 and "human_verified" in changes):
+            edit_changes = {k: v for k, v in changes.items() if k != "human_verified"}
+            if edit_changes:
+                append_history(
+                    image_path=record.image_path,
+                    store_path=store_path,
+                    who=actor,
+                    what=ACTION_EDITED,
+                    how=format_edit_details(edit_changes),
+                )
 
     # Re-run flier verification if needed
     should_reverify = "flier_name" in updates

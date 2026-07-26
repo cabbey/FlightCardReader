@@ -315,6 +315,11 @@ async def create_user(body: CreateUserRequest, request: Request):
             detail="A user with this email already exists.",
         )
 
+    # Update the display name cache
+    dns = getattr(request.app.state, "display_name_service", None)
+    if dns:
+        dns.update(user.email, user.display_name)
+
     # Audit log the user creation
     log_action(
         actor=current_user.email if current_user else "anonymous",
@@ -382,6 +387,11 @@ async def update_user(user_id: int, body: UpdateUserRequest, request: Request):
         if body.display_name is not None and body.display_name != user.display_name:
             changes["display_name"] = {"old": user.display_name, "new": body.display_name}
             user.display_name = body.display_name
+
+            # Update the display name cache
+            dns = getattr(request.app.state, "display_name_service", None)
+            if dns:
+                dns.update(user.email, body.display_name)
 
         if body.role is not None and body.role != user.role:
             changes["role"] = {"old": user.role, "new": body.role}
