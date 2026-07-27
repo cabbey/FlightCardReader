@@ -92,6 +92,7 @@ class RecordRow:
     flier_verified: bool = False
     motors_verified: bool = False
     is_queued: bool = False
+    distance: float | None = None
 
 
 def _record_impulse_ns(record: FlightRecord) -> float:
@@ -400,6 +401,7 @@ async def list_records(
     norm_search_diameter = normalize_length_to_mm(search_diameter_val, search_diameter_unit)
     norm_search_weight = normalize_weight_to_g(search_weight_val, search_weight_unit)
     has_measurement_search = any(v is not None for v in (norm_search_length, norm_search_diameter, norm_search_weight))
+    _distance_by_id: dict[int, float] = {}
 
     if has_measurement_search:
         # Measurement search requires loading all filtered records and sorting by proximity
@@ -422,18 +424,28 @@ async def list_records(
                 or _matches_search(r, q_lower)
             ]
 
-        # Filter to records that have at least one searched measurement and compute distance
+        # Filter to records that have at least one searched measurement and compute distance.
+        # Uses proportional (relative) differences so that small-magnitude dimensions
+        # like diameter are not overshadowed by large-magnitude ones like length.
+        # Diameter gets extra weight (3x) because rockets are typically distinguished
+        # more by diameter than length — a half-inch difference in diameter is more
+        # significant than a couple inches difference in length.
+        _DIAMETER_WEIGHT = 3.0
+
         def _measurement_distance(record):
             dist = 0.0
             count = 0
             if norm_search_length is not None and record.norm_length_mm is not None:
-                dist += abs(record.norm_length_mm - norm_search_length)
+                rel = abs(record.norm_length_mm - norm_search_length) / norm_search_length
+                dist += rel
                 count += 1
             if norm_search_diameter is not None and record.norm_diameter_mm is not None:
-                dist += abs(record.norm_diameter_mm - norm_search_diameter)
+                rel = abs(record.norm_diameter_mm - norm_search_diameter) / norm_search_diameter
+                dist += rel * _DIAMETER_WEIGHT
                 count += 1
             if norm_search_weight is not None and record.norm_weight_g is not None:
-                dist += abs(record.norm_weight_g - norm_search_weight)
+                rel = abs(record.norm_weight_g - norm_search_weight) / norm_search_weight
+                dist += rel
                 count += 1
             if count == 0:
                 return None  # no comparable measurements
@@ -450,7 +462,10 @@ async def list_records(
         total_pages = max(1, math.ceil(total_records / effective_page_size))
         start_idx = (page - 1) * effective_page_size
         end_idx = start_idx + effective_page_size
-        page_records = [r for _, r in scored[start_idx:end_idx]]
+        page_scored = scored[start_idx:end_idx]
+        page_records = [r for _, r in page_scored]
+        # Map record IDs to their distance scores for template display
+        _distance_by_id = {r.id: d for d, r in page_scored}
 
     # --- Impulse sort (Python-side, computed from overflow JSON) ---
     if is_impulse_sort and not has_measurement_search:
@@ -525,6 +540,7 @@ async def list_records(
                 flier_verified=r.flier_verified,
                 motors_verified=motors_verified,
                 is_queued=(r.id in queued_ids),
+                distance=_distance_by_id.get(r.id),
             )
         )
 
@@ -557,6 +573,7 @@ async def list_records(
             "search_weight_unit": search_weight_unit or "",
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),
+            "has_measurement_search": has_measurement_search,
         },
     )
 
@@ -962,6 +979,7 @@ async def list_records_impl(
     norm_search_diameter = normalize_length_to_mm(search_diameter_val, search_diameter_unit)
     norm_search_weight = normalize_weight_to_g(search_weight_val, search_weight_unit)
     has_measurement_search = any(v is not None for v in (norm_search_length, norm_search_diameter, norm_search_weight))
+    _distance_by_id: dict[int, float] = {}
 
     if has_measurement_search:
         all_stmt = select(FlightRecord)
@@ -979,17 +997,22 @@ async def list_records_impl(
                 or _matches_search(r, q_lower)
             ]
 
+        _DIAMETER_WEIGHT = 3.0
+
         def _measurement_distance(record):
             dist = 0.0
             count = 0
             if norm_search_length is not None and record.norm_length_mm is not None:
-                dist += abs(record.norm_length_mm - norm_search_length)
+                rel = abs(record.norm_length_mm - norm_search_length) / norm_search_length
+                dist += rel
                 count += 1
             if norm_search_diameter is not None and record.norm_diameter_mm is not None:
-                dist += abs(record.norm_diameter_mm - norm_search_diameter)
+                rel = abs(record.norm_diameter_mm - norm_search_diameter) / norm_search_diameter
+                dist += rel * _DIAMETER_WEIGHT
                 count += 1
             if norm_search_weight is not None and record.norm_weight_g is not None:
-                dist += abs(record.norm_weight_g - norm_search_weight)
+                rel = abs(record.norm_weight_g - norm_search_weight) / norm_search_weight
+                dist += rel
                 count += 1
             if count == 0:
                 return None
@@ -1006,7 +1029,9 @@ async def list_records_impl(
         total_pages = max(1, math.ceil(total_records / effective_page_size))
         start_idx = (page - 1) * effective_page_size
         end_idx = start_idx + effective_page_size
-        page_records = [r for _, r in scored[start_idx:end_idx]]
+        page_scored = scored[start_idx:end_idx]
+        page_records = [r for _, r in page_scored]
+        _distance_by_id = {r.id: d for d, r in page_scored}
 
     if is_impulse_sort and not has_measurement_search:
         all_stmt = select(FlightRecord)
@@ -1062,6 +1087,7 @@ async def list_records_impl(
                 flier_verified=r.flier_verified,
                 motors_verified=motors_verified,
                 is_queued=(r.id in queued_ids),
+                distance=_distance_by_id.get(r.id),
             )
         )
 
@@ -1102,6 +1128,7 @@ async def list_records_impl(
             "search_weight_unit": search_weight_unit or "",
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),
+            "has_measurement_search": has_measurement_search,
         },
     )
 

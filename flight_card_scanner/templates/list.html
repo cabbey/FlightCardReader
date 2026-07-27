@@ -201,7 +201,7 @@
 
 {# --- Helper macro: build URL preserving current filter/sort params --- #}
 {% macro list_url(p=page, s=sort, v=verified_filter, st=status_filter, fd=flight_day_filter, ic=impulse_class_filter, search=q) -%}
-{{ event_base_url|default('', true) }}/?page={{ p }}{% if s and s != 'id_desc' %}&sort={{ s }}{% endif %}{% if v and v != 'all' %}&verified={{ v }}{% endif %}{% if st %}&status={{ st }}{% endif %}{% if fd %}&flight_day={{ fd }}{% endif %}{% if ic %}&impulse_class={{ ic }}{% endif %}{% if search %}&q={{ search }}{% endif %}
+{{ event_base_url|default('', true) }}/?page={{ p }}{% if s and s != 'id_desc' %}&sort={{ s }}{% endif %}{% if v and v != 'all' %}&verified={{ v }}{% endif %}{% if st %}&status={{ st }}{% endif %}{% if fd %}&flight_day={{ fd }}{% endif %}{% if ic %}&impulse_class={{ ic }}{% endif %}{% if search %}&q={{ search }}{% endif %}{% if search_length is not none %}&search_length={{ search_length }}{% endif %}{% if search_length_unit %}&search_length_unit={{ search_length_unit }}{% endif %}{% if search_diameter is not none %}&search_diameter={{ search_diameter }}{% endif %}{% if search_diameter_unit %}&search_diameter_unit={{ search_diameter_unit }}{% endif %}{% if search_weight is not none %}&search_weight={{ search_weight }}{% endif %}{% if search_weight_unit %}&search_weight_unit={{ search_weight_unit }}{% endif %}
 {%- endmacro %}
 
 {% block content %}
@@ -313,6 +313,15 @@
             <span class="arrow{{ ' active' if sort == 'id_desc' else '' }}">&#x25BC;</span>
           </span>
         </th>
+        {% if has_measurement_search %}
+        <th class="numeric" title="Distance from search criteria (lower is closer match)" style="font-size:0.75rem;">
+          Dist
+          <span class="sort-arrows">
+            <span class="arrow active">&#x25B2;</span>
+            <span class="arrow">&#x25BC;</span>
+          </span>
+        </th>
+        {% endif %}
         <th class="sortable" data-sort-asc="flier_asc" data-sort-desc="flier_desc" title="Sort by Flier">
           Flier
           <span class="sort-arrows">
@@ -336,6 +345,9 @@
       {% for record in records %}
       <tr>
         <td><a href="{{ event_base_url|default('', true) }}/record/{{ record.id }}">{{ record.id }}</a>{% if record.human_verified %} <span title="Human verified" style="color:#2563eb;">&#x1F6E1;&#xFE0F;</span>{% endif %}</td>
+        {% if has_measurement_search %}
+        <td class="numeric" style="font-size:0.75rem; color:#6b7280;">{{ "%.3f"|format(record.distance) if record.distance is not none else "—" }}</td>
+        {% endif %}
         <td>{{ record.flier_name or "—" }}{% if record.flier_verified %} <span title="Verified against known fliers" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
         <td>{{ record.rocket_name or "—" }}</td>
         <td>{{ record.motor_designation or "—" }}{% if record.motors_verified %} <span title="Motor verified via ThrustCurve" style="color:#16a34a;">&#x2713;</span>{% endif %}</td>
@@ -435,7 +447,13 @@
       status: '{{ status_filter }}',
       flight_day: '{{ flight_day_filter }}',
       impulse_class: '{{ impulse_class_filter }}',
-      q: '{{ q or "" }}'
+      q: '{{ q or "" }}',
+      search_length: '{{ search_length if search_length is not none else "" }}',
+      search_length_unit: '{{ search_length_unit }}',
+      search_diameter: '{{ search_diameter if search_diameter is not none else "" }}',
+      search_diameter_unit: '{{ search_diameter_unit }}',
+      search_weight: '{{ search_weight if search_weight is not none else "" }}',
+      search_weight_unit: '{{ search_weight_unit }}'
     };
     if (overrides) {
       Object.keys(overrides).forEach(function(k) { params[k] = overrides[k]; });
@@ -447,6 +465,12 @@
     if (params.flight_day) parts.push('flight_day=' + encodeURIComponent(params.flight_day));
     if (params.impulse_class) parts.push('impulse_class=' + encodeURIComponent(params.impulse_class));
     if (params.q) parts.push('q=' + encodeURIComponent(params.q));
+    if (params.search_length) parts.push('search_length=' + encodeURIComponent(params.search_length));
+    if (params.search_length_unit) parts.push('search_length_unit=' + encodeURIComponent(params.search_length_unit));
+    if (params.search_diameter) parts.push('search_diameter=' + encodeURIComponent(params.search_diameter));
+    if (params.search_diameter_unit) parts.push('search_diameter_unit=' + encodeURIComponent(params.search_diameter_unit));
+    if (params.search_weight) parts.push('search_weight=' + encodeURIComponent(params.search_weight));
+    if (params.search_weight_unit) parts.push('search_weight_unit=' + encodeURIComponent(params.search_weight_unit));
     return parts[0] + (parts.length > 1 ? '&' + parts.slice(1).join('&') : '');
   }
 
