@@ -52,7 +52,7 @@ class MotorEntry(BaseModel):
         pattern=r"^\d+$",
     )
     suffix: Optional[str] = Field(
-        None, description="Propellant/variant code after the number, separated by a space or a dash, e.g. 'WT', 'R', 'DMS', 'P', '7'"
+        None, description="Everything after the average thrust number: propellant code and/or delay, e.g. 'W-14', 'FJ-9', 'R', 'DMS', '7'"
     )
     quantity: int = Field(
         default=1, description="Number of this motor used (for clusters). Defaults to 1."

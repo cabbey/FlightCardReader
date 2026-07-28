@@ -100,16 +100,16 @@ Fields to extract:
 - motors: A flat array of motor objects used in this flight (most cards have just one).
   Each motor object has: manufacturer, leading_number, letter, number, suffix.
   MOTOR DESIGNATION FORMAT: A motor designation follows a strict pattern:
-    [leading_number]<letter><number>[-suffix]
+    [leading_number]<letter><number>[suffix]
   Where:
   - leading_number (optional, rare): the total thrust in Newtons, ALWAYS a pure integer (no slashes, no decimals).
   - letter: a SINGLE uppercase letter (A through O) indicating the total impulse class.
     Common letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O
   - number: the average thrust in Newtons, ALWAYS a pure integer (no slashes, no decimals).
     Examples: 218, 1000, 2560, 450, 65, 180
-  - suffix (optional): a code for propellant type like "WT", "R", "P", "DMS", "SS", "FJ" may be
-    listed after a space or a hyphen. In smaller motors, this may also be numeric to infidate a
-    delay time.
+  - suffix (optional): everything after the number. This includes propellant type letters
+    and/or a delay time, possibly separated by a dash. Put it ALL in suffix as-is.
+    Examples: "W-14", "FJ-9", "R", "DMS", "7", "WT", "SS-P"
   
   CRITICAL: The letter+number portion has NO separator between them. "I218" is correct
   (letter=I, number=218). If you see what looks like "I2/8" or "I2|8", that is almost
@@ -117,12 +117,13 @@ Fields to extract:
   The number is always an integer: 218, not 2/8 or 2.8.
   
   Examples of valid motor designations:
-  - "C6-7"  → letter=C, number=6, suffix=7
-  - "H128W" → letter=H, number=128, suffix=W
-  - "I218R" → letter=I, number=218, suffix=R
-  - "J450DMS" → letter=J, number=450, suffix=DMS
+  - "C6-7"     → letter=C, number=6, suffix=7
+  - "F67FJ-9"  → letter=F, number=67, suffix=FJ-9
+  - "H128W-14" → letter=H, number=128, suffix=W-14
+  - "I218R"    → letter=I, number=218, suffix=R
+  - "J450DMS"  → letter=J, number=450, suffix=DMS
   - "54M2560WT" → leading_number=54, letter=M, number=2560, suffix=WT
-  - "K600" → letter=K, number=600 (no suffix)
+  - "K600"     → letter=K, number=600 (no suffix)
   
   Common manufacturer prefixes (sometimes written before the designation, space-separated):
   AT (Aerotech), CTI (Cesaroni), AMW (Animal Motor Works), Loki, Estes, Q-jet, Quest, Sugar,
