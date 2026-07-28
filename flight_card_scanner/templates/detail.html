@@ -781,14 +781,14 @@
   <a href="{{ event_base_url|default('', true) }}/" class="back-link" id="backToList">&larr; Back to list</a>
   <span class="prev-next">
     {% if prev_id %}
-    <a href="{{ event_base_url|default('', true) }}/record/{{ prev_id }}">&larr; Prev</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ prev_id }}" id="navPrev">&larr; Prev</a>
     {% else %}
-    <span class="disabled">&larr; Prev</span>
+    <span class="disabled" id="navPrev">&larr; Prev</span>
     {% endif %}
     {% if next_id %}
-    <a href="{{ event_base_url|default('', true) }}/record/{{ next_id }}">Next &rarr;</a>
+    <a href="{{ event_base_url|default('', true) }}/record/{{ next_id }}" id="navNext">Next &rarr;</a>
     {% else %}
-    <span class="disabled">Next &rarr;</span>
+    <span class="disabled" id="navNext">Next &rarr;</span>
     {% endif %}
   </span>
 </nav>
@@ -1315,32 +1315,125 @@
 
 <script>
 (function() {
-  // --- Update "Back to list" link with saved filter/sort prefs ---
+  var recordId = {{ record.id }};
+  var eventBaseUrl = '{{ event_base_url|default("", true) }}';
+
+  // --- Update navigation links from saved list context ---
   (function() {
     var STORAGE_KEY = 'fcs_list_prefs';
     var TTL_MS = 60 * 60 * 1000; // 1 hour
     var link = document.getElementById('backToList');
+    var navPrev = document.getElementById('navPrev');
+    var navNext = document.getElementById('navNext');
     if (!link) return;
+
+    var data = null;
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      var data = JSON.parse(raw);
-      if (Date.now() - data.ts > TTL_MS) {
-        localStorage.removeItem(STORAGE_KEY);
-        return;
+      if (raw) {
+        data = JSON.parse(raw);
+        if (Date.now() - data.ts > TTL_MS) {
+          localStorage.removeItem(STORAGE_KEY);
+          data = null;
+        }
       }
-      var parts = ['/?page=1'];
+    } catch(e) { data = null; }
+
+    if (!data) return;
+
+    // Build the list URL with all stored params
+    function buildStoredListUrl(pageOverride) {
+      var base = eventBaseUrl || '';
+      var pg = pageOverride || data.page || 1;
+      var parts = [base + '/?page=' + pg];
       if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
       if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
       if (data.status) parts.push('status=' + encodeURIComponent(data.status));
       if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
-      if (parts.length > 1) {
-        link.href = parts[0] + '&' + parts.slice(1).join('&');
+      if (data.impulse_class) parts.push('impulse_class=' + encodeURIComponent(data.impulse_class));
+      if (data.q) parts.push('q=' + encodeURIComponent(data.q));
+      if (data.search_length) parts.push('search_length=' + encodeURIComponent(data.search_length));
+      if (data.search_length_unit) parts.push('search_length_unit=' + encodeURIComponent(data.search_length_unit));
+      if (data.search_diameter) parts.push('search_diameter=' + encodeURIComponent(data.search_diameter));
+      if (data.search_diameter_unit) parts.push('search_diameter_unit=' + encodeURIComponent(data.search_diameter_unit));
+      if (data.search_weight) parts.push('search_weight=' + encodeURIComponent(data.search_weight));
+      if (data.search_weight_unit) parts.push('search_weight_unit=' + encodeURIComponent(data.search_weight_unit));
+      return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : base + '/';
+    }
+
+    // Determine if any filter/search is active
+    var hasFilter = !!(data.q || data.impulse_class || data.search_length || data.search_diameter || data.search_weight ||
+      (data.verified && data.verified !== 'all') || data.status || data.flight_day ||
+      (data.sort && data.sort !== 'id_desc'));
+    var hasSearch = !!(data.q || data.search_length || data.search_diameter || data.search_weight);
+
+    // Update back link URL and label
+    if (hasFilter) {
+      link.href = buildStoredListUrl();
+      if (hasSearch) {
+        link.innerHTML = '&larr; Back to search results';
+      } else {
+        link.innerHTML = '&larr; Back to filtered list';
       }
-    } catch(e) {}
+    }
+
+    // Update prev/next using stored record IDs
+    var ids = data.record_ids || [];
+    if (ids.length > 0) {
+      var currentIdx = ids.indexOf(recordId);
+      var base = eventBaseUrl || '';
+
+      if (currentIdx > 0) {
+        // There's a previous record in the filtered set
+        var prevId = ids[currentIdx - 1];
+        if (navPrev.tagName === 'SPAN') {
+          // Replace disabled span with a link
+          var prevLink = document.createElement('a');
+          prevLink.href = base + '/record/' + prevId;
+          prevLink.id = 'navPrev';
+          prevLink.innerHTML = '&larr; Prev';
+          navPrev.parentNode.replaceChild(prevLink, navPrev);
+        } else {
+          navPrev.href = base + '/record/' + prevId;
+        }
+      } else if (currentIdx === 0) {
+        // First in list — disable prev
+        if (navPrev.tagName === 'A') {
+          var prevSpan = document.createElement('span');
+          prevSpan.className = 'disabled';
+          prevSpan.id = 'navPrev';
+          prevSpan.innerHTML = '&larr; Prev';
+          navPrev.parentNode.replaceChild(prevSpan, navPrev);
+        }
+      }
+      // currentIdx === -1 means this record isn't in the stored page — leave server defaults
+
+      if (currentIdx >= 0 && currentIdx < ids.length - 1) {
+        // There's a next record in the filtered set
+        var nextId = ids[currentIdx + 1];
+        if (navNext.tagName === 'SPAN') {
+          var nextLink = document.createElement('a');
+          nextLink.href = base + '/record/' + nextId;
+          nextLink.id = 'navNext';
+          nextLink.innerHTML = 'Next &rarr;';
+          navNext.parentNode.replaceChild(nextLink, navNext);
+        } else {
+          navNext.href = base + '/record/' + nextId;
+        }
+      } else if (currentIdx === ids.length - 1) {
+        // Last in list — disable next
+        if (navNext.tagName === 'A') {
+          var nextSpan = document.createElement('span');
+          nextSpan.className = 'disabled';
+          nextSpan.id = 'navNext';
+          nextSpan.innerHTML = 'Next &rarr;';
+          navNext.parentNode.replaceChild(nextSpan, navNext);
+        }
+      }
+    }
   })();
 
-  // Helper: get the list URL with saved filter prefs
+  // Helper: get the list URL with saved filter prefs (used by verify/delete navigation)
   function getListUrl() {
     var STORAGE_KEY = 'fcs_list_prefs';
     var TTL_MS = 60 * 60 * 1000;
@@ -1350,17 +1443,23 @@
       if (!raw) return base + '/';
       var data = JSON.parse(raw);
       if (Date.now() - data.ts > TTL_MS) return base + '/';
-      var parts = [base + '/?page=1'];
+      var parts = [base + '/?page=' + (data.page || 1)];
       if (data.sort && data.sort !== 'id_desc') parts.push('sort=' + encodeURIComponent(data.sort));
       if (data.verified && data.verified !== 'all') parts.push('verified=' + encodeURIComponent(data.verified));
       if (data.status) parts.push('status=' + encodeURIComponent(data.status));
       if (data.flight_day) parts.push('flight_day=' + encodeURIComponent(data.flight_day));
+      if (data.impulse_class) parts.push('impulse_class=' + encodeURIComponent(data.impulse_class));
+      if (data.q) parts.push('q=' + encodeURIComponent(data.q));
+      if (data.search_length) parts.push('search_length=' + encodeURIComponent(data.search_length));
+      if (data.search_length_unit) parts.push('search_length_unit=' + encodeURIComponent(data.search_length_unit));
+      if (data.search_diameter) parts.push('search_diameter=' + encodeURIComponent(data.search_diameter));
+      if (data.search_diameter_unit) parts.push('search_diameter_unit=' + encodeURIComponent(data.search_diameter_unit));
+      if (data.search_weight) parts.push('search_weight=' + encodeURIComponent(data.search_weight));
+      if (data.search_weight_unit) parts.push('search_weight_unit=' + encodeURIComponent(data.search_weight_unit));
       return parts.length > 1 ? parts[0] + '&' + parts.slice(1).join('&') : base + '/';
     } catch(e) { return base + '/'; }
   }
 
-  var recordId = {{ record.id }};
-  var eventBaseUrl = '{{ event_base_url|default("", true) }}';
   var pendingChanges = {};
   var originalOverflow = {{ record.overflow | tojson if record.overflow else '{}' }};
 

@@ -409,6 +409,17 @@
       verified: prefs.verified,
       status: prefs.status,
       flight_day: prefs.flight_day,
+      impulse_class: prefs.impulse_class || '',
+      q: prefs.q || '',
+      search_length: prefs.search_length || '',
+      search_length_unit: prefs.search_length_unit || '',
+      search_diameter: prefs.search_diameter || '',
+      search_diameter_unit: prefs.search_diameter_unit || '',
+      search_weight: prefs.search_weight || '',
+      search_weight_unit: prefs.search_weight_unit || '',
+      record_ids: prefs.record_ids || [],
+      page: prefs.page || 1,
+      total_pages: prefs.total_pages || 1,
       ts: Date.now()
     };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
@@ -432,7 +443,18 @@
     sort: '{{ sort }}',
     verified: '{{ verified_filter }}',
     status: '{{ status_filter }}',
-    flight_day: '{{ flight_day_filter }}'
+    flight_day: '{{ flight_day_filter }}',
+    impulse_class: '{{ impulse_class_filter }}',
+    q: '{{ q or "" }}',
+    search_length: '{{ search_length if search_length is not none else "" }}',
+    search_length_unit: '{{ search_length_unit }}',
+    search_diameter: '{{ search_diameter if search_diameter is not none else "" }}',
+    search_diameter_unit: '{{ search_diameter_unit }}',
+    search_weight: '{{ search_weight if search_weight is not none else "" }}',
+    search_weight_unit: '{{ search_weight_unit }}',
+    record_ids: [{% for record in records %}{{ record.id }}{% if not loop.last %},{% endif %}{% endfor %}],
+    page: {{ page }},
+    total_pages: {{ total_pages }}
   };
 
   // On page load: save current state (refreshes the TTL)
@@ -490,7 +512,7 @@
         targetSort = descSort;
         if (ascSort === 'flier_asc') targetSort = ascSort;
       }
-      var newPrefs = { sort: targetSort, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
+      var newPrefs = Object.assign({}, currentPrefs, { sort: targetSort });
       savePrefs(newPrefs);
       window.location.href = buildListUrl({ sort: targetSort, page: '1' });
     });
@@ -498,24 +520,26 @@
 
   // --- Filter change handlers (save prefs before navigating) ---
   document.getElementById('verifiedFilter').addEventListener('change', function() {
-    var newPrefs = { sort: currentPrefs.sort, verified: this.value, status: currentPrefs.status, flight_day: currentPrefs.flight_day };
+    var newPrefs = Object.assign({}, currentPrefs, { verified: this.value });
     savePrefs(newPrefs);
     window.location.href = buildListUrl({ verified: this.value, page: '1' });
   });
 
   document.getElementById('statusFilter').addEventListener('change', function() {
-    var newPrefs = { sort: currentPrefs.sort, verified: currentPrefs.verified, status: this.value, flight_day: currentPrefs.flight_day };
+    var newPrefs = Object.assign({}, currentPrefs, { status: this.value });
     savePrefs(newPrefs);
     window.location.href = buildListUrl({ status: this.value, page: '1' });
   });
 
   document.getElementById('flightDayFilter').addEventListener('change', function() {
-    var newPrefs = { sort: currentPrefs.sort, verified: currentPrefs.verified, status: currentPrefs.status, flight_day: this.value };
+    var newPrefs = Object.assign({}, currentPrefs, { flight_day: this.value });
     savePrefs(newPrefs);
     window.location.href = buildListUrl({ flight_day: this.value, page: '1' });
   });
 
   document.getElementById('impulseClassFilter').addEventListener('change', function() {
+    var newPrefs = Object.assign({}, currentPrefs, { impulse_class: this.value });
+    savePrefs(newPrefs);
     window.location.href = buildListUrl({ impulse_class: this.value, page: '1' });
   });
 
