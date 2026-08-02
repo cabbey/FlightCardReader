@@ -648,6 +648,64 @@ class ExtractionService:
         record.overflow = overflow
         await db.commit()
 
+    def _prepare_images(
+        self, image_path: str, back_image_path: str | None = None
+    ) -> tuple[list[bytes], str]:
+        """Load, resize, and return image bytes for extraction.
+
+        Reads the front image (and optionally the back image), resizes any
+        image taller than 1600px, preserving the source format (JPEG or PNG)
+        rather than unconditionally re-encoding to JPEG.
+
+        Returns:
+            A tuple of (list of resized image byte sequences, back_instruction string).
+            The back_instruction is empty when no back image is present.
+        """
+        from io import BytesIO
+        from PIL import Image
+
+        target_height = 1600
+
+        def _resize_image(raw_bytes: bytes) -> bytes:
+            """Resize a single image if taller than target_height, preserving format."""
+            img = Image.open(BytesIO(raw_bytes))
+            if img.height <= target_height:
+                return raw_bytes
+            scale = target_height / img.height
+            new_width = int(img.width * scale)
+            img = img.resize((new_width, target_height), Image.LANCZOS)
+            buf = BytesIO()
+            # Detect source format and preserve it
+            fmt = img.format or Image.open(BytesIO(raw_bytes)).format or "JPEG"
+            save_kwargs: dict = {}
+            if fmt.upper() == "JPEG":
+                save_kwargs["quality"] = 90
+            img.save(buf, format=fmt, **save_kwargs)
+            return buf.getvalue()
+
+        # Read and resize front image
+        full_path = self._config.image_store_path / image_path
+        image_bytes = full_path.read_bytes()
+        resized_front = _resize_image(image_bytes)
+
+        images = [resized_front]
+        back_instruction = ""
+
+        # Read and resize back image if available
+        if back_image_path:
+            back_full_path = self._config.image_store_path / back_image_path
+            if back_full_path.exists():
+                back_bytes = back_full_path.read_bytes()
+                resized_back = _resize_image(back_bytes)
+                images.append(resized_back)
+                back_instruction = (
+                    "\n\nA second image is provided showing the back of this flight card. "
+                    "Any handwritten text found on the back is likely additional notes or "
+                    "continuation of the notes field. Include that content in the notes field."
+                )
+
+        return images, back_instruction
+
     async def _call_ollama(
         self, client: httpx.AsyncClient, image_path: str, record_id: int,
         back_image_path: str | None = None,
@@ -663,53 +721,9 @@ class ExtractionService:
             OllamaUnavailableError: If the Ollama endpoint returns an HTTP error.
             ExtractionParseError: If the LLM response cannot be validated.
         """
-        # Read image, resize to 1600px tall for LLM context efficiency, then base64-encode
-        full_path = self._config.image_store_path / image_path
-        image_bytes = full_path.read_bytes()
+        images_list, back_instruction = self._prepare_images(image_path, back_image_path)
 
-        from io import BytesIO
-        from PIL import Image
-
-        img = Image.open(BytesIO(image_bytes))
-        target_height = 1600
-        if img.height > target_height:
-            scale = target_height / img.height
-            new_width = int(img.width * scale)
-            img = img.resize((new_width, target_height), Image.LANCZOS)
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=90)
-            resized_bytes = buf.getvalue()
-        else:
-            resized_bytes = image_bytes
-
-        b64_image = base64.b64encode(resized_bytes).decode("ascii")
-
-        # Prepare images list
-        images_list = [b64_image]
-
-        # If back image exists, load and resize it too
-        back_instruction = ""
-        if back_image_path:
-            back_full_path = self._config.image_store_path / back_image_path
-            if back_full_path.exists():
-                back_image_bytes = back_full_path.read_bytes()
-                back_img = Image.open(BytesIO(back_image_bytes))
-                if back_img.height > target_height:
-                    back_scale = target_height / back_img.height
-                    back_new_width = int(back_img.width * back_scale)
-                    back_img = back_img.resize((back_new_width, target_height), Image.LANCZOS)
-                    back_buf = BytesIO()
-                    back_img.save(back_buf, format="JPEG", quality=90)
-                    back_resized_bytes = back_buf.getvalue()
-                else:
-                    back_resized_bytes = back_image_bytes
-                b64_back = base64.b64encode(back_resized_bytes).decode("ascii")
-                images_list.append(b64_back)
-                back_instruction = (
-                    "\n\nA second image is provided showing the back of this flight card. "
-                    "Any handwritten text found on the back is likely additional notes or "
-                    "continuation of the notes field. Include that content in the notes field."
-                )
+        b64_images = [base64.b64encode(img_bytes).decode("ascii") for img_bytes in images_list]
 
         # Build the prompt content
         prompt_content = EXTRACTION_PROMPT.format(
@@ -724,7 +738,7 @@ class ExtractionService:
                 {
                     "role": "user",
                     "content": prompt_content,
-                    "images": images_list,
+                    "images": b64_images,
                 }
             ],
             "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
@@ -741,7 +755,7 @@ class ExtractionService:
             request_dump = json.loads(json.dumps(payload))
             for msg in request_dump.get("messages", []):
                 if "images" in msg:
-                    msg["images"] = [f"<base64 image: {len(b64_image)} chars>"]
+                    msg["images"] = [f"<base64 image: {len(b)} chars>" for b in b64_images]
             request_path.write_text(json.dumps(request_dump, indent=2, ensure_ascii=False))
         except OSError as exc:
             logger.warning("Failed to write request file %s: %s", request_path, exc)
@@ -1006,47 +1020,7 @@ class ExtractionService:
             BedrockUnavailableError: If the Bedrock API call fails.
             ExtractionParseError: If the LLM response cannot be validated.
         """
-        from io import BytesIO
-        from PIL import Image
-
-        # Read image, resize to 1600px tall for LLM context efficiency
-        full_path = self._config.image_store_path / image_path
-        image_bytes = full_path.read_bytes()
-
-        img = Image.open(BytesIO(image_bytes))
-        target_height = 1600
-        if img.height > target_height:
-            scale = target_height / img.height
-            new_width = int(img.width * scale)
-            img = img.resize((new_width, target_height), Image.LANCZOS)
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=90)
-            resized_bytes = buf.getvalue()
-        else:
-            resized_bytes = image_bytes
-
-        # Prepare back image if available
-        back_resized_bytes = None
-        back_instruction = ""
-        if back_image_path:
-            back_full_path = self._config.image_store_path / back_image_path
-            if back_full_path.exists():
-                back_image_bytes = back_full_path.read_bytes()
-                back_img = Image.open(BytesIO(back_image_bytes))
-                if back_img.height > target_height:
-                    back_scale = target_height / back_img.height
-                    back_new_width = int(back_img.width * back_scale)
-                    back_img = back_img.resize((back_new_width, target_height), Image.LANCZOS)
-                    back_buf = BytesIO()
-                    back_img.save(back_buf, format="JPEG", quality=90)
-                    back_resized_bytes = back_buf.getvalue()
-                else:
-                    back_resized_bytes = back_image_bytes
-                back_instruction = (
-                    "\n\nA second image is provided showing the back of this flight card. "
-                    "Any handwritten text found on the back is likely additional notes or "
-                    "continuation of the notes field. Include that content in the notes field."
-                )
+        images_list, back_instruction = self._prepare_images(image_path, back_image_path)
 
         prompt_text = EXTRACTION_PROMPT.format(
             event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
@@ -1063,19 +1037,13 @@ class ExtractionService:
         )
 
         # Build the request payload for debug sidecar
-        content_blocks_debug = [
-            {
-                "image": {
-                    "format": "jpeg",
-                    "source": {"bytes": f"<image: {len(resized_bytes)} bytes>"},
-                }
-            },
-        ]
-        if back_resized_bytes:
+        content_blocks_debug = []
+        for i, img_bytes in enumerate(images_list):
+            label = "image" if i == 0 else "back image"
             content_blocks_debug.append({
                 "image": {
                     "format": "jpeg",
-                    "source": {"bytes": f"<back image: {len(back_resized_bytes)} bytes>"},
+                    "source": {"bytes": f"<{label}: {len(img_bytes)} bytes>"},
                 }
             })
         content_blocks_debug.append({"text": prompt_text})
@@ -1106,19 +1074,12 @@ class ExtractionService:
         import time as _time
 
         # Build the content blocks for the actual API call
-        content_blocks = [
-            {
-                "image": {
-                    "format": "jpeg",
-                    "source": {"bytes": resized_bytes},
-                }
-            },
-        ]
-        if back_resized_bytes:
+        content_blocks = []
+        for img_bytes in images_list:
             content_blocks.append({
                 "image": {
                     "format": "jpeg",
-                    "source": {"bytes": back_resized_bytes},
+                    "source": {"bytes": img_bytes},
                 }
             })
         content_blocks.append({"text": prompt_text})
