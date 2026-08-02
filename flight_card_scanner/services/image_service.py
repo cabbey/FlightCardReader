@@ -69,3 +69,61 @@ def delete_image(path: Path) -> None:
         path.unlink(missing_ok=True)
     except OSError as exc:
         logger.warning("Failed to delete image at %s during rollback: %s", path, exc)
+
+
+def get_preflight_image_path(front_filename: str) -> str:
+    """Derive the preflight image filename from the front image filename.
+
+    Inserts '-preflight' before the file extension.
+
+    Args:
+        front_filename: The front image filename (e.g. "a1b2c3d4-uuid.jpg").
+
+    Returns:
+        The preflight image filename (e.g. "a1b2c3d4-uuid-preflight.jpg").
+    """
+    stem, dot, ext = front_filename.rpartition(".")
+    if not dot:
+        return front_filename + "-preflight"
+    return f"{stem}-preflight.{ext}"
+
+
+def save_preflight_image(
+    front_filename: str, file_bytes: bytes, store_path: Path
+) -> str:
+    """Save a preflight image alongside the front image.
+
+    The filename is derived from the front image filename with '-preflight'
+    inserted before the extension.
+
+    Args:
+        front_filename: The front image filename used as the naming base.
+        file_bytes: Raw image bytes to store.
+        store_path: Path to the image store directory.
+
+    Returns:
+        The preflight image filename.
+
+    Raises:
+        ImageStorageError: If the directory is not writable or the write fails.
+    """
+    preflight_filename = get_preflight_image_path(front_filename)
+    target = store_path / preflight_filename
+
+    if not store_path.exists():
+        raise ImageStorageError(
+            f"Image store directory does not exist: {store_path}"
+        )
+    if not store_path.is_dir():
+        raise ImageStorageError(
+            f"Image store path is not a directory: {store_path}"
+        )
+
+    try:
+        target.write_bytes(file_bytes)
+    except OSError as exc:
+        raise ImageStorageError(
+            f"Failed to write preflight image to {target}: {exc}"
+        ) from exc
+
+    return preflight_filename

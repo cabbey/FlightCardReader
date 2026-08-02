@@ -18,16 +18,18 @@ from fastapi import HTTPException, Request
 
 
 class Role(IntEnum):
-    """Access tiers in strict inclusive hierarchy: ADMIN > DATA_ENTRY > PUBLIC."""
+    """Access tiers in strict inclusive hierarchy: ADMIN > DATA_ENTRY > FLYER > PUBLIC."""
 
     PUBLIC = 0
-    DATA_ENTRY = 1
-    ADMIN = 2
+    FLYER = 1
+    DATA_ENTRY = 2
+    ADMIN = 3
 
 
 ROLE_MAP: dict[str, Role] = {
     "admin": Role.ADMIN,
     "data_entry": Role.DATA_ENTRY,
+    "flyer": Role.FLYER,
 }
 
 

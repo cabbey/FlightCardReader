@@ -761,4 +761,147 @@ async def event_delete_record(
     )
 
 
+# --- Preflight image upload ---
+
+
+@event_router.post(
+    "/api/record/{record_id}/preflight",
+    dependencies=[Depends(require_role(Role.FLYER))],
+)
+async def event_upload_preflight(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Upload a preflight image for a flight record.
+
+    Requires Role.FLYER minimum. Saves the image and marks overflow
+    with preflight_status='pending' and optionally is_lost=True.
+    """
+    from fastapi import File, Form, UploadFile
+
+    from .services.image_service import save_preflight_image
+
+    # Manually parse the multipart form since we declared deps in the decorator
+    form = await request.form()
+    preflight_image = form.get("preflight_image")
+    mark_lost_raw = form.get("mark_lost", "false")
+    mark_lost = mark_lost_raw in ("true", "1", "on", "True")
+
+    if preflight_image is None or not hasattr(preflight_image, "read"):
+        raise HTTPException(status_code=400, detail="No preflight image provided")
+
+    # Validate content type
+    content_type = getattr(preflight_image, "content_type", "") or ""
+    if content_type not in ("image/jpeg", "image/png"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only JPEG and PNG are accepted.",
+        )
+
+    # Read file bytes
+    file_bytes = await preflight_image.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    # Fetch the record
+    from sqlalchemy import select as sa_select
+
+    from .models import FlightRecord
+
+    result = await db.execute(
+        sa_select(FlightRecord).where(FlightRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    # Check if a preflight image already exists
+    from .services.image_service import get_preflight_image_path
+
+    preflight_filename = get_preflight_image_path(record.image_path)
+    store_path = event_info.event_config.image_store_path
+    if (store_path / preflight_filename).exists():
+        raise HTTPException(
+            status_code=409, detail="Preflight image already exists for this record"
+        )
+
+    # Save the image
+    save_preflight_image(record.image_path, file_bytes, store_path)
+
+    # Update overflow
+    overflow = dict(record.overflow) if record.overflow else {}
+    overflow["preflight_status"] = "pending"
+
+    # Get current user from the require_role dependency (already validated)
+    user = getattr(request.state, "user", None)
+    overflow["preflight_uploaded_by"] = user.email if user else "unknown"
+
+    if mark_lost:
+        overflow["is_lost"] = True
+
+    record.overflow = overflow
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(record, "overflow")
+    await db.commit()
+
+    return {"message": "Preflight image uploaded successfully", "status": "pending"}
+
+
+@event_router.post(
+    "/api/record/{record_id}/clear-lost",
+    dependencies=[Depends(require_role(Role.FLYER))],
+)
+async def event_clear_lost(
+    request: Request,
+    event_path: str,
+    record_id: int,
+    event_info: EventInfo = Depends(get_event_info),
+    db: AsyncSession = Depends(get_event_db),
+):
+    """Clear the 'lost' status on a flight record.
+
+    Allowed for the user who set it (by email match) or admin/data_entry roles.
+    Keeps the preflight image file intact.
+    """
+    from sqlalchemy import select as sa_select
+
+    from .models import FlightRecord
+
+    result = await db.execute(
+        sa_select(FlightRecord).where(FlightRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    overflow = dict(record.overflow) if record.overflow else {}
+    if not overflow.get("is_lost"):
+        raise HTTPException(status_code=400, detail="Record is not marked as lost")
+
+    # Authorization: only the uploader or admin/data_entry can clear
+    user = getattr(request.state, "user", None)
+    uploaded_by = overflow.get("preflight_uploaded_by", "")
+    user_role = user.role if user else ""
+    user_email = user.email if user else ""
+
+    if user_role not in ("admin", "data_entry") and user_email != uploaded_by:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the user who marked it lost or admin/data_entry can clear this",
+        )
+
+    overflow["is_lost"] = False
+    record.overflow = overflow
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(record, "overflow")
+    await db.commit()
+
+    return {"message": "Lost status cleared"}
+
+
 app.include_router(event_router)
