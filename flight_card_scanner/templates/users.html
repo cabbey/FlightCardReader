@@ -25,6 +25,7 @@
   }
   .badge-admin { background: #e3f2fd; color: #1565c0; }
   .badge-data-entry { background: #e8f5e9; color: #2e7d32; }
+  .badge-flyer { background: #fff3e0; color: #e65100; }
   .badge-active { background: #e8f5e9; color: #2e7d32; }
   .badge-inactive { background: #fbe9e7; color: #c62828; }
   .back-link {
@@ -165,6 +166,8 @@
       <td>
         {% if user.role == "admin" %}
           <span class="badge badge-admin">admin</span>
+        {% elif user.role == "flyer" %}
+          <span class="badge badge-flyer">flyer</span>
         {% else %}
           <span class="badge badge-data-entry">data_entry</span>
         {% endif %}
@@ -199,6 +202,7 @@
 
       <label for="new-role">Role</label>
       <select id="new-role" name="role" required>
+        <option value="flyer">flyer</option>
         <option value="data_entry">data_entry</option>
         <option value="admin">admin</option>
       </select>
@@ -220,6 +224,7 @@
 
       <label for="edit-role">Role</label>
       <select id="edit-role" name="role">
+        <option value="flyer">flyer</option>
         <option value="data_entry">data_entry</option>
         <option value="admin">admin</option>
       </select>
