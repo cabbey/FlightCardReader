@@ -32,6 +32,9 @@ class FlightRecord(Base):
 
     # --- Image ---
     image_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    back_image_path: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, default=None
+    )
 
     # --- Extraction lifecycle ---
     extraction_status: Mapped[str] = mapped_column(
