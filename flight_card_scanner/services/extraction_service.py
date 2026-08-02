@@ -529,7 +529,7 @@ class ExtractionService:
             await record_service.set_status(db, record_id, "processing")
 
         try:
-            extracted = await self._call_ollama(client, record.image_path, record_id)
+            extracted = await self._call_ollama(client, record.image_path, record_id, back_image_path=record.back_image_path)
         except OllamaUnavailableError as exc:
             logger.error(
                 "Endpoint %s unreachable for record %d: %s — returning to pending",
@@ -649,13 +649,15 @@ class ExtractionService:
         await db.commit()
 
     async def _call_ollama(
-        self, client: httpx.AsyncClient, image_path: str, record_id: int
+        self, client: httpx.AsyncClient, image_path: str, record_id: int,
+        back_image_path: str | None = None,
     ) -> FlightCardExtraction:
         """Submit card image to Ollama and return parsed extraction.
 
         Reads the image, base64-encodes it, sends to the Ollama /api/chat
         endpoint with structured output format, and parses the response
-        into a FlightCardExtraction model.
+        into a FlightCardExtraction model. If back_image_path is provided,
+        both images are included with an instruction about back content.
 
         Raises:
             OllamaUnavailableError: If the Ollama endpoint returns an HTTP error.
@@ -682,17 +684,47 @@ class ExtractionService:
 
         b64_image = base64.b64encode(resized_bytes).decode("ascii")
 
+        # Prepare images list
+        images_list = [b64_image]
+
+        # If back image exists, load and resize it too
+        back_instruction = ""
+        if back_image_path:
+            back_full_path = self._config.image_store_path / back_image_path
+            if back_full_path.exists():
+                back_image_bytes = back_full_path.read_bytes()
+                back_img = Image.open(BytesIO(back_image_bytes))
+                if back_img.height > target_height:
+                    back_scale = target_height / back_img.height
+                    back_new_width = int(back_img.width * back_scale)
+                    back_img = back_img.resize((back_new_width, target_height), Image.LANCZOS)
+                    back_buf = BytesIO()
+                    back_img.save(back_buf, format="JPEG", quality=90)
+                    back_resized_bytes = back_buf.getvalue()
+                else:
+                    back_resized_bytes = back_image_bytes
+                b64_back = base64.b64encode(back_resized_bytes).decode("ascii")
+                images_list.append(b64_back)
+                back_instruction = (
+                    "\n\nA second image is provided showing the back of this flight card. "
+                    "Any handwritten text found on the back is likely additional notes or "
+                    "continuation of the notes field. Include that content in the notes field."
+                )
+
+        # Build the prompt content
+        prompt_content = EXTRACTION_PROMPT.format(
+            event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
+            event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
+        ) + back_instruction
+
         # Build the Ollama /api/chat payload
         payload = {
             "model": "qwen3-vl",
             "messages": [
                 {
                     "role": "user",
-                    "content": EXTRACTION_PROMPT.format(
-                        event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
-                        event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
-                    ),
-                    "images": [b64_image],
+                    "content": prompt_content,
+                    "images": images_list,
                 }
             ],
             "format": _simplify_schema(FlightCardExtraction.model_json_schema()),
@@ -923,7 +955,8 @@ class ExtractionService:
 
         try:
             extracted = await self._call_bedrock(
-                bedrock_client, endpoint.model_id, record.image_path, record_id
+                bedrock_client, endpoint.model_id, record.image_path, record_id,
+                back_image_path=record.back_image_path,
             )
         except BedrockUnavailableError as exc:
             logger.error(
@@ -959,12 +992,14 @@ class ExtractionService:
         await self._post_extraction(record_id, extracted)
 
     async def _call_bedrock(
-        self, bedrock_client, model_id: str, image_path: str, record_id: int
+        self, bedrock_client, model_id: str, image_path: str, record_id: int,
+        back_image_path: str | None = None,
     ) -> FlightCardExtraction:
         """Submit card image to Amazon Bedrock and return parsed extraction.
 
         Reads the image, resizes it, then uses the boto3 Bedrock Converse API
-        to send the image and EXTRACTION_PROMPT. Parses the response into a
+        to send the image and EXTRACTION_PROMPT. If back_image_path is provided,
+        both images are included. Parses the response into a
         FlightCardExtraction model.
 
         Raises:
@@ -990,10 +1025,33 @@ class ExtractionService:
         else:
             resized_bytes = image_bytes
 
+        # Prepare back image if available
+        back_resized_bytes = None
+        back_instruction = ""
+        if back_image_path:
+            back_full_path = self._config.image_store_path / back_image_path
+            if back_full_path.exists():
+                back_image_bytes = back_full_path.read_bytes()
+                back_img = Image.open(BytesIO(back_image_bytes))
+                if back_img.height > target_height:
+                    back_scale = target_height / back_img.height
+                    back_new_width = int(back_img.width * back_scale)
+                    back_img = back_img.resize((back_new_width, target_height), Image.LANCZOS)
+                    back_buf = BytesIO()
+                    back_img.save(back_buf, format="JPEG", quality=90)
+                    back_resized_bytes = back_buf.getvalue()
+                else:
+                    back_resized_bytes = back_image_bytes
+                back_instruction = (
+                    "\n\nA second image is provided showing the back of this flight card. "
+                    "Any handwritten text found on the back is likely additional notes or "
+                    "continuation of the notes field. Include that content in the notes field."
+                )
+
         prompt_text = EXTRACTION_PROMPT.format(
             event_start=self._config.event_date_range.start.strftime("%B %-d, %Y"),
             event_end=self._config.event_date_range.end.strftime("%B %-d, %Y"),
-        )
+        ) + back_instruction
 
         # Append the JSON schema to the prompt (Bedrock doesn't have Ollama's native
         # structured output "format" parameter, so we include it as instructions)
@@ -1005,20 +1063,29 @@ class ExtractionService:
         )
 
         # Build the request payload for debug sidecar
+        content_blocks_debug = [
+            {
+                "image": {
+                    "format": "jpeg",
+                    "source": {"bytes": f"<image: {len(resized_bytes)} bytes>"},
+                }
+            },
+        ]
+        if back_resized_bytes:
+            content_blocks_debug.append({
+                "image": {
+                    "format": "jpeg",
+                    "source": {"bytes": f"<back image: {len(back_resized_bytes)} bytes>"},
+                }
+            })
+        content_blocks_debug.append({"text": prompt_text})
+
         request_payload = {
             "modelId": model_id,
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "image": {
-                                "format": "jpeg",
-                                "source": {"bytes": f"<image: {len(resized_bytes)} bytes>"},
-                            }
-                        },
-                        {"text": prompt_text},
-                    ],
+                    "content": content_blocks_debug,
                 }
             ],
             "inferenceConfig": {
@@ -1038,21 +1105,31 @@ class ExtractionService:
         # Call Bedrock Converse API via boto3 (blocking, run in a thread)
         import time as _time
 
+        # Build the content blocks for the actual API call
+        content_blocks = [
+            {
+                "image": {
+                    "format": "jpeg",
+                    "source": {"bytes": resized_bytes},
+                }
+            },
+        ]
+        if back_resized_bytes:
+            content_blocks.append({
+                "image": {
+                    "format": "jpeg",
+                    "source": {"bytes": back_resized_bytes},
+                }
+            })
+        content_blocks.append({"text": prompt_text})
+
         def _invoke():
             return bedrock_client.converse(
                 modelId=model_id,
                 messages=[
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "image": {
-                                    "format": "jpeg",
-                                    "source": {"bytes": resized_bytes},
-                                }
-                            },
-                            {"text": prompt_text},
-                        ],
+                        "content": content_blocks,
                     }
                 ],
                 inferenceConfig={
