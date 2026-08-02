@@ -253,6 +253,11 @@ async def preflight_queue_page(request: Request):
 
     Queries all events for FlightRecords with preflight_status='pending'
     in their overflow JSON.
+
+    NOTE: This creates a disposable read-only engine per event per request.
+    This is acceptable for now since the approval queue is admin-only and
+    rarely accessed. Could be optimized by reusing the event manager's
+    existing session factories if performance becomes a concern with many events.
     """
     if _templates is None:
         raise RuntimeError("Auth router not configured.")

@@ -40,7 +40,15 @@ class LostRocketsBase(DeclarativeBase):
 
 
 class LostRocket(LostRocketsBase):
-    """Represents a rocket that has been marked as lost."""
+    """Represents a rocket that has been marked as lost.
+
+    NOTE: This model denormalizes flier_name, rocket_colors, diameter, length,
+    and motor_designation from the source FlightRecord at insertion time. If a
+    data_entry user later corrects those fields on the flight record, the lost
+    rockets listing will show outdated information. This is a known limitation
+    acceptable for the MVP. A future improvement could join back to the source
+    event DB at query time or implement a sync mechanism.
+    """
 
     __tablename__ = "lost_rockets"
 

@@ -813,10 +813,26 @@ async def event_upload_preflight(
             detail="Invalid file type. Only JPEG and PNG are accepted.",
         )
 
-    # Read file bytes
-    file_bytes = await preflight_image.read()
+    # Enforce a 20MB file-size limit. Check Content-Length header first for
+    # early rejection, then cap the actual read to prevent memory exhaustion.
+    MAX_PREFLIGHT_BYTES = 20 * 1024 * 1024  # 20 MB
+
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_PREFLIGHT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum upload size is 20 MB.",
+        )
+
+    # Read file bytes with a cap
+    file_bytes = await preflight_image.read(MAX_PREFLIGHT_BYTES + 1)
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(file_bytes) > MAX_PREFLIGHT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum upload size is 20 MB.",
+        )
 
     # Fetch the record
     from sqlalchemy import select as sa_select
@@ -906,11 +922,20 @@ async def event_upload_preflight(
             added_by=user.email if user else "unknown",
         )
 
-        # Use the lost rockets DB session
+        # Use the lost rockets DB session.
+        # Handle IntegrityError gracefully (e.g., retry after partial failure
+        # where the lost_rockets row already exists from a previous attempt).
+        from sqlalchemy.exc import IntegrityError as SAIntegrityError
+
         from .lost_rockets_database import _lost_rockets_session
         async with _lost_rockets_session() as lost_db:
-            lost_db.add(lost_entry)
-            await lost_db.commit()
+            try:
+                lost_db.add(lost_entry)
+                await lost_db.commit()
+            except SAIntegrityError:
+                # Row already exists (unique constraint on event_slug + record_id).
+                # This is benign - the record was likely created by a prior attempt.
+                await lost_db.rollback()
 
     return {"message": "Preflight image uploaded successfully", "status": "pending"}
 
@@ -930,6 +955,12 @@ async def event_clear_lost(
 
     Allowed for the user who set it (by email match) or admin/data_entry roles.
     Keeps the preflight image file intact.
+
+    NOTE: This intentionally does NOT change preflight_status. The preflight image
+    remains in moderation (pending or approved) even after the lost flag is cleared.
+    Per user requirements: "Clearing lost status: Keep the preflight image file,
+    just remove the row from the lost database and clear any flag in the event
+    database." The image stays visible in the approval queue for independent review.
     """
     from sqlalchemy import select as sa_select
 
@@ -971,14 +1002,15 @@ async def event_clear_lost(
     from .lost_rockets_models import LostRocket
     from sqlalchemy import delete as sa_delete
 
-    async with _lost_rockets_session() as lost_db:
-        await lost_db.execute(
-            sa_delete(LostRocket).where(
-                LostRocket.event_slug == event_slug,
-                LostRocket.record_id == record_id,
+    if _lost_rockets_session is not None:
+        async with _lost_rockets_session() as lost_db:
+            await lost_db.execute(
+                sa_delete(LostRocket).where(
+                    LostRocket.event_slug == event_slug,
+                    LostRocket.record_id == record_id,
+                )
             )
-        )
-        await lost_db.commit()
+            await lost_db.commit()
 
     return {"message": "Lost status cleared"}
 
