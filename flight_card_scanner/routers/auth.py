@@ -238,6 +238,242 @@ async def admin_dashboard(request: Request):
     )
 
 
+# ---------------------------------------------------------------------------
+# Preflight Approval Queue (FEAT-009)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/admin/preflight-queue",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def preflight_queue_page(request: Request):
+    """Render the preflight image approval queue.
+
+    Queries all events for FlightRecords with preflight_status='pending'
+    in their overflow JSON.
+    """
+    if _templates is None:
+        raise RuntimeError("Auth router not configured.")
+
+    from sqlalchemy import text
+
+    event_manager = getattr(request.app.state, "event_manager", None)
+    if event_manager is None:
+        raise HTTPException(status_code=500, detail="Event manager not available")
+
+    pending_items: list[dict] = []
+
+    for slug, event_info in event_manager.events.items():
+        # Access the event's database (read-only query)
+        db_path = event_info.event_config.db_path
+        if not db_path.exists():
+            continue
+
+        # Open a temporary read-only connection to query pending preflight records
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        uri_path = str(db_path).replace("?", "%3f").replace("#", "%23")
+        url = f"sqlite+aiosqlite:///file:{uri_path}?mode=ro&uri=true"
+        engine = create_async_engine(url, echo=False)
+
+        try:
+            async with engine.connect() as conn:
+                # Check if flight_records table exists
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(
+                        sync_conn, "flight_records"
+                    )
+                )
+                if not table_exists:
+                    continue
+
+                # Query for records with preflight_status='pending' using json_extract
+                result = await conn.execute(
+                    text(
+                        "SELECT id, image_path, overflow FROM flight_records "
+                        "WHERE json_extract(overflow, '$.preflight_status') = 'pending'"
+                    )
+                )
+                rows = result.fetchall()
+
+                for row in rows:
+                    import json as json_mod
+
+                    overflow = row[2]
+                    if isinstance(overflow, str):
+                        overflow = json_mod.loads(overflow)
+                    elif overflow is None:
+                        overflow = {}
+
+                    from flight_card_scanner.services.image_service import (
+                        get_preflight_image_path,
+                    )
+
+                    preflight_filename = get_preflight_image_path(row[1])
+
+                    pending_items.append({
+                        "event_slug": slug,
+                        "event_name": event_info.event_config.event_name,
+                        "record_id": row[0],
+                        "image_path": row[1],
+                        "preflight_image_path": preflight_filename,
+                        "uploaded_by": overflow.get("preflight_uploaded_by", "unknown"),
+                        "is_lost": overflow.get("is_lost", False),
+                    })
+        except Exception as exc:
+            logger.warning(
+                "Failed to query preflight queue for event %s: %s", slug, exc
+            )
+        finally:
+            await engine.dispose()
+
+    return _templates.TemplateResponse(
+        name="preflight_queue.html",
+        request=request,
+        context={
+            "request": request,
+            "page_title": "Preflight Approval Queue",
+            "pending_items": pending_items,
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+@router.post(
+    "/api/admin/preflight/{event_slug:path}/{record_id:int}/approve",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def approve_preflight(request: Request, event_slug: str, record_id: int):
+    """Approve a pending preflight image.
+
+    Sets overflow.preflight_status='approved' on the FlightRecord in the
+    event's database.
+    """
+    event_manager = getattr(request.app.state, "event_manager", None)
+    if event_manager is None:
+        raise HTTPException(status_code=500, detail="Event manager not available")
+
+    # Get the event info
+    event_info = event_manager.events.get(event_slug)
+    if event_info is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Open the event to get a writable session
+    event_info = await event_manager.get_event(event_slug)
+
+    if event_info.session_factory is None:
+        raise HTTPException(status_code=500, detail="Event database not available")
+
+    from sqlalchemy import select as sa_select
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from flight_card_scanner.models import FlightRecord
+
+    async with event_info.session_factory() as db:
+        result = await db.execute(
+            sa_select(FlightRecord).where(FlightRecord.id == record_id)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        overflow = dict(record.overflow) if record.overflow else {}
+        if overflow.get("preflight_status") != "pending":
+            raise HTTPException(
+                status_code=400, detail="Record is not pending approval"
+            )
+
+        overflow["preflight_status"] = "approved"
+        record.overflow = overflow
+        flag_modified(record, "overflow")
+        await db.commit()
+
+    return {"message": "Preflight image approved", "status": "approved"}
+
+
+@router.post(
+    "/api/admin/preflight/{event_slug:path}/{record_id:int}/delete",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def delete_preflight(request: Request, event_slug: str, record_id: int):
+    """Delete a pending preflight image.
+
+    Removes the preflight image file from disk, clears preflight data from
+    the record's overflow. If the record was marked as lost, also removes
+    the lost rocket entry from lost_rockets.db and clears overflow.is_lost.
+    """
+    event_manager = getattr(request.app.state, "event_manager", None)
+    if event_manager is None:
+        raise HTTPException(status_code=500, detail="Event manager not available")
+
+    # Get the event info
+    event_info_check = event_manager.events.get(event_slug)
+    if event_info_check is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Open the event to get a writable session
+    event_info = await event_manager.get_event(event_slug)
+
+    if event_info.session_factory is None:
+        raise HTTPException(status_code=500, detail="Event database not available")
+
+    from sqlalchemy import select as sa_select
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from flight_card_scanner.models import FlightRecord
+    from flight_card_scanner.services.image_service import get_preflight_image_path
+
+    async with event_info.session_factory() as db:
+        result = await db.execute(
+            sa_select(FlightRecord).where(FlightRecord.id == record_id)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        overflow = dict(record.overflow) if record.overflow else {}
+        was_lost = overflow.get("is_lost", False)
+
+        # Delete the preflight image file from disk
+        preflight_filename = get_preflight_image_path(record.image_path)
+        image_path = event_info.event_config.image_store_path / preflight_filename
+        if image_path.exists():
+            image_path.unlink()
+
+        # Clear preflight data from overflow
+        overflow.pop("preflight_status", None)
+        overflow.pop("preflight_uploaded_by", None)
+
+        # If was marked lost, also clear is_lost
+        if was_lost:
+            overflow.pop("is_lost", None)
+
+        record.overflow = overflow
+        flag_modified(record, "overflow")
+        await db.commit()
+
+    # If was marked lost, remove from lost rockets database
+    if was_lost:
+        from sqlalchemy import delete as sa_delete
+
+        from flight_card_scanner.lost_rockets_database import _lost_rockets_session
+        from flight_card_scanner.lost_rockets_models import LostRocket
+
+        if _lost_rockets_session is not None:
+            async with _lost_rockets_session() as lost_db:
+                await lost_db.execute(
+                    sa_delete(LostRocket).where(
+                        LostRocket.event_slug == event_slug,
+                        LostRocket.record_id == record_id,
+                    )
+                )
+                await lost_db.commit()
+
+    return {"message": "Preflight image deleted"}
+
+
 @router.get(
     "/admin/users",
     response_class=HTMLResponse,
