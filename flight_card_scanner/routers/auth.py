@@ -366,7 +366,7 @@ async def admin_dashboard(request: Request):
     current_mode = extraction_service.mode.value
 
     return _templates.TemplateResponse(
-        name="admin.html",
+        name="main_admin.html",
         request=request,
         context={
             "request": request,
