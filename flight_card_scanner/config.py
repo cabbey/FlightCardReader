@@ -377,6 +377,7 @@ class ServerConfig:
     ssl_certfile: Path | None = None
     ssl_keyfile: Path | None = None
     auth_db_path: Path = field(default_factory=lambda: Path("./auth.db"))
+    lost_rockets_db_path: Path = field(default_factory=lambda: Path("./lost_rockets.db"))
     session_timeout_hours: float = 8.0
     event_idle_timeout_minutes: int = 60
 
@@ -540,6 +541,11 @@ def load_app_config(path: Path) -> ServerConfig:
         Path(get_with_default("auth_db_path", "./auth.db")), config_dir
     )
 
+    # --- lost_rockets_db_path ---
+    lost_rockets_db_path = _resolve_path(
+        Path(get_with_default("lost_rockets_db_path", "./lost_rockets.db")), config_dir
+    )
+
     # --- session_timeout_hours ---
     session_timeout_hours = get_with_default("session_timeout_hours", 8)
     if not isinstance(session_timeout_hours, (int, float)) or isinstance(
@@ -580,6 +586,7 @@ def load_app_config(path: Path) -> ServerConfig:
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
         auth_db_path=auth_db_path,
+        lost_rockets_db_path=lost_rockets_db_path,
         session_timeout_hours=session_timeout_hours,
         event_idle_timeout_minutes=event_idle_timeout_minutes,
     )

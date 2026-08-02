@@ -88,6 +88,7 @@
     .nav-btn-reports { background: #7c3aed; }
     .nav-btn-queue { background: #0891b2; }
     .nav-btn-admin { background: #dc2626; }
+    .nav-btn-lost { background: #d97706; }
 
     /* Title row with stats */
     .title-row {
@@ -187,6 +188,7 @@
       </div>
       <div class="nav-right">
         <a href="/" class="nav-btn nav-btn-events">&#x1F4C5; Events</a>
+        <a href="/lost-rockets" class="nav-btn nav-btn-lost">&#x1F680; Lost Rockets</a>
         {% if _event_base %}
           <a href="{{ _event_base }}/" class="nav-btn nav-btn-cards">&#x1F680; Flight Cards</a>
           {% if current_user %}

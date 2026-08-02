@@ -28,6 +28,7 @@ from .dependencies.event import get_event_db, get_event_info
 from .event_manager import EventInfo, EventManager
 from .exceptions import ConfigError
 from .routers import admin, auth, events, reports, review, scan
+from .routers import lost_rockets as lost_rockets_router_mod
 from .services.record_service import display_fractions
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,15 @@ async def lifespan(app: FastAPI):
     auth_engine = init_auth_engine(app_config.auth_db_path)
     await create_auth_tables(auth_engine)
 
+    # 1c2. Initialize lost rockets database (shared across all events)
+    from .lost_rockets_database import (
+        create_lost_rockets_tables,
+        init_lost_rockets_engine,
+    )
+
+    lost_rockets_engine = init_lost_rockets_engine(app_config.lost_rockets_db_path)
+    await create_lost_rockets_tables(lost_rockets_engine)
+
     from .auth_database import _auth_session as auth_session_factory
     auth_service = AuthService(
         session_factory=auth_session_factory,
@@ -182,6 +192,7 @@ async def lifespan(app: FastAPI):
 
     # 6. Configure routers that need template access
     events.configure(templates=templates)
+    lost_rockets_router_mod.configure(templates=templates)
     auth.configure(
         auth_service=auth_service,
         templates=templates,
@@ -306,9 +317,10 @@ async def session_resolution(request: Request, call_next):
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-# Include top-level routers (events list, auth)
+# Include top-level routers (events list, auth, lost rockets)
 app.include_router(events.router)
 app.include_router(auth.router)
+app.include_router(lost_rockets_router_mod.router)
 
 
 # ---------------------------------------------------------------------------
@@ -848,6 +860,58 @@ async def event_upload_preflight(
     flag_modified(record, "overflow")
     await db.commit()
 
+    # If marked lost, create a row in the lost rockets database
+    if mark_lost:
+        from .lost_rockets_database import get_lost_rockets_db
+        from .lost_rockets_models import LostRocket
+
+        # Extract display info from overflow
+        rocket_colors = overflow.get("rocket_colors") or overflow.get("colors")
+        diameter_val = overflow.get("diameter_value", "")
+        diameter_unit = overflow.get("diameter_unit", "")
+        diameter = f"{diameter_val} {diameter_unit}".strip() if diameter_val else None
+        length_val = overflow.get("length_value", "")
+        length_unit = overflow.get("length_unit", "")
+        length = f"{length_val} {length_unit}".strip() if length_val else None
+
+        # Motor designation from overflow
+        motors = overflow.get("motors", [])
+        motor_designation = None
+        if motors and isinstance(motors, list) and len(motors) > 0:
+            first_motor = motors[0]
+            if isinstance(first_motor, dict):
+                motor_designation = first_motor.get("designation") or first_motor.get("motor_designation")
+            elif isinstance(first_motor, str):
+                motor_designation = first_motor
+
+        # Get event slug from the URL path
+        event_slug = event_path.strip("/")
+
+        # Get event name from the event config
+        event_name = event_info.event_config.event_name
+
+        preflight_filename = get_preflight_image_path(record.image_path)
+
+        lost_entry = LostRocket(
+            event_slug=event_slug,
+            event_name=event_name,
+            record_id=record_id,
+            flier_name=record.flier_name,
+            rocket_colors=rocket_colors if isinstance(rocket_colors, list) else None,
+            diameter=diameter,
+            length=length,
+            motor_designation=motor_designation,
+            flight_date=record.flight_date,
+            preflight_image_path=preflight_filename,
+            added_by=user.email if user else "unknown",
+        )
+
+        # Use the lost rockets DB session
+        from .lost_rockets_database import _lost_rockets_session
+        async with _lost_rockets_session() as lost_db:
+            lost_db.add(lost_entry)
+            await lost_db.commit()
+
     return {"message": "Preflight image uploaded successfully", "status": "pending"}
 
 
@@ -900,6 +964,21 @@ async def event_clear_lost(
 
     flag_modified(record, "overflow")
     await db.commit()
+
+    # Remove the corresponding row from lost_rockets database
+    event_slug = event_path.strip("/")
+    from .lost_rockets_database import _lost_rockets_session
+    from .lost_rockets_models import LostRocket
+    from sqlalchemy import delete as sa_delete
+
+    async with _lost_rockets_session() as lost_db:
+        await lost_db.execute(
+            sa_delete(LostRocket).where(
+                LostRocket.event_slug == event_slug,
+                LostRocket.record_id == record_id,
+            )
+        )
+        await lost_db.commit()
 
     return {"message": "Lost status cleared"}
 

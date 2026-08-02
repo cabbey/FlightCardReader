@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .lost-rockets-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .lost-rockets-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+
+  .btn-approval-queue {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: #fff;
+    background: #7c3aed;
+  }
+
+  .btn-approval-queue:hover {
+    opacity: 0.9;
+    text-decoration: none;
+  }
+
+  .lost-rockets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .lost-rocket-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.2s, transform 0.1s;
+  }
+
+  .lost-rocket-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+
+  .lost-rocket-card .card-image {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    background: #f3f4f6;
+    display: block;
+  }
+
+  .lost-rocket-card .card-body {
+    padding: 0.75rem;
+  }
+
+  .lost-rocket-card .card-event {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+  }
+
+  .lost-rocket-card .card-flier {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: #1a1a1a;
+  }
+
+  .lost-rocket-card .card-details {
+    font-size: 0.8rem;
+    color: #4b5563;
+    line-height: 1.4;
+  }
+
+  .lost-rocket-card .card-details span {
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6b7280;
+  }
+
+  .empty-state .emoji {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lost-rockets-header">
+  <h2>Lost Rockets</h2>
+  {% if current_user and current_user.role in ('admin', 'data_entry') %}
+    <a href="/admin/preflight-queue" class="btn-approval-queue">&#x1F50D; Approval Queue</a>
+  {% endif %}
+</div>
+
+{% if rockets %}
+<div class="lost-rockets-grid">
+  {% for rocket in rockets %}
+  <a href="/events/{{ rocket.event_slug }}/record/{{ rocket.record_id }}" class="lost-rocket-card">
+    {% if rocket.preflight_image_path %}
+      <img class="card-image" src="/events/{{ rocket.event_slug }}/images/{{ rocket.preflight_image_path }}" alt="Preflight photo" loading="lazy">
+    {% else %}
+      <div class="card-image" style="display:flex;align-items:center;justify-content:center;font-size:3rem;">&#x1F680;</div>
+    {% endif %}
+    <div class="card-body">
+      <div class="card-event">
+        {{ rocket.event_name or rocket.event_slug }}
+        {% if rocket.flight_date %}
+          - {{ rocket.flight_date.strftime('%A') }}
+        {% endif %}
+      </div>
+      <div class="card-flier">{{ rocket.flier_name or 'Unknown Flier' }}</div>
+      <div class="card-details">
+        {% if rocket.rocket_colors %}
+          <span>&#x1F3A8; {{ rocket.rocket_colors | join(', ') }}</span>
+        {% endif %}
+        {% if rocket.diameter %}
+          <span>&#x2300; {{ rocket.diameter }}</span>
+        {% endif %}
+        {% if rocket.length %}
+          <span>&#x2195; {{ rocket.length }}</span>
+        {% endif %}
+        {% if rocket.motor_designation %}
+          <span>&#x1F525; {{ rocket.motor_designation }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="emoji">&#x1F389;</div>
+  <p>No lost rockets! All rockets have made it home safely.</p>
+</div>
+{% endif %}
+{% endblock %}
