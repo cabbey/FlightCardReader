@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .register-form {
+    max-width: 500px;
+    margin: 2rem auto;
+    padding: 1.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .register-form h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  .register-form label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+  .register-form input[type="email"],
+  .register-form input[type="text"],
+  .register-form input[type="password"],
+  .register-form textarea,
+  .register-form select {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  .register-form textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+  .register-form button[type="submit"] {
+    width: 100%;
+    padding: 0.6rem;
+    background: #1565c0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .register-form button[type="submit"]:hover {
+    background: #0d47a1;
+  }
+  .register-form button[type="submit"]:disabled {
+    background: #90caf9;
+    cursor: not-allowed;
+  }
+  .error-msg {
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    background: #fbe9e7;
+    color: #c62828;
+    border-radius: 4px;
+    font-size: 0.9rem;
+  }
+  .note-msg {
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .password-strength {
+    margin-top: -0.75rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+    min-height: 1.2em;
+  }
+  .strength-weak { color: #c62828; }
+  .strength-fair { color: #f9a825; }
+  .strength-strong { color: #2e7d32; }
+  .strength-bar {
+    height: 4px;
+    border-radius: 2px;
+    margin-top: 0.25rem;
+    transition: width 0.3s, background 0.3s;
+  }
+  .strength-bar-weak { width: 33%; background: #c62828; }
+  .strength-bar-fair { width: 66%; background: #f9a825; }
+  .strength-bar-strong { width: 100%; background: #2e7d32; }
+  .login-link {
+    display: block;
+    text-align: center;
+    margin-top: 1rem;
+    color: #1565c0;
+    text-decoration: none;
+  }
+  .login-link:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="register-form">
+  <h2>Request Access</h2>
+  <div class="note-msg">
+    Registrations are processed manually and may take time to be approved. You will receive an email when approved.
+  </div>
+  {% if error %}
+  <div class="error-msg">{{ error }}</div>
+  {% endif %}
+  <form method="post" action="/register" id="register-form">
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" maxlength="254" required value="{{ form_email|default('', true) }}">
+
+    <label for="display_name">Name</label>
+    <input type="text" id="display_name" name="display_name" maxlength="100" required value="{{ form_name|default('', true) }}">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" maxlength="128" required>
+    <div class="password-strength" id="password-strength">
+      <span id="strength-text"></span>
+      <div class="strength-bar" id="strength-bar"></div>
+    </div>
+
+    <label for="confirm_password">Confirm Password</label>
+    <input type="password" id="confirm_password" name="confirm_password" maxlength="128" required>
+
+    <label for="reason">Reason for requesting access</label>
+    <textarea id="reason" name="reason" required>{{ form_reason|default('', true) }}</textarea>
+
+    <label for="requested_role">Requested role</label>
+    <select id="requested_role" name="requested_role" required>
+      <option value="flyer"{% if form_role == 'flyer' %} selected{% endif %}>I am a flier and want to mark a rocket lost</option>
+      <option value="data_entry"{% if form_role == 'data_entry' %} selected{% endif %}>I want to help with data entry</option>
+    </select>
+
+    <button type="submit" id="submit-btn" disabled>Submit Registration</button>
+  </form>
+  <a href="/login" class="login-link">Already have an account? Sign in</a>
+</div>
+
+<script>
+(function() {
+  var passwordInput = document.getElementById('password');
+  var confirmInput = document.getElementById('confirm_password');
+  var strengthText = document.getElementById('strength-text');
+  var strengthBar = document.getElementById('strength-bar');
+  var submitBtn = document.getElementById('submit-btn');
+  var form = document.getElementById('register-form');
+
+  function checkPasswordStrength(password) {
+    // Returns: 'weak', 'fair', or 'strong'
+    if (password.length < 12) return 'weak';
+    var hasUpper = /[A-Z]/.test(password);
+    var hasLower = /[a-z]/.test(password);
+    var hasDigit = /[0-9]/.test(password);
+    var hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (hasUpper && hasLower && (hasDigit || hasSpecial)) {
+      return 'strong';
+    }
+    return 'fair';
+  }
+
+  function getStrengthMessage(password) {
+    if (password.length === 0) return '';
+    if (password.length < 12) return 'Too short (minimum 12 characters)';
+    var hasUpper = /[A-Z]/.test(password);
+    var hasLower = /[a-z]/.test(password);
+    var hasDigit = /[0-9]/.test(password);
+    var hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (!hasUpper) return 'Add an uppercase letter';
+    if (!hasLower) return 'Add a lowercase letter';
+    if (!hasDigit && !hasSpecial) return 'Add a digit or special character';
+    return 'Strong password';
+  }
+
+  function updateStrengthIndicator() {
+    var password = passwordInput.value;
+    var strength = checkPasswordStrength(password);
+    var message = getStrengthMessage(password);
+
+    strengthText.textContent = message;
+    strengthText.className = '';
+    strengthBar.className = 'strength-bar';
+
+    if (password.length === 0) {
+      strengthBar.className = 'strength-bar';
+      return;
+    }
+
+    if (strength === 'weak') {
+      strengthText.classList.add('strength-weak');
+      strengthBar.classList.add('strength-bar-weak');
+    } else if (strength === 'fair') {
+      strengthText.classList.add('strength-fair');
+      strengthBar.classList.add('strength-bar-fair');
+    } else {
+      strengthText.classList.add('strength-strong');
+      strengthBar.classList.add('strength-bar-strong');
+    }
+  }
+
+  function validateForm() {
+    var email = document.getElementById('email').value.trim();
+    var name = document.getElementById('display_name').value.trim();
+    var password = passwordInput.value;
+    var confirm = confirmInput.value;
+    var reason = document.getElementById('reason').value.trim();
+    var strength = checkPasswordStrength(password);
+
+    var valid = (
+      email.length > 0 &&
+      name.length > 0 &&
+      strength === 'strong' &&
+      password === confirm &&
+      reason.length > 0
+    );
+
+    submitBtn.disabled = !valid;
+  }
+
+  passwordInput.addEventListener('input', function() {
+    updateStrengthIndicator();
+    validateForm();
+  });
+  confirmInput.addEventListener('input', validateForm);
+  document.getElementById('email').addEventListener('input', validateForm);
+  document.getElementById('display_name').addEventListener('input', validateForm);
+  document.getElementById('reason').addEventListener('input', validateForm);
+
+  // Initial state
+  updateStrengthIndicator();
+  validateForm();
+})();
+</script>
+{% endblock %}

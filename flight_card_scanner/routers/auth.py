@@ -4,6 +4,8 @@ Endpoints:
 - GET /login — render login form
 - POST /login — authenticate user, create session, set cookie
 - GET /logout — invalidate session, clear cookie, redirect
+- GET /register — render registration form
+- POST /register — create inactive user pending admin approval
 - GET /admin/users — user management HTML page (admin only)
 - GET /api/admin/users — list all users as JSON (admin only)
 - POST /api/admin/users — create a new user (admin only)
@@ -11,6 +13,7 @@ Endpoints:
 """
 
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -205,6 +208,141 @@ async def logout(request: Request):
     clear_header = _session_middleware._build_clear_cookie_header()
     response.headers["Set-Cookie"] = clear_header
     return response
+
+
+# ---------------------------------------------------------------------------
+# Registration endpoints
+# ---------------------------------------------------------------------------
+
+# Valid role values for registration
+_REGISTRATION_ROLES = {"flyer", "data_entry"}
+
+# Email validation regex (basic)
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_password_strength(password: str) -> str | None:
+    """Return an error message if password is too weak, or None if acceptable."""
+    if len(password) < 12:
+        return "Password must be at least 12 characters long."
+    has_upper = bool(re.search(r"[A-Z]", password))
+    has_lower = bool(re.search(r"[a-z]", password))
+    has_digit = bool(re.search(r"[0-9]", password))
+    has_special = bool(re.search(r"[^A-Za-z0-9]", password))
+    if not (has_upper and has_lower and (has_digit or has_special)):
+        return "Password must contain uppercase, lowercase, and a digit or special character."
+    return None
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Render the registration form."""
+    if _templates is None:
+        raise RuntimeError("Auth router not configured.")
+    return _templates.TemplateResponse(
+        name="register.html",
+        request=request,
+        context={
+            "request": request,
+            "error": None,
+            "form_email": "",
+            "form_name": "",
+            "form_reason": "",
+            "form_role": "flyer",
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+@router.post("/register")
+async def register_submit(request: Request):
+    """Validate registration form and create inactive user."""
+    if _auth_service is None or _templates is None:
+        raise RuntimeError("Auth router not configured.")
+
+    form = await request.form()
+    email = form.get("email", "").strip()
+    display_name = form.get("display_name", "").strip()
+    password = form.get("password", "")
+    confirm_password = form.get("confirm_password", "")
+    reason = form.get("reason", "").strip()
+    requested_role = form.get("requested_role", "").strip()
+
+    def _render_error(error_msg: str):
+        return _templates.TemplateResponse(
+            name="register.html",
+            request=request,
+            context={
+                "request": request,
+                "error": error_msg,
+                "form_email": email,
+                "form_name": display_name,
+                "form_reason": reason,
+                "form_role": requested_role,
+                "current_user": getattr(request.state, "user", None),
+            },
+            status_code=400,
+        )
+
+    # Server-side validation
+    if not email or not _EMAIL_RE.match(email):
+        return _render_error("A valid email address is required.")
+
+    if not display_name:
+        return _render_error("Name is required.")
+
+    password_error = _validate_password_strength(password)
+    if password_error:
+        return _render_error(password_error)
+
+    if password != confirm_password:
+        return _render_error("Passwords do not match.")
+
+    if not reason:
+        return _render_error("Reason for requesting access is required.")
+
+    if requested_role not in _REGISTRATION_ROLES:
+        return _render_error("Please select a valid role.")
+
+    # Create the user with active=False
+    from argon2 import PasswordHasher
+
+    hasher = PasswordHasher()
+    normalized_email = email.lower().strip()
+    password_hash = hasher.hash(password)
+
+    async with _auth_service._session_factory() as db:
+        # Check for duplicate email
+        existing = await db.execute(
+            select(User).where(User.email == normalized_email)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return _render_error("An account with this email already exists.")
+
+        user = User(
+            email=normalized_email,
+            display_name=display_name,
+            password_hash=password_hash,
+            role=requested_role,
+            active=False,
+            reason=reason,
+        )
+        db.add(user)
+        await db.commit()
+
+    log_action(
+        actor=normalized_email,
+        action="registered",
+        object_type="user",
+        object_id="",
+        details={"role": requested_role, "reason": reason},
+    )
+
+    # Redirect to login with success message
+    return RedirectResponse(
+        url="/login?registered=1",
+        status_code=303,
+    )
 
 
 # ---------------------------------------------------------------------------

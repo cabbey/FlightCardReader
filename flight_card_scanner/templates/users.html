@@ -88,6 +88,30 @@
   .actions-cell button {
     margin-right: 0.25rem;
   }
+  .actions-cell a {
+    margin-right: 0.25rem;
+  }
+  .btn-approve {
+    background: #2e7d32;
+    color: #fff;
+  }
+  .btn-approve:hover { background: #1b5e20; }
+  .mailto-link {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #1565c0;
+    text-decoration: none;
+  }
+  .mailto-link:hover { text-decoration: underline; }
+  .reason-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: #555;
+  }
   .message {
     padding: 0.5rem 1rem;
     margin: 1rem 0;
@@ -155,6 +179,7 @@
       <th>Display Name</th>
       <th>Role</th>
       <th>Status</th>
+      <th>Reason</th>
       <th>Actions</th>
     </tr>
   </thead>
@@ -179,8 +204,13 @@
           <span class="badge badge-inactive">inactive</span>
         {% endif %}
       </td>
+      <td class="reason-cell" title="{{ user.reason or '' }}">{{ user.reason or '' }}</td>
       <td class="actions-cell">
         <button class="btn btn-secondary btn-small" onclick="openEditModal({{ user.id }}, '{{ user.display_name | e }}', '{{ user.role }}', {{ 'true' if user.active else 'false' }})">Edit</button>
+        {% if not user.active %}
+        <button class="btn btn-approve btn-small" onclick="approveUser({{ user.id }}, '{{ user.email | e }}', '{{ user.display_name | e }}', '{{ user.role }}')">Approve</button>
+        {% endif %}
+        <span id="mailto-{{ user.id }}"></span>
       </td>
     </tr>
     {% endfor %}
@@ -318,6 +348,32 @@ function saveEditUser(e) {
     } else {
       return resp.json().then(function(data) {
         showMessage(data.detail || 'Failed to update user.', 'error');
+      });
+    }
+  }).catch(function() {
+    showMessage('Network error. Please try again.', 'error');
+  });
+}
+
+function approveUser(userId, email, displayName, role) {
+  var body = { active: true };
+  fetch('/api/admin/users/' + userId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(resp) {
+    if (resp.ok) {
+      showMessage('User approved successfully.', 'success');
+      // Show mailto link
+      var subject = encodeURIComponent('Your Flight Card Scanner access has been approved');
+      var bodyText = encodeURIComponent('Hi ' + displayName + ',\n\nYour account has been approved with the role: ' + role + '.\nYou can now log in.\n\n');
+      var mailtoUrl = 'mailto:' + encodeURIComponent(email) + '?subject=' + subject + '&body=' + bodyText;
+      var container = document.getElementById('mailto-' + userId);
+      container.innerHTML = '<a href="' + mailtoUrl + '" class="mailto-link">Send notification email</a>';
+      setTimeout(function() { location.reload(); }, 3000);
+    } else {
+      return resp.json().then(function(data) {
+        showMessage(data.detail || 'Failed to approve user.', 'error');
       });
     }
   }).catch(function() {

@@ -88,3 +88,27 @@ async def create_auth_tables(engine: AsyncEngine) -> None:
     """
     async with engine.begin() as conn:
         await conn.run_sync(AuthBase.metadata.create_all)
+
+
+async def migrate_auth_columns(engine: AsyncEngine) -> None:
+    """Add columns introduced after initial schema creation.
+
+    Safely adds new columns (e.g., ``reason``) to the ``users`` table if they
+    don't already exist. This allows existing databases to be upgraded without
+    data loss.
+
+    Args:
+        engine: The async engine to use for running ALTER TABLE statements.
+    """
+    import sqlite3
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        # Check existing columns in the users table
+        result = await conn.execute(text("PRAGMA table_info(users)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+
+        if "reason" not in existing_columns:
+            await conn.execute(
+                text("ALTER TABLE users ADD COLUMN reason TEXT DEFAULT NULL")
+            )
