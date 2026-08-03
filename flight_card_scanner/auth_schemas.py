@@ -12,7 +12,7 @@ class CreateUserRequest(BaseModel):
     email: str = Field(max_length=254)
     display_name: str = Field(max_length=100)
     password: str = Field(min_length=8, max_length=128)
-    role: Literal["admin", "data_entry"]
+    role: Literal["admin", "data_entry", "flyer"]
 
 
 class UpdateUserRequest(BaseModel):
@@ -22,7 +22,7 @@ class UpdateUserRequest(BaseModel):
     """
 
     display_name: str | None = Field(None, max_length=100)
-    role: Literal["admin", "data_entry"] | None = None
+    role: Literal["admin", "data_entry", "flyer"] | None = None
     active: bool | None = None
     password: str | None = Field(None, min_length=8, max_length=128)
 

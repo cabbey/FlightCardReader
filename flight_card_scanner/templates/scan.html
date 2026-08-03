@@ -345,6 +345,18 @@
     color: #6b7280;
     word-break: break-all;
   }
+
+  /* Back capture banner */
+  .back-capture-banner {
+    background: #1e40af;
+    color: #fff;
+    text-align: center;
+    padding: 0.6rem 1rem;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
 </style>
 {% endblock %}
 
@@ -430,6 +442,11 @@
       <button class="rotate-btn rotate-ccw" id="rotateCCW" type="button" aria-label="Rotate counter-clockwise">&#x21BA;</button>
       <button class="rotate-btn rotate-cw" id="rotateCW" type="button" aria-label="Rotate clockwise">&#x21BB;</button>
       <img id="capturePreview" alt="Captured flight card" />
+    </div>
+    <div class="video-options" style="margin-top:0.5rem;">
+      <label class="option-toggle">
+        <input type="checkbox" id="captureBackCheck"> Also capture back of card
+      </label>
     </div>
     <div class="controls">
       <button id="acceptBtn" type="button">&#x2714; Accept</button>

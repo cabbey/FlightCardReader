@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Add a 'My Flights' button on the cards list page that filters to records where flier_name matches the logged-in user's linked_flier_name and flier_verified=True. The button should only appear for users who have a linked_flier_name set. The filter should NOT expose the user's email in the URL, template context, or any client-visible data.",
+  "status": "completed",
+  "steps": [
+    "1. In flight_card_scanner/routers/review.py list_records_impl(): Add a new query parameter 'my_flights' (boolean flag). When my_flights=1 is present AND the current_user has a linked_flier_name, add SQL filter: FlightRecord.flier_name == current_user.linked_flier_name AND FlightRecord.flier_verified == True. Pass 'my_flights' state and 'user_has_flier_identity' (bool) to the template context.",
+    "2. In flight_card_scanner/templates/list.html: In the search section (the second .filter-row div), add a 'My Flights' button/link that is visible only when the user has a linked flier identity (user_has_flier_identity is true). The button should link to the current page with ?my_flights=1 added (preserving other filters). When my_flights is active, show it as a highlighted/active state with a 'Clear' link to remove the filter. The button should be styled consistently with existing filter elements.",
+    "3. In the list_url macro in list.html: Add my_flights parameter support so pagination and other links preserve the my_flights filter state.",
+    "4. In the JavaScript section of list.html: Add my_flights to the currentPrefs object and the buildListUrl function so it persists across filter changes.",
+    "5. Ensure privacy: Confirm that the user's email is NEVER included in template context, URL parameters, HTML output, or JavaScript variables. Only the roster name flows through linked_flier_name on the User object, and the filter uses that name server-side.",
+    "6. Write tests: Add tests that verify (a) the my_flights filter correctly returns only records matching the user's linked_flier_name with flier_verified=True, (b) the button does not appear when user has no linked_flier_name, (c) email is not exposed in any response."
+  ],
+  "acceptance_criteria": [
+    "When a logged-in user with linked_flier_name visits the cards list page, a 'My Flights' button is visible in the search/filter area",
+    "Clicking 'My Flights' filters the list to show only records where flier_name matches their linked_flier_name AND flier_verified=True",
+    "The 'My Flights' button is NOT visible for users without a linked_flier_name",
+    "The user's email address is never exposed in the page HTML, URL, or JavaScript",
+    "The my_flights filter state is preserved across pagination and other filter changes",
+    "All existing tests continue to pass"
+  ],
+  "verification": [
+    "python3.12 -m pytest tests/test_registration.py tests/test_column_detection.py tests/test_flier_match_flow.py tests/test_auth_router.py -v",
+    "python3.12 -m pytest tests/test_my_flights.py -v (new test file)"
+  ],
+  "blocked_reason": null,
+  "findings": "All 9 new tests pass, all 134 existing tests continue to pass. The FakeConfig in tests needed an event_date_range field since _build_event_dates expects it. The my_flights filter integrates cleanly with existing _apply_filters pattern - just one additional WHERE clause. The template uses Jinja2 conditional rendering based on user_has_flier_identity context variable."
+}

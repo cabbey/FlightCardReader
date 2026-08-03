@@ -114,12 +114,13 @@ async def lifespan(app: FastAPI):
     app.state.session_secret = session_secret
 
     # 1c. Initialize auth database and service (shared across all events)
-    from .auth_database import create_auth_tables, init_auth_engine
+    from .auth_database import create_auth_tables, init_auth_engine, migrate_auth_columns
     from .services.auth_service import AuthService
     from .middleware.session_middleware import SessionMiddleware as AuthSessionMiddleware
 
     auth_engine = init_auth_engine(app_config.auth_db_path)
     await create_auth_tables(auth_engine)
+    await migrate_auth_columns(auth_engine)
 
     # 1c2. Initialize lost rockets database (shared across all events)
     from .lost_rockets_database import (

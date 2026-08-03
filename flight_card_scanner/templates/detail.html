@@ -125,6 +125,116 @@
     cursor: zoom-in;
   }
 
+  /* Image switcher links */
+  .image-switcher {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .image-switcher a {
+    color: #2563eb;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0.2rem 0;
+  }
+
+  .image-switcher a:hover {
+    text-decoration: underline;
+  }
+
+  .image-switcher a.active {
+    font-weight: 700;
+    text-decoration: underline;
+    color: #1e40af;
+  }
+
+  /* Card flip animation */
+  .card-flip-container {
+    perspective: 1000px;
+    width: 100%;
+    max-width: 50vw;
+  }
+
+  .card-flip-inner {
+    position: relative;
+    width: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+  }
+
+  .card-flip-inner.flipped {
+    transform: rotateY(180deg);
+  }
+
+  .card-flip-front,
+  .card-flip-back {
+    width: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .card-flip-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotateY(180deg);
+  }
+
+  .card-flip-front img,
+  .card-flip-back img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    object-fit: contain;
+    cursor: zoom-in;
+  }
+
+  /* Preflight image display */
+  .preflight-image-container {
+    display: none;
+    width: 100%;
+    max-width: 50vw;
+  }
+
+  .preflight-image-container img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    object-fit: contain;
+    cursor: zoom-in;
+  }
+
+  .preflight-pending-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 50vw;
+    min-height: 200px;
+    background: #f3f4f6;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 2rem;
+  }
+
+  .preflight-pending-placeholder .rocket-emoji {
+    font-size: 4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .preflight-pending-placeholder .pending-text {
+    color: #6b7280;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
   /* Image lightbox */
   .image-lightbox {
     display: none;
@@ -828,21 +938,12 @@
 <div class="detail-layout">
   <!-- Card image column -->
   <div class="card-image-wrapper">
-    <img
-      src="{{ record.image_url }}"
-      alt="Flight card image for record {{ record.id }}"
-      class="card-image"
-      id="cardImage"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-    >
-    <div class="image-placeholder" style="display:none;">Image not available</div>
-
-    {# --- Preflight image section --- #}
-    {% set has_preflight = record.overflow and record.overflow.preflight_status %}
-    {% set preflight_status = record.overflow.preflight_status if has_preflight else None %}
+    {# --- Preflight variables --- #}
+    {% set has_preflight_overflow = record.overflow and record.overflow.preflight_status %}
+    {% set preflight_status = record.overflow.preflight_status if has_preflight_overflow else None %}
     {% set is_lost = record.overflow.is_lost if record.overflow and record.overflow.is_lost else False %}
     {% set preflight_uploaded_by = record.overflow.preflight_uploaded_by if record.overflow else None %}
-    {% set can_upload_preflight = current_user and current_user.role in ('flyer', 'data_entry', 'admin') and not has_preflight %}
+    {% set can_upload_preflight = current_user and current_user.role in ('flyer', 'data_entry', 'admin') and not has_preflight_overflow %}
     {% set can_clear_lost = is_lost and current_user and (current_user.role in ('admin', 'data_entry') or current_user.email == preflight_uploaded_by) %}
 
     {% if is_lost %}
@@ -855,16 +956,58 @@
     </div>
     {% endif %}
 
-    {% if has_preflight %}
-    <div class="preflight-display" style="margin-top: 0.75rem;">
-      <span style="font-size: 0.8rem; font-weight: 600; color: #4b5563;">Preflight Image</span>
-      {% if preflight_status == 'pending' %}
-      <div style="margin-top: 0.25rem; padding: 1rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; text-align: center;">
-        <span style="font-size: 3rem;">&#x1F680;</span>
-        <p style="margin: 0.5rem 0 0; font-size: 0.8rem; color: #6b7280;">Preflight image pending review</p>
+    {% if has_back or has_preflight %}
+    <div class="image-switcher" id="imageSwitcher">
+      <a href="#" class="active" data-view="front" id="switchFront">front</a>
+      {% if has_back %}
+      <a href="#" data-view="back" id="switchBack">back</a>
+      {% endif %}
+      {% if has_preflight %}
+      <a href="#" data-view="preflight" id="switchPreflight">preflight</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="card-flip-container" id="cardFlipContainer">
+      <div class="card-flip-inner" id="cardFlipInner">
+        <div class="card-flip-front">
+          <img
+            src="{{ record.image_url }}"
+            alt="Flight card front image for record {{ record.id }}"
+            class="card-image"
+            id="cardImage"
+            onerror="this.style.display='none';this.parentElement.querySelector('.image-placeholder') && (this.parentElement.querySelector('.image-placeholder').style.display='flex');"
+          >
+          <div class="image-placeholder" style="display:none;">Image not available</div>
+        </div>
+        {% if has_back %}
+        <div class="card-flip-back">
+          <img
+            src="{{ back_image_url }}"
+            alt="Flight card back image for record {{ record.id }}"
+            class="card-image"
+            id="cardImageBack"
+          >
+        </div>
+        {% endif %}
       </div>
-      {% elif preflight_status == 'approved' %}
-      <img src="{{ event_base_url }}/images/{{ record.image_path.rsplit('.', 1)[0] }}-preflight.{{ record.image_path.rsplit('.', 1)[1] }}" alt="Preflight image" style="margin-top: 0.25rem; max-width: 100%; border: 1px solid #ddd; border-radius: 6px;">
+    </div>
+
+    {% if has_preflight %}
+    <div class="preflight-image-container" id="preflightContainer">
+      {% set can_view_preflight = (current_user and current_user.role in ("admin", "data_entry")) or preflight_status == "approved" %}
+      {% if can_view_preflight %}
+      <img
+        src="{{ preflight_image_url }}"
+        alt="Preflight image for record {{ record.id }}"
+        class="card-image"
+        id="cardImagePreflight"
+      >
+      {% else %}
+      <div class="preflight-pending-placeholder" id="preflightPlaceholder">
+        <span class="rocket-emoji">&#x1F680;</span>
+        <span class="pending-text">Pending review</span>
+      </div>
       {% endif %}
     </div>
     {% endif %}
@@ -2081,28 +2224,87 @@
   var isDragging = false;
   var dragStartX, dragStartY, imgStartX, imgStartY;
 
+  function openLightbox(imgElement) {
+    if (!imgElement) return;
+    lightboxImg.src = imgElement.src;
+    lightbox.classList.add('active');
+    lightboxImg.onload = function() {
+      var vw = window.innerWidth / 2;
+      var vh = window.innerHeight;
+      var iw = lightboxImg.naturalWidth;
+      var ih = lightboxImg.naturalHeight;
+      lightboxImg.style.left = Math.min(0, (vw - iw) / 2) + 'px';
+      lightboxImg.style.top = Math.min(0, (vh - ih) / 2) + 'px';
+      lightboxImg.style.width = iw + 'px';
+      lightboxImg.style.height = ih + 'px';
+    };
+    if (lightboxImg.complete && lightboxImg.naturalWidth) {
+      lightboxImg.onload();
+    }
+  }
+
   if (cardImage) {
     cardImage.addEventListener('click', function() {
-      lightboxImg.src = cardImage.src;
-      lightbox.classList.add('active');
-      // Center the image at 1:1 once loaded
-      lightboxImg.onload = function() {
-        var vw = window.innerWidth / 2; // lightbox is left half
-        var vh = window.innerHeight;
-        var iw = lightboxImg.naturalWidth;
-        var ih = lightboxImg.naturalHeight;
-        // Center it within the left half
-        lightboxImg.style.left = Math.min(0, (vw - iw) / 2) + 'px';
-        lightboxImg.style.top = Math.min(0, (vh - ih) / 2) + 'px';
-        lightboxImg.style.width = iw + 'px';
-        lightboxImg.style.height = ih + 'px';
-      };
-      // If already cached, trigger manually
-      if (lightboxImg.complete && lightboxImg.naturalWidth) {
-        lightboxImg.onload();
-      }
+      openLightbox(cardImage);
     });
   }
+
+  // Back image lightbox
+  var cardImageBack = document.getElementById('cardImageBack');
+  if (cardImageBack) {
+    cardImageBack.addEventListener('click', function() {
+      openLightbox(cardImageBack);
+    });
+  }
+
+  // Preflight image lightbox
+  var cardImagePreflight = document.getElementById('cardImagePreflight');
+  if (cardImagePreflight) {
+    cardImagePreflight.addEventListener('click', function() {
+      openLightbox(cardImagePreflight);
+    });
+  }
+
+  // --- Image switcher logic ---
+  (function() {
+    var switcher = document.getElementById('imageSwitcher');
+    if (!switcher) return;
+
+    var flipContainer = document.getElementById('cardFlipContainer');
+    var flipInner = document.getElementById('cardFlipInner');
+    var preflightContainer = document.getElementById('preflightContainer');
+    var links = switcher.querySelectorAll('a[data-view]');
+
+    function setActive(view) {
+      links.forEach(function(link) {
+        if (link.getAttribute('data-view') === view) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+
+      if (view === 'front') {
+        flipContainer.style.display = '';
+        flipInner.classList.remove('flipped');
+        if (preflightContainer) preflightContainer.style.display = 'none';
+      } else if (view === 'back') {
+        flipContainer.style.display = '';
+        flipInner.classList.add('flipped');
+        if (preflightContainer) preflightContainer.style.display = 'none';
+      } else if (view === 'preflight') {
+        flipContainer.style.display = 'none';
+        if (preflightContainer) preflightContainer.style.display = '';
+      }
+    }
+
+    links.forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        setActive(link.getAttribute('data-view'));
+      });
+    });
+  })();
 
   document.getElementById('lightboxClose').addEventListener('click', function(e) {
     e.stopPropagation();

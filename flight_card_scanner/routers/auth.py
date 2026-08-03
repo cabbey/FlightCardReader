@@ -4,6 +4,8 @@ Endpoints:
 - GET /login — render login form
 - POST /login — authenticate user, create session, set cookie
 - GET /logout — invalidate session, clear cookie, redirect
+- GET /register — render registration form
+- POST /register — create inactive user pending admin approval
 - GET /admin/users — user management HTML page (admin only)
 - GET /api/admin/users — list all users as JSON (admin only)
 - POST /api/admin/users — create a new user (admin only)
@@ -11,6 +13,7 @@ Endpoints:
 """
 
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -208,6 +211,231 @@ async def logout(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Registration endpoints
+# ---------------------------------------------------------------------------
+
+# Valid role values for registration
+_REGISTRATION_ROLES = {"flyer", "data_entry"}
+
+# Email validation regex (basic)
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_password_strength(password: str) -> str | None:
+    """Return an error message if password is too weak, or None if acceptable."""
+    if len(password) < 12:
+        return "Password must be at least 12 characters long."
+    has_upper = bool(re.search(r"[A-Z]", password))
+    has_lower = bool(re.search(r"[a-z]", password))
+    has_digit = bool(re.search(r"[0-9]", password))
+    has_special = bool(re.search(r"[^A-Za-z0-9]", password))
+    if not (has_upper and has_lower and (has_digit or has_special)):
+        return "Password must contain uppercase, lowercase, and a digit or special character."
+    return None
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Render the registration form."""
+    if _templates is None:
+        raise RuntimeError("Auth router not configured.")
+    return _templates.TemplateResponse(
+        name="register.html",
+        request=request,
+        context={
+            "request": request,
+            "error": None,
+            "form_email": "",
+            "form_name": "",
+            "form_reason": "",
+            "form_role": "flyer",
+            "current_user": getattr(request.state, "user", None),
+        },
+    )
+
+
+@router.post("/register")
+async def register_submit(request: Request):
+    """Validate registration form and create inactive user."""
+    if _auth_service is None or _templates is None:
+        raise RuntimeError("Auth router not configured.")
+
+    form = await request.form()
+    email = form.get("email", "").strip()
+    display_name = form.get("display_name", "").strip()
+    password = form.get("password", "")
+    confirm_password = form.get("confirm_password", "")
+    reason = form.get("reason", "").strip()
+    requested_role = form.get("requested_role", "").strip()
+
+    def _render_error(error_msg: str):
+        return _templates.TemplateResponse(
+            name="register.html",
+            request=request,
+            context={
+                "request": request,
+                "error": error_msg,
+                "form_email": email,
+                "form_name": display_name,
+                "form_reason": reason,
+                "form_role": requested_role,
+                "current_user": getattr(request.state, "user", None),
+            },
+            status_code=400,
+        )
+
+    # Server-side validation
+    if not email or not _EMAIL_RE.match(email):
+        return _render_error("A valid email address is required.")
+
+    if not display_name:
+        return _render_error("Name is required.")
+
+    password_error = _validate_password_strength(password)
+    if password_error:
+        return _render_error(password_error)
+
+    if password != confirm_password:
+        return _render_error("Passwords do not match.")
+
+    if not reason:
+        return _render_error("Reason for requesting access is required.")
+
+    if requested_role not in _REGISTRATION_ROLES:
+        return _render_error("Please select a valid role.")
+
+    # Create the user with active=False
+    from argon2 import PasswordHasher
+
+    hasher = PasswordHasher()
+    normalized_email = email.lower().strip()
+    password_hash = hasher.hash(password)
+
+    async with _auth_service._session_factory() as db:
+        # Check for duplicate email
+        existing = await db.execute(
+            select(User).where(User.email == normalized_email)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return _render_error("An account with this email already exists.")
+
+        user = User(
+            email=normalized_email,
+            display_name=display_name,
+            password_hash=password_hash,
+            role=requested_role,
+            active=False,
+            reason=reason,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    # --- Auto-approval: check known flier rosters ---
+    auto_approved = False
+    linked_name = None
+    try:
+        event_manager = getattr(getattr(request.app, "state", None), "event_manager", None)
+        if event_manager is not None:
+            from datetime import date as date_type
+
+            from flight_card_scanner.services.flier_match_service import FlierMatchService
+
+            today = date_type.today()
+            events_dict = event_manager.events
+
+            # Determine qualifying events:
+            # 1. The most recently completed event (end < today, max end date)
+            # 2. All future/current events (end >= today)
+            most_recent_completed = None
+            most_recent_end = None
+            qualifying_events = []
+
+            for _slug, info in events_dict.items():
+                event_cfg = info.event_config
+                if event_cfg.event_date_range is None:
+                    continue
+                end_date = event_cfg.event_date_range.end
+                if end_date < today:
+                    # Completed event - track the most recent one
+                    if most_recent_end is None or end_date > most_recent_end:
+                        most_recent_end = end_date
+                        most_recent_completed = info
+                else:
+                    # Future or current event
+                    qualifying_events.append(info)
+
+            if most_recent_completed is not None:
+                qualifying_events.append(most_recent_completed)
+
+            # Check each qualifying event for email match
+            for info in qualifying_events:
+                event_cfg = info.event_config
+                if not event_cfg.known_fliers_path:
+                    continue
+                if not event_cfg.known_fliers_path.exists():
+                    continue
+
+                svc = FlierMatchService(
+                    known_fliers_path=event_cfg.known_fliers_path
+                )
+                svc.load()
+                if not svc.enabled:
+                    continue
+
+                matched_row = svc.find_by_email(normalized_email)
+                if matched_row is not None:
+                    # Get the roster name from the matched row
+                    linked_name = matched_row.get(svc._col_name, "").strip()
+                    auto_approved = True
+                    break
+
+            if auto_approved and linked_name:
+                async with _auth_service._session_factory() as db:
+                    result = await db.execute(
+                        select(User).where(User.email == normalized_email)
+                    )
+                    user_to_update = result.scalar_one_or_none()
+                    if user_to_update is not None:
+                        user_to_update.active = True
+                        user_to_update.role = "flyer"
+                        await db.commit()
+                    else:
+                        # User was deleted between creation and auto-approval;
+                        # treat as if auto-approval did not happen.
+                        auto_approved = False
+                        linked_name = None
+
+    except Exception:
+        # If auto-approval fails for any reason, just skip it.
+        # The user remains inactive pending admin approval.
+        logger.debug("Auto-approval check failed, skipping", exc_info=True)
+
+    log_action(
+        actor=normalized_email,
+        action="registered",
+        object_type="user",
+        object_id="",
+        details={"role": requested_role, "reason": reason},
+    )
+
+    if auto_approved:
+        log_action(
+            actor=normalized_email,
+            action="auto_approved",
+            object_type="user",
+            object_id="",
+            details={"matched_roster_name": linked_name},
+        )
+
+    # Redirect to login with success message
+    return RedirectResponse(
+        url="/login?registered=1",
+        status_code=303,
+    )
+
+
+# ---------------------------------------------------------------------------
 # User Management endpoints (task 7.2)
 # ---------------------------------------------------------------------------
 
@@ -222,13 +450,18 @@ async def admin_dashboard(request: Request):
     if _templates is None:
         raise RuntimeError("Auth router not configured.")
 
+    # Extraction mode is per-event in multi-event deployments, so the global
+    # admin page does not depend on a per-event extraction service.
     from flight_card_scanner.routers.admin import get_extraction_service
 
-    extraction_service = get_extraction_service()
-    current_mode = extraction_service.mode.value
+    try:
+        extraction_service = get_extraction_service()
+        current_mode = extraction_service.mode.value
+    except RuntimeError:
+        current_mode = None
 
     return _templates.TemplateResponse(
-        name="admin.html",
+        name="main_admin.html",
         request=request,
         context={
             "request": request,

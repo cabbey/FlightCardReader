@@ -24,6 +24,7 @@ from ..database import get_db
 from ..models import FlightRecord
 from ..services.card_history_service import read_history, render_history_html
 from ..services.extraction_service import ExtractionService
+from ..services.image_service import get_preflight_image_path
 from ..services.record_service import motor_designation_str
 from ..services.record_service import normalize_length_to_mm, normalize_weight_to_g
 
@@ -694,6 +695,19 @@ async def detail_record(
     # Attach image_url to the record object for template use
     record_obj.image_url = image_url  # type: ignore[attr-defined]
 
+    # Determine which additional images exist
+    has_back = bool(record_obj.back_image_path)
+    back_image_url = f"/images/{record_obj.back_image_path}" if has_back else None
+
+    preflight_filename = get_preflight_image_path(record_obj.image_path)
+    preflight_file = config.image_store_path / preflight_filename
+    has_preflight = preflight_file.exists()
+    preflight_image_url = f"/images/{preflight_filename}" if has_preflight else None
+
+    # Preflight moderation status from overflow
+    overflow = record_obj.overflow or {}
+    preflight_status = overflow.get("preflight_status", None)
+
     # Load raw LLM JSON from the sidecar .json file (if it exists)
     llm_raw_json = None
     llm_content_json = None
@@ -775,6 +789,11 @@ async def detail_record(
             "record": record_obj,
             "prev_id": prev_id,
             "next_id": next_id,
+            "has_back": has_back,
+            "has_preflight": has_preflight,
+            "back_image_url": back_image_url,
+            "preflight_image_url": preflight_image_url,
+            "preflight_status": preflight_status,
             "llm_raw_json": llm_raw_json,
             "llm_content_json": llm_content_json,
             "llm_thinking": llm_thinking,
@@ -829,6 +848,11 @@ async def list_records_impl(
     search_diameter_unit = params.get("search_diameter_unit")
     search_weight = params.get("search_weight")
     search_weight_unit = params.get("search_weight_unit")
+    # Determine if the current user has an identity for "My Flights"
+    current_user = getattr(request.state, "user", None)
+    user_has_flier_identity = bool(
+        current_user and getattr(current_user, "display_name", None)
+    )
 
     effective_page_size = min(page_size, _MAX_PAGE_SIZE)
 
@@ -1129,6 +1153,7 @@ async def list_records_impl(
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),
             "has_measurement_search": has_measurement_search,
+            "user_has_flier_identity": user_has_flier_identity,
         },
     )
 
@@ -1245,6 +1270,19 @@ async def detail_record_impl(
     image_url = f"{event_base_url}/images/{record_obj.image_path}"
     record_obj.image_url = image_url  # type: ignore[attr-defined]
 
+    # Determine which additional images exist
+    has_back = bool(record_obj.back_image_path)
+    back_image_url = f"{event_base_url}/images/{record_obj.back_image_path}" if has_back else None
+
+    preflight_filename = get_preflight_image_path(record_obj.image_path)
+    preflight_file = config.image_store_path / preflight_filename
+    has_preflight = preflight_file.exists()
+    preflight_image_url = f"{event_base_url}/images/{preflight_filename}" if has_preflight else None
+
+    # Preflight moderation status from overflow
+    overflow = record_obj.overflow or {}
+    preflight_status = overflow.get("preflight_status", None)
+
     # Load raw LLM JSON
     llm_raw_json = None
     llm_content_json = None
@@ -1319,6 +1357,11 @@ async def detail_record_impl(
             "record": record_obj,
             "prev_id": prev_id,
             "next_id": next_id,
+            "has_back": has_back,
+            "has_preflight": has_preflight,
+            "back_image_url": back_image_url,
+            "preflight_image_url": preflight_image_url,
+            "preflight_status": preflight_status,
             "llm_raw_json": llm_raw_json,
             "llm_content_json": llm_content_json,
             "llm_thinking": llm_thinking,

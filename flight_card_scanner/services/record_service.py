@@ -118,6 +118,7 @@ async def create(
     db: AsyncSession,
     image_path: str,
     flight_date: date | None = None,
+    back_image_path: str | None = None,
 ) -> FlightRecord:
     """Create a new FlightRecord with status 'pending'.
 
@@ -125,6 +126,7 @@ async def create(
         db: Active async database session.
         image_path: Relative path to the saved card image in the Image Store.
         flight_date: Optional flight date override from the scan UI.
+        back_image_path: Optional relative path to the back image in the Image Store.
 
     Returns:
         The newly created FlightRecord instance.
@@ -133,6 +135,7 @@ async def create(
         image_path=image_path,
         extraction_status="pending",
         flight_date=flight_date,
+        back_image_path=back_image_path,
     )
     db.add(record)
     await db.commit()

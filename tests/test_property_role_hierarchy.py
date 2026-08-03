@@ -28,7 +28,7 @@ from flight_card_scanner.dependencies.auth import Role, ROLE_MAP, require_role
 # ---------------------------------------------------------------------------
 
 # All valid roles a user can have (as stored in the User model)
-_user_role_strings = st.sampled_from(["admin", "data_entry"])
+_user_role_strings = st.sampled_from(["admin", "data_entry", "flyer"])
 
 # All Role enum values that can be used as min_required_role
 _min_role_strategy = st.sampled_from(list(Role))

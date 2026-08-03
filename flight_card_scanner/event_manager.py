@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from .config import EventConfig, ServerConfig, load_event_config
-from .database import Base, create_all
+from .database import Base, create_all, migrate_add_columns
 from .models import FlightRecord
 from .services.extraction_service import ExtractionService
 from .services.flier_match_service import FlierMatchService
@@ -266,6 +266,7 @@ class EventManager:
         # Create tables if not read-only
         if not event_config.read_only:
             await create_all(engine)
+            await migrate_add_columns(engine)
 
         # Start motor lookup service
         motor_lookup_service = MotorLookupService()

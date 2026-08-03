@@ -108,3 +108,38 @@ async def create_all(engine: AsyncEngine) -> None:
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def migrate_add_columns(engine: AsyncEngine) -> None:
+    """Add new columns to existing tables if they don't already exist.
+
+    This handles the case where create_all created the table in a previous
+    version and new columns have been added to the model. SQLite does not
+    support IF NOT EXISTS for ALTER TABLE ADD COLUMN, so we inspect the
+    table's column list first.
+
+    Call this after create_all during application startup.
+
+    Args:
+        engine: The async engine to use for migration.
+    """
+    from sqlalchemy import text
+
+    migrations = [
+        # (table_name, column_name, column_ddl)
+        ("flight_records", "back_image_path", "VARCHAR(512) DEFAULT NULL"),
+    ]
+
+    async with engine.begin() as conn:
+        for table_name, col_name, col_ddl in migrations:
+            # Check if column already exists by querying table_info
+            result = await conn.execute(
+                text(f"PRAGMA table_info({table_name})")
+            )
+            columns = [row[1] for row in result.fetchall()]
+            if col_name not in columns:
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_ddl}"
+                    )
+                )

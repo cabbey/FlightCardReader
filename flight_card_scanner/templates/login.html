@@ -58,6 +58,11 @@
   {% if error %}
   <div class="error-msg">{{ error }}</div>
   {% endif %}
+  {% if request.query_params.get('registered') %}
+  <div class="success-msg" style="padding:0.5rem;margin-bottom:1rem;background:#e8f5e9;color:#2e7d32;border-radius:4px;font-size:0.9rem;">
+    Registration submitted. You will be notified when approved.
+  </div>
+  {% endif %}
   <form method="post" action="/login">
     <input type="hidden" name="next" value="{{ next }}">
     <label for="email">Email</label>
@@ -66,5 +71,6 @@
     <input type="password" id="password" name="password" maxlength="128" required>
     <button type="submit">Sign In</button>
   </form>
+  <a href="/register" style="display:block;text-align:center;margin-top:1rem;color:#1565c0;text-decoration:none;">Request Access</a>
 </div>
 {% endblock %}

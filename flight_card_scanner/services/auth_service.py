@@ -28,6 +28,7 @@ RATE_LIMIT_WINDOW_SECONDS = 15 * 60  # 15 minutes
 HARD_MAX_LIFETIME_HOURS = {
     "admin": 8,
     "data_entry": 120,
+    "flyer": 120,
 }
 
 # Argon2id hasher with default (secure) parameters
