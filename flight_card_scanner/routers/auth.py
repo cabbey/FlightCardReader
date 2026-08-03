@@ -401,6 +401,11 @@ async def register_submit(request: Request):
                         user_to_update.role = "flyer"
                         user_to_update.linked_flier_name = linked_name
                         await db.commit()
+                    else:
+                        # User was deleted between creation and auto-approval;
+                        # treat as if auto-approval did not happen.
+                        auto_approved = False
+                        linked_name = None
 
     except Exception:
         # If auto-approval fails for any reason, just skip it.
