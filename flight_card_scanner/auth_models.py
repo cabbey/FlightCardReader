@@ -45,9 +45,6 @@ class User(AuthBase):
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="data_entry")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    linked_flier_name: Mapped[str | None] = mapped_column(
-        String(200), nullable=True, default=None
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

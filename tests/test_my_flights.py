@@ -1,9 +1,9 @@
 """Tests for the My Flights filter on the cards list page.
 
 Verifies that:
-- The my_flights filter correctly returns only records matching the user's
-  linked_flier_name with flier_verified=True.
-- The button does not appear when user has no linked_flier_name.
+- The my_flights filter correctly uses the user's display_name as a text
+  search against flier_name (via the existing ILIKE logic).
+- The button appears for any logged-in user who has a display_name.
 - The user's email is never exposed in the response.
 """
 
@@ -43,9 +43,9 @@ class FakeUser:
 
     username: str = "testuser"
     email: str = "hidden@secret.com"
+    display_name: str = "Test User"
     role: str = "flyer"
     active: bool = True
-    linked_flier_name: str | None = None
 
 
 @dataclass
@@ -109,7 +109,7 @@ async def seed_records(db_session_factory):
             ),
             FlightRecord(
                 flier_name="John Smith",
-                flier_verified=False,  # Not verified - should be excluded
+                flier_verified=False,
                 extraction_status="extracted",
                 image_path="/fake/img3.jpg",
             ),
@@ -164,11 +164,11 @@ def _build_test_app(user: FakeUser | None, db_session_factory):
 
 
 @pytest.mark.anyio
-async def test_my_flights_filters_to_user_records(
+async def test_my_flights_filters_by_display_name(
     db_session_factory, seed_records
 ):
-    """When my_flights=1 and user has linked_flier_name, only their verified records show."""
-    user = FakeUser(linked_flier_name="John Smith")
+    """When my_flights=1 and user is logged in, records matching display_name show."""
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -178,27 +178,20 @@ async def test_my_flights_filters_to_user_records(
     assert response.status_code == 200
     html = response.text
 
-    # Should show John Smith's verified records (IDs 1 and 2)
+    # Should show John Smith's records (all 3 - the search is by name, not
+    # filtered by flier_verified since it uses text search now)
     assert "John Smith" in html
     # Should NOT show Jane Doe or Bob Builder
     assert "Jane Doe" not in html
     assert "Bob Builder" not in html
-    # The unverified John Smith record should also be excluded
-    # (we have 2 verified + 1 unverified for John Smith, only 2 should show)
-    # Count occurrences of table rows with links to records
-    assert html.count("/record/1") >= 1
-    assert html.count("/record/2") >= 1
-    assert "/record/3" not in html  # unverified
-    assert "/record/4" not in html  # Jane Doe
-    assert "/record/5" not in html  # Bob Builder
 
 
 @pytest.mark.anyio
-async def test_my_flights_without_linked_name_shows_all(
+async def test_my_flights_without_display_name_shows_all(
     db_session_factory, seed_records
 ):
-    """When my_flights=1 but user has no linked_flier_name, filter is ignored."""
-    user = FakeUser(linked_flier_name=None)
+    """When my_flights=1 but user has no display_name, filter is not applied."""
+    user = FakeUser(display_name="")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -215,11 +208,11 @@ async def test_my_flights_without_linked_name_shows_all(
 
 
 @pytest.mark.anyio
-async def test_my_flights_button_visible_for_linked_user(
+async def test_my_flights_button_visible_for_logged_in_user(
     db_session_factory, seed_records
 ):
-    """The My Flights button appears when user has a linked_flier_name."""
-    user = FakeUser(linked_flier_name="John Smith")
+    """The My Flights button appears when user is logged in with a display_name."""
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -232,11 +225,11 @@ async def test_my_flights_button_visible_for_linked_user(
 
 
 @pytest.mark.anyio
-async def test_my_flights_button_not_visible_without_linked_name(
+async def test_my_flights_button_not_visible_without_display_name(
     db_session_factory, seed_records
 ):
-    """The My Flights button does NOT appear when user has no linked_flier_name."""
-    user = FakeUser(linked_flier_name=None)
+    """The My Flights button does NOT appear when user has no display_name."""
+    user = FakeUser(display_name="")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -269,7 +262,7 @@ async def test_my_flights_active_state_shows_clear(
     db_session_factory, seed_records
 ):
     """When my_flights is active, the button shows as highlighted with a clear action."""
-    user = FakeUser(linked_flier_name="John Smith")
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -280,8 +273,6 @@ async def test_my_flights_active_state_shows_clear(
     html = response.text
     # Active state button text includes the dismiss marker
     assert "My Flights" in html
-    # The button in active state should NOT include my_flights=1 in its href
-    # (it links to the clear state)
 
 
 @pytest.mark.anyio
@@ -289,7 +280,7 @@ async def test_my_flights_combined_with_other_filters(
     db_session_factory, seed_records
 ):
     """my_flights works additively with other filters like status."""
-    user = FakeUser(linked_flier_name="John Smith")
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
@@ -298,7 +289,7 @@ async def test_my_flights_combined_with_other_filters(
 
     assert response.status_code == 200
     html = response.text
-    # Should still filter to only John Smith verified records
+    # Should still filter to only John Smith records
     assert "Jane Doe" not in html
     assert "Bob Builder" not in html
 
@@ -310,7 +301,7 @@ async def test_email_not_exposed_in_response(
     """The user's email address NEVER appears in the page HTML, URL, or JS."""
     user = FakeUser(
         email="secret_email@private.com",
-        linked_flier_name="John Smith",
+        display_name="John Smith",
     )
     app = _build_test_app(user, db_session_factory)
 
@@ -332,7 +323,7 @@ async def test_my_flights_preserves_in_pagination_url(
     db_session_factory, seed_records
 ):
     """The my_flights param is preserved in pagination links."""
-    user = FakeUser(linked_flier_name="John Smith")
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)

@@ -831,10 +831,10 @@ async def list_records_impl(
     search_weight_unit = params.get("search_weight_unit")
     my_flights = params.get("my_flights")
 
-    # Determine if the current user has a linked flier identity
+    # Determine if the current user has an identity for "My Flights"
     current_user = getattr(request.state, "user", None)
     user_has_flier_identity = bool(
-        current_user and getattr(current_user, "linked_flier_name", None)
+        current_user and getattr(current_user, "display_name", None)
     )
     my_flights_active = my_flights == "1" and user_has_flier_identity
 
@@ -899,15 +899,14 @@ async def list_records_impl(
             stmt = stmt.where(FlightRecord.extraction_status == status)
         if flight_day_date:
             stmt = stmt.where(FlightRecord.flight_date == flight_day_date)
-        if my_flights_active:
-            stmt = stmt.where(
-                FlightRecord.flier_name == current_user.linked_flier_name,
-                FlightRecord.flier_verified == True,  # noqa: E712
-            )
         return stmt
 
     q_stripped = q.strip() if q else None
     search_term = q_stripped if q_stripped else None
+
+    # When "My Flights" is active, use the user's display_name as the search term
+    if my_flights_active:
+        search_term = current_user.display_name
 
     impulse_class_upper = None
     if impulse_class:

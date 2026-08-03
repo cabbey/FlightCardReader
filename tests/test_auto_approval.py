@@ -282,7 +282,6 @@ async def test_auto_approval_matching_email(
         assert user is not None
         assert user.active is True
         assert user.role == "flyer"
-        assert user.linked_flier_name == "Jane Rocketeer"
 
 
 @pytest.mark.anyio
@@ -341,7 +340,6 @@ async def test_auto_approval_case_insensitive_email(
         assert user is not None
         assert user.active is True
         assert user.role == "flyer"
-        assert user.linked_flier_name == "Bob Builder"
 
 
 @pytest.mark.anyio
@@ -400,7 +398,6 @@ async def test_no_auto_approval_for_unmatched_email(
         assert user is not None
         assert user.active is False
         assert user.role == "flyer"
-        assert user.linked_flier_name is None
 
 
 @pytest.mark.anyio
@@ -493,7 +490,6 @@ async def test_only_recent_and_future_events_checked(
         user = result.scalar_one_or_none()
         assert user is not None
         assert user.active is False
-        assert user.linked_flier_name is None
 
     # "newest@example.com" SHOULD be auto-approved (most recent completed)
     transport2 = ASGITransport(app=test_app)
@@ -521,7 +517,6 @@ async def test_only_recent_and_future_events_checked(
         assert user is not None
         assert user.active is True
         assert user.role == "flyer"
-        assert user.linked_flier_name == "Newest Flier"
 
     # "recent@example.com" should NOT be auto-approved (not the most recent completed)
     transport3 = ASGITransport(app=test_app)
@@ -548,7 +543,6 @@ async def test_only_recent_and_future_events_checked(
         user = result.scalar_one_or_none()
         assert user is not None
         assert user.active is False
-        assert user.linked_flier_name is None
 
 
 @pytest.mark.anyio
@@ -608,7 +602,6 @@ async def test_future_event_is_checked(
         assert user is not None
         assert user.active is True
         assert user.role == "flyer"
-        assert user.linked_flier_name == "Future Flier"
 
 
 @pytest.mark.anyio
@@ -644,4 +637,3 @@ async def test_no_event_manager_skips_auto_approval(
         user = result.scalar_one_or_none()
         assert user is not None
         assert user.active is False
-        assert user.linked_flier_name is None

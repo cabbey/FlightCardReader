@@ -100,7 +100,6 @@ async def migrate_auth_columns(engine: AsyncEngine) -> None:
     Args:
         engine: The async engine to use for running ALTER TABLE statements.
     """
-    import sqlite3
     from sqlalchemy import text
 
     async with engine.begin() as conn:
@@ -113,10 +112,4 @@ async def migrate_auth_columns(engine: AsyncEngine) -> None:
                 text("ALTER TABLE users ADD COLUMN reason TEXT DEFAULT NULL")
             )
 
-        if "linked_flier_name" not in existing_columns:
-            await conn.execute(
-                text(
-                    "ALTER TABLE users ADD COLUMN linked_flier_name"
-                    " VARCHAR(200) DEFAULT NULL"
-                )
-            )
+

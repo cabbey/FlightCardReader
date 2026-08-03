@@ -399,7 +399,6 @@ async def register_submit(request: Request):
                     if user_to_update is not None:
                         user_to_update.active = True
                         user_to_update.role = "flyer"
-                        user_to_update.linked_flier_name = linked_name
                         await db.commit()
                     else:
                         # User was deleted between creation and auto-approval;
@@ -426,7 +425,7 @@ async def register_submit(request: Request):
             action="auto_approved",
             object_type="user",
             object_id="",
-            details={"linked_flier_name": linked_name},
+            details={"matched_roster_name": linked_name},
         )
 
     # Redirect to login with success message
