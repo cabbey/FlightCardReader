@@ -829,6 +829,14 @@ async def list_records_impl(
     search_diameter_unit = params.get("search_diameter_unit")
     search_weight = params.get("search_weight")
     search_weight_unit = params.get("search_weight_unit")
+    my_flights = params.get("my_flights")
+
+    # Determine if the current user has a linked flier identity
+    current_user = getattr(request.state, "user", None)
+    user_has_flier_identity = bool(
+        current_user and getattr(current_user, "linked_flier_name", None)
+    )
+    my_flights_active = my_flights == "1" and user_has_flier_identity
 
     effective_page_size = min(page_size, _MAX_PAGE_SIZE)
 
@@ -891,6 +899,11 @@ async def list_records_impl(
             stmt = stmt.where(FlightRecord.extraction_status == status)
         if flight_day_date:
             stmt = stmt.where(FlightRecord.flight_date == flight_day_date)
+        if my_flights_active:
+            stmt = stmt.where(
+                FlightRecord.flier_name == current_user.linked_flier_name,
+                FlightRecord.flier_verified == True,  # noqa: E712
+            )
         return stmt
 
     q_stripped = q.strip() if q else None
@@ -1129,6 +1142,8 @@ async def list_records_impl(
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),
             "has_measurement_search": has_measurement_search,
+            "my_flights_active": my_flights_active,
+            "user_has_flier_identity": user_has_flier_identity,
         },
     )
 
