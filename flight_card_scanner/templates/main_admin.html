@@ -73,6 +73,7 @@
 {% endblock %}
 
 {% block content %}
+{% if current_mode %}
 <div class="admin-section">
   <h2>Extraction Control</h2>
   <div class="mode-control">
@@ -84,6 +85,12 @@
   </div>
   <div class="status-msg" id="statusMsg"></div>
 </div>
+{% else %}
+<div class="admin-section">
+  <h2>Extraction Control</h2>
+  <p>Extraction mode is configured per-event. Open an event to manage its extraction settings.</p>
+</div>
+{% endif %}
 
 <div class="admin-section">
   <h2>Management</h2>
@@ -94,6 +101,9 @@
 
 <script>
 (function() {
+  var modeSelect = document.getElementById('modeSelect');
+  if (!modeSelect) return;
+
   var statusMsg = document.getElementById('statusMsg');
 
   function showMsg(text, isError) {
@@ -103,7 +113,7 @@
   }
 
   // Mode switch - uses the first event's API for global mode change
-  document.getElementById('modeSelect').addEventListener('change', function() {
+  modeSelect.addEventListener('change', function() {
     fetch('/api/admin/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

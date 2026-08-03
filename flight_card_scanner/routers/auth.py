@@ -451,10 +451,15 @@ async def admin_dashboard(request: Request):
     if _templates is None:
         raise RuntimeError("Auth router not configured.")
 
+    # Extraction mode is per-event in multi-event deployments, so the global
+    # admin page does not depend on a per-event extraction service.
     from flight_card_scanner.routers.admin import get_extraction_service
 
-    extraction_service = get_extraction_service()
-    current_mode = extraction_service.mode.value
+    try:
+        extraction_service = get_extraction_service()
+        current_mode = extraction_service.mode.value
+    except RuntimeError:
+        current_mode = None
 
     return _templates.TemplateResponse(
         name="main_admin.html",
