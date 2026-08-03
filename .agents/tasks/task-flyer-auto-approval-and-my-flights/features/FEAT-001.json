@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add email column detection to FlierMatchService and implement auto-approval during registration when user's email matches a known flier roster entry. Also add a 'linked_flier_name' column to the User model to store the matched roster name for later use by the My Flights feature.",
+  "status": "in_progress",
+  "steps": [
+    "1. In flight_card_scanner/services/flier_match_service.py: Add self._col_email: str = 'Email' to __init__. In _detect_columns(), add detection for email column (match on 'email' in h_lower). Add a find_by_email(email: str) method that searches all rows for a case-insensitive match on the email column and returns the matched row or None (with the roster name). Update the logger.info in _detect_columns to include the email column.",
+    "2. In flight_card_scanner/auth_models.py: Add a new column 'linked_flier_name' to the User model: linked_flier_name: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None). This stores the roster name that was matched during auto-approval.",
+    "3. In flight_card_scanner/auth_database.py: In migrate_auth_columns(), add a check for 'linked_flier_name' column and ALTER TABLE to add it if missing, following the exact same pattern as the 'reason' column migration.",
+    "4. In flight_card_scanner/routers/auth.py POST /register handler: After creating the user (after db.commit()), add auto-approval logic: (a) Get the EventManager from request.app.state.event_manager (need to pass request or app to the handler - note the handler already has access to `request`). (b) Get today's date. (c) Iterate over all events in event_manager.events. For each event, check if it qualifies: the event is either the most recently completed (event_date_range.end < today, pick the one with max end date) OR a future/current event (event_date_range.end >= today). (d) For qualifying events that have known_fliers_path configured, instantiate a temporary FlierMatchService, call load(), and call find_by_email(normalized_email). (e) If a match is found: update the user to set active=True, role='flyer', linked_flier_name=matched_roster_name, then commit. (f) Log the auto-approval action via audit log. (g) Important: The auto-approval check must handle cases where event_manager is not available on app.state (e.g., in test environments) gracefully - just skip auto-approval.",
+    "5. Write tests in tests/test_auto_approval.py: Test that (a) a user registering with an email that matches a known_fliers TSV entry gets auto-approved with role='flyer' and active=True and linked_flier_name set, (b) a user whose email does not match remains inactive, (c) only the most recently completed event and future events are checked (not old past events), (d) email matching is case-insensitive, (e) the find_by_email method works correctly on FlierMatchService.",
+    "6. Write tests in tests/test_email_column_detection.py (or add to tests/test_column_detection.py): Test that email column detection works with headers like 'Email', 'email', 'E-Mail', etc."
+  ],
+  "acceptance_criteria": [
+    "FlierMatchService._detect_columns() detects an email column from headers containing 'email' (case-insensitive)",
+    "FlierMatchService.find_by_email(email) returns the matched row (with roster name) when email matches, None otherwise, case-insensitive comparison",
+    "User model has a linked_flier_name nullable column",
+    "migrate_auth_columns adds the linked_flier_name column to existing databases",
+    "POST /register auto-approves (active=True, role='flyer', linked_flier_name=<name from roster>) when user email matches a known flier in a qualifying event",
+    "Only the most recently completed event and all future/current events are checked for auto-approval",
+    "Users whose email does not match any roster remain inactive pending admin approval",
+    "All new tests pass with python3.12 -m pytest"
+  ],
+  "verification": [
+    "python3.12 -m pytest tests/test_column_detection.py tests/test_registration.py -v",
+    "python3.12 -m pytest tests/test_auto_approval.py -v (new test file)"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

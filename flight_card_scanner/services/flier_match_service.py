@@ -62,6 +62,7 @@ class FlierMatchService:
         self._col_nar: str = "NAR"
         self._col_tra: str = "TRA"
         self._col_level: str = "Level"
+        self._col_email: str = "Email"
 
     @property
     def enabled(self) -> bool:
@@ -115,9 +116,9 @@ class FlierMatchService:
     def _detect_columns(self) -> None:
         """Detect actual column names from headers using fuzzy matching.
 
-        Maps logical fields (name, NAR number, TRA number, cert level) to
-        whatever the actual header strings are. Supports variations like
-        "NAR Number", "TRA #", "Certification Level", etc.
+        Maps logical fields (name, NAR number, TRA number, cert level, email)
+        to whatever the actual header strings are. Supports variations like
+        "NAR Number", "TRA #", "Certification Level", "E-Mail", etc.
         """
         for header in self._headers:
             h_lower = header.lower().strip()
@@ -127,13 +128,35 @@ class FlierMatchService:
                 self._col_tra = header
             elif "level" in h_lower or "cert" in h_lower:
                 self._col_level = header
+            elif "email" in h_lower or "e-mail" in h_lower:
+                self._col_email = header
             elif "name" in h_lower:
                 self._col_name = header
 
         logger.info(
-            "Detected columns: name=%r, nar=%r, tra=%r, level=%r",
+            "Detected columns: name=%r, nar=%r, tra=%r, level=%r, email=%r",
             self._col_name, self._col_nar, self._col_tra, self._col_level,
+            self._col_email,
         )
+
+    def find_by_email(self, email: str) -> dict[str, str] | None:
+        """Search all rows for a case-insensitive match on the email column.
+
+        Args:
+            email: The email address to search for.
+
+        Returns:
+            The matched row dict if found, or None.
+        """
+        if not self._enabled or not email:
+            return None
+
+        normalized_email = email.strip().lower()
+        for row in self._rows:
+            row_email = row.get(self._col_email, "").strip().lower()
+            if row_email and row_email == normalized_email:
+                return row
+        return None
 
     @staticmethod
     def _normalize_name(name: str) -> str:

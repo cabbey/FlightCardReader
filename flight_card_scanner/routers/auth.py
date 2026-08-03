@@ -329,6 +329,83 @@ async def register_submit(request: Request):
         )
         db.add(user)
         await db.commit()
+        await db.refresh(user)
+
+    # --- Auto-approval: check known flier rosters ---
+    auto_approved = False
+    linked_name = None
+    try:
+        event_manager = getattr(getattr(request.app, "state", None), "event_manager", None)
+        if event_manager is not None:
+            from datetime import date as date_type
+
+            from flight_card_scanner.services.flier_match_service import FlierMatchService
+
+            today = date_type.today()
+            events_dict = event_manager.events
+
+            # Determine qualifying events:
+            # 1. The most recently completed event (end < today, max end date)
+            # 2. All future/current events (end >= today)
+            most_recent_completed = None
+            most_recent_end = None
+            qualifying_events = []
+
+            for _slug, info in events_dict.items():
+                event_cfg = info.event_config
+                if event_cfg.event_date_range is None:
+                    continue
+                end_date = event_cfg.event_date_range.end
+                if end_date < today:
+                    # Completed event - track the most recent one
+                    if most_recent_end is None or end_date > most_recent_end:
+                        most_recent_end = end_date
+                        most_recent_completed = info
+                else:
+                    # Future or current event
+                    qualifying_events.append(info)
+
+            if most_recent_completed is not None:
+                qualifying_events.append(most_recent_completed)
+
+            # Check each qualifying event for email match
+            for info in qualifying_events:
+                event_cfg = info.event_config
+                if not event_cfg.known_fliers_path:
+                    continue
+                if not event_cfg.known_fliers_path.exists():
+                    continue
+
+                svc = FlierMatchService(
+                    known_fliers_path=event_cfg.known_fliers_path
+                )
+                svc.load()
+                if not svc.enabled:
+                    continue
+
+                matched_row = svc.find_by_email(normalized_email)
+                if matched_row is not None:
+                    # Get the roster name from the matched row
+                    linked_name = matched_row.get(svc._col_name, "").strip()
+                    auto_approved = True
+                    break
+
+            if auto_approved and linked_name:
+                async with _auth_service._session_factory() as db:
+                    result = await db.execute(
+                        select(User).where(User.email == normalized_email)
+                    )
+                    user_to_update = result.scalar_one_or_none()
+                    if user_to_update is not None:
+                        user_to_update.active = True
+                        user_to_update.role = "flyer"
+                        user_to_update.linked_flier_name = linked_name
+                        await db.commit()
+
+    except Exception:
+        # If auto-approval fails for any reason, just skip it.
+        # The user remains inactive pending admin approval.
+        logger.debug("Auto-approval check failed, skipping", exc_info=True)
 
     log_action(
         actor=normalized_email,
@@ -337,6 +414,15 @@ async def register_submit(request: Request):
         object_id="",
         details={"role": requested_role, "reason": reason},
     )
+
+    if auto_approved:
+        log_action(
+            actor=normalized_email,
+            action="auto_approved",
+            object_type="user",
+            object_id="",
+            details={"linked_flier_name": linked_name},
+        )
 
     # Redirect to login with success message
     return RedirectResponse(
