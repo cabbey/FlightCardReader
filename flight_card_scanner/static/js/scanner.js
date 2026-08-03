@@ -145,6 +145,16 @@
   var swipeTouchStartY = null;
 
   // =========================================================================
+  // Back Image Capture State
+  // =========================================================================
+
+  /** @type {string|null} Stored front image data URL (when capturing back) */
+  var frontDataUrl = null;
+
+  /** @type {boolean} Whether we are currently in back-capture mode */
+  var capturingBack = false;
+
+  // =========================================================================
   // Detection Pipeline State
   // =========================================================================
 
@@ -1381,11 +1391,9 @@
     swipeTouchStartY = null;
 
     if (deltaY > 80) {
-      // Swipe up detected — accept the card
-      if (capturedDataUrl) {
-        getFinalDataUrl().then(function(finalUrl) {
-          submitCard(finalUrl);
-        });
+      // Swipe up detected — trigger accept
+      if (capturedDataUrl && acceptBtn) {
+        acceptBtn.click();
       }
     }
   }
@@ -1438,14 +1446,16 @@
    *
    * Converts the JPEG data URL to a Blob, builds a FormData with field
    * `card_image`, POSTs to `/scan` with a 30-second timeout.
+   * If backDataUrl is provided, it is also included as `back_image`.
    *
-   * On 201: shows success toast with record ID for ≥ 2 s, returns to State 1.
+   * On 201: shows success toast with record ID for >= 2 s, returns to State 1.
    * On 4xx/5xx: shows server error toast, re-enables controls.
    * On network error or timeout: shows connectivity error toast, re-enables controls.
    *
-   * @param {string} jpegDataUrl - The JPEG data URL to submit
+   * @param {string} jpegDataUrl - The JPEG data URL to submit (front image)
+   * @param {string|null} [backDataUrl] - Optional back image data URL
    */
-  async function submitCard(jpegDataUrl) {
+  async function submitCard(jpegDataUrl, backDataUrl) {
     // Show spinner and disable controls
     showSpinnerAndDisableControls();
     hideAllToasts();
@@ -1454,6 +1464,12 @@
     var blob = dataUrlToBlob(jpegDataUrl);
     var formData = new FormData();
     formData.append('card_image', blob, 'card.jpg');
+
+    // Include back image if provided
+    if (backDataUrl) {
+      var backBlob = dataUrlToBlob(backDataUrl);
+      formData.append('back_image', backBlob, 'card-back.jpg');
+    }
 
     // Include the selected flight date override
     var flightDateEl = document.getElementById('flightDateSelect');
@@ -1590,6 +1606,23 @@
     // Hide all toasts
     hideAllToasts();
 
+    // Remove back-capture banner if present
+    var banner = document.getElementById('backCaptureBanner');
+    if (banner) {
+      banner.remove();
+    }
+
+    // Hide the capture-back checkbox
+    var captureBackCheck = document.getElementById('captureBackCheck');
+    if (captureBackCheck) {
+      captureBackCheck.parentElement.parentElement.style.display = '';
+    }
+
+    // Reset back-capture state
+    if (!capturingBack) {
+      frontDataUrl = null;
+    }
+
     // Hide confirmation, show live preview
     if (confirmationStateEl) {
       confirmationStateEl.style.display = 'none';
@@ -1719,14 +1752,47 @@
       });
     }
 
-    // Wire up accept button — submit card
+    // Wire up accept button — submit card or start back capture
     if (acceptBtn) {
       acceptBtn.addEventListener('click', function () {
-        if (capturedDataUrl && typeof submitCard === 'function') {
-          getFinalDataUrl().then(function(finalUrl) {
+        if (!capturedDataUrl) return;
+        var captureBackCheck = document.getElementById('captureBackCheck');
+        var wantsBack = captureBackCheck && captureBackCheck.checked;
+
+        getFinalDataUrl().then(function(finalUrl) {
+          if (wantsBack && !capturingBack) {
+            // Store front and switch to back capture mode
+            frontDataUrl = finalUrl;
+            capturingBack = true;
+
+            // Hide the checkbox since we are now capturing the back
+            captureBackCheck.parentElement.parentElement.style.display = 'none';
+
+            // Show banner indicating back capture
+            var banner = document.createElement('div');
+            banner.id = 'backCaptureBanner';
+            banner.className = 'back-capture-banner';
+            banner.textContent = 'Now capture the back of the card';
+            var previewWrapper = livePreviewStateEl.querySelector('.preview-wrapper');
+            if (previewWrapper) {
+              livePreviewStateEl.insertBefore(banner, previewWrapper);
+            } else {
+              livePreviewStateEl.insertBefore(banner, livePreviewStateEl.firstChild);
+            }
+
+            // Return to live preview for back capture
+            transitionToLivePreview();
+          } else if (capturingBack) {
+            // We just captured the back image - submit both
+            var backUrl = finalUrl;
+            capturingBack = false;
+            submitCard(frontDataUrl, backUrl);
+            frontDataUrl = null;
+          } else {
+            // Normal submit (no back image)
             submitCard(finalUrl);
-          });
-        }
+          }
+        });
       });
     }
 
@@ -1768,9 +1834,7 @@
         if (key === 'a') {
           e.preventDefault();
           if (acceptBtn && !acceptBtn.disabled && capturedDataUrl) {
-            getFinalDataUrl().then(function(finalUrl) {
-              submitCard(finalUrl);
-            });
+            acceptBtn.click();
           }
           return;
         } else if (key === 'r') {

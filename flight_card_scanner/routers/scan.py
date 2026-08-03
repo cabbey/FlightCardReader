@@ -275,6 +275,7 @@ async def scan_page(
 async def submit_card(
     request: Request,
     card_image: UploadFile = File(...),
+    back_image: UploadFile | None = File(None),
     flight_date: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     config: AppConfig = Depends(get_config),
@@ -284,9 +285,10 @@ async def submit_card(
 
     1. Validate file is JPEG or PNG.
     2. Save image to the Image Store.
-    3. Create a FlightRecord (status=pending).
-    4. Enqueue the record for extraction (no-op in DEFERRED mode).
-    5. Return 201 with the record ID.
+    3. Optionally save back image if provided.
+    4. Create a FlightRecord (status=pending).
+    5. Enqueue the record for extraction (no-op in DEFERRED mode).
+    6. Return 201 with the record ID.
     """
     # --- 1. Validate file type ---
     ext = _resolve_extension(card_image)
@@ -295,6 +297,16 @@ async def submit_card(
             status_code=400,
             detail="Unsupported file type. Only JPEG and PNG images are accepted.",
         )
+
+    # Validate back image extension if provided
+    back_ext = None
+    if back_image is not None:
+        back_ext = _resolve_extension(back_image)
+        if back_ext is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported back image file type. Only JPEG and PNG images are accepted.",
+            )
 
     # --- 2. Save image ---
     file_bytes = await card_image.read()
@@ -311,6 +323,25 @@ async def submit_card(
             detail="Failed to store the uploaded image.",
         ) from exc
 
+    # --- 2b. Save back image if provided ---
+    back_image_path: str | None = None
+    if back_image is not None:
+        back_bytes = await back_image.read()
+        try:
+            back_image_path = image_service.save_back_image(
+                front_filename=filename,
+                file_bytes=back_bytes,
+                store_path=config.image_store_path,
+            )
+        except ImageStorageError as exc:
+            logger.error("Failed to save back image: %s", exc)
+            # Rollback front image
+            image_service.delete_image(config.image_store_path / filename)
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to store the back image.",
+            ) from exc
+
     # --- 3. Create DB record ---
     # Parse the optional flight_date override from the form
     parsed_flight_date: date | None = None
@@ -322,12 +353,15 @@ async def submit_card(
 
     try:
         record = await record_service.create(
-            db, image_path=filename, flight_date=parsed_flight_date
+            db, image_path=filename, flight_date=parsed_flight_date,
+            back_image_path=back_image_path,
         )
     except Exception as exc:
         # Rollback: delete the saved image since the record wasn't created
         logger.error("Failed to create flight record: %s", exc)
         image_service.delete_image(config.image_store_path / filename)
+        if back_image_path:
+            image_service.delete_image(config.image_store_path / back_image_path)
         raise HTTPException(
             status_code=500,
             detail="Failed to create flight record.",
@@ -428,10 +462,10 @@ async def submit_card_impl(
 
     form = await request.form()
     card_image = form.get("card_image")
+    back_image = form.get("back_image")
     flight_date_str = form.get("flight_date")
 
     if card_image is None:
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=400,
             detail="No card_image file provided.",
@@ -440,13 +474,21 @@ async def submit_card_impl(
     # Validate file type
     ext = _resolve_extension(card_image)
     if ext is None:
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=400,
             detail="Unsupported file type. Only JPEG and PNG images are accepted.",
         )
 
-    # Save image
+    # Validate back image extension if provided
+    if back_image is not None:
+        back_ext = _resolve_extension(back_image)
+        if back_ext is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported back image file type. Only JPEG and PNG images are accepted.",
+            )
+
+    # Save front image
     file_bytes = await card_image.read()
     try:
         filename = image_service.save_image(
@@ -456,11 +498,28 @@ async def submit_card_impl(
         )
     except ImageStorageError as exc:
         logger.error("Failed to save uploaded image: %s", exc)
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=500,
             detail="Failed to store the uploaded image.",
         ) from exc
+
+    # Save back image if provided
+    back_image_path: str | None = None
+    if back_image is not None:
+        back_bytes = await back_image.read()
+        try:
+            back_image_path = image_service.save_back_image(
+                front_filename=filename,
+                file_bytes=back_bytes,
+                store_path=config.image_store_path,
+            )
+        except ImageStorageError as exc:
+            logger.error("Failed to save back image: %s", exc)
+            image_service.delete_image(config.image_store_path / filename)
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to store the back image.",
+            ) from exc
 
     # Parse the optional flight_date
     parsed_flight_date: date | None = None
@@ -470,15 +529,17 @@ async def submit_card_impl(
         except ValueError:
             logger.warning("Invalid flight_date value: %r", flight_date_str)
 
-    # Create DB record
+    # Create DB record (with back_image_path set atomically)
     try:
         record = await record_service.create(
-            db, image_path=filename, flight_date=parsed_flight_date
+            db, image_path=filename, flight_date=parsed_flight_date,
+            back_image_path=back_image_path,
         )
     except Exception as exc:
         logger.error("Failed to create flight record: %s", exc)
         image_service.delete_image(config.image_store_path / filename)
-        from fastapi import HTTPException
+        if back_image_path:
+            image_service.delete_image(config.image_store_path / back_image_path)
         raise HTTPException(
             status_code=500,
             detail="Failed to create flight record.",
