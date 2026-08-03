@@ -829,14 +829,11 @@ async def list_records_impl(
     search_diameter_unit = params.get("search_diameter_unit")
     search_weight = params.get("search_weight")
     search_weight_unit = params.get("search_weight_unit")
-    my_flights = params.get("my_flights")
-
     # Determine if the current user has an identity for "My Flights"
     current_user = getattr(request.state, "user", None)
     user_has_flier_identity = bool(
         current_user and getattr(current_user, "display_name", None)
     )
-    my_flights_active = my_flights == "1" and user_has_flier_identity
 
     effective_page_size = min(page_size, _MAX_PAGE_SIZE)
 
@@ -903,10 +900,6 @@ async def list_records_impl(
 
     q_stripped = q.strip() if q else None
     search_term = q_stripped if q_stripped else None
-
-    # When "My Flights" is active, use the user's display_name as the search term
-    if my_flights_active:
-        search_term = current_user.display_name
 
     impulse_class_upper = None
     if impulse_class:
@@ -1141,7 +1134,6 @@ async def list_records_impl(
             "event_dates": _build_event_dates(config),
             "current_user": getattr(request.state, "user", None),
             "has_measurement_search": has_measurement_search,
-            "my_flights_active": my_flights_active,
             "user_has_flier_identity": user_has_flier_identity,
         },
     )

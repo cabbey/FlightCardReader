@@ -1,9 +1,10 @@
-"""Tests for the My Flights filter on the cards list page.
+"""Tests for the My Flights button on the cards list page.
 
 Verifies that:
-- The my_flights filter correctly uses the user's display_name as a text
-  search against flier_name (via the existing ILIKE logic).
+- The My Flights button is a simple link that sets q=<display_name>.
 - The button appears for any logged-in user who has a display_name.
+- Clicking the link (i.e. navigating with ?q=display_name) filters records
+  via the existing ILIKE text search.
 - The user's email is never exposed in the response.
 """
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import date
-from unittest.mock import MagicMock
+from urllib.parse import quote
 
 import pytest
 from fastapi import FastAPI, Request
@@ -159,52 +160,50 @@ def _build_test_app(user: FakeUser | None, db_session_factory):
 
 
 # ---------------------------------------------------------------------------
-# Tests: My Flights filter functionality
+# Tests: My Flights button renders as a simple link with q=display_name
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_my_flights_filters_by_display_name(
+async def test_my_flights_button_links_to_text_search(
     db_session_factory, seed_records
 ):
-    """When my_flights=1 and user is logged in, records matching display_name show."""
+    """The My Flights button should be a link that sets q=<display_name>."""
     user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/?my_flights=1")
+        response = await client.get("/")
 
     assert response.status_code == 200
     html = response.text
-
-    # Should show John Smith's records (all 3 - the search is by name, not
-    # filtered by flier_verified since it uses text search now)
-    assert "John Smith" in html
-    # Should NOT show Jane Doe or Bob Builder
-    assert "Jane Doe" not in html
-    assert "Bob Builder" not in html
+    # The button should link with q=John+Smith (or q=John%20Smith)
+    assert "My Flights" in html
+    # The link should contain the display name as a q parameter
+    assert "q=John" in html
 
 
 @pytest.mark.anyio
-async def test_my_flights_without_display_name_shows_all(
+async def test_my_flights_text_search_filters_records(
     db_session_factory, seed_records
 ):
-    """When my_flights=1 but user has no display_name, filter is not applied."""
-    user = FakeUser(display_name="")
+    """Navigating with ?q=display_name filters records by flier name."""
+    user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/?my_flights=1")
+        response = await client.get("/?q=John+Smith")
 
     assert response.status_code == 200
     html = response.text
 
-    # All records should be visible since filter cannot be applied
+    # Should show John Smith's records (all 3 - ILIKE text search)
     assert "John Smith" in html
-    assert "Jane Doe" in html
-    assert "Bob Builder" in html
+    # Should NOT show Jane Doe or Bob Builder
+    assert "Jane Doe" not in html
+    assert "Bob Builder" not in html
 
 
 @pytest.mark.anyio
@@ -258,34 +257,51 @@ async def test_my_flights_button_not_visible_no_user(
 
 
 @pytest.mark.anyio
-async def test_my_flights_active_state_shows_clear(
+async def test_no_my_flights_parameter_in_urls(
     db_session_factory, seed_records
 ):
-    """When my_flights is active, the button shows as highlighted with a clear action."""
+    """The my_flights parameter should no longer exist anywhere in the output."""
     user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/?my_flights=1")
+        response = await client.get("/")
 
     assert response.status_code == 200
     html = response.text
-    # Active state button text includes the dismiss marker
-    assert "My Flights" in html
+    assert "my_flights" not in html
+
+
+@pytest.mark.anyio
+async def test_search_field_shows_display_name_when_q_set(
+    db_session_factory, seed_records
+):
+    """When navigating with ?q=display_name the search field shows the value."""
+    user = FakeUser(display_name="John Smith")
+    app = _build_test_app(user, db_session_factory)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/?q=John+Smith")
+
+    assert response.status_code == 200
+    html = response.text
+    # The search input should have the value set
+    assert 'value="John Smith"' in html
 
 
 @pytest.mark.anyio
 async def test_my_flights_combined_with_other_filters(
     db_session_factory, seed_records
 ):
-    """my_flights works additively with other filters like status."""
+    """Text search works additively with other filters like status."""
     user = FakeUser(display_name="John Smith")
     app = _build_test_app(user, db_session_factory)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/?my_flights=1&status=extracted")
+        response = await client.get("/?q=John+Smith&status=extracted")
 
     assert response.status_code == 200
     html = response.text
@@ -307,31 +323,12 @@ async def test_email_not_exposed_in_response(
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Test without my_flights
+        # Test without search
         response = await client.get("/")
         assert "secret_email@private.com" not in response.text
         assert "secret_email" not in response.text
 
-        # Test with my_flights active
-        response = await client.get("/?my_flights=1")
+        # Test with text search active
+        response = await client.get("/?q=John+Smith")
         assert "secret_email@private.com" not in response.text
         assert "secret_email" not in response.text
-
-
-@pytest.mark.anyio
-async def test_my_flights_preserves_in_pagination_url(
-    db_session_factory, seed_records
-):
-    """The my_flights param is preserved in pagination links."""
-    user = FakeUser(display_name="John Smith")
-    app = _build_test_app(user, db_session_factory)
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Use page_size=1 to force multiple pages
-        response = await client.get("/?my_flights=1&page_size=1")
-
-    assert response.status_code == 200
-    html = response.text
-    # Pagination links should preserve my_flights=1
-    assert "my_flights=1" in html
