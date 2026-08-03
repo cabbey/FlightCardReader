@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add email column detection to FlierMatchService and implement auto-approval during registration when user's email matches a known flier roster entry. Also add a 'linked_flier_name' column to the User model to store the matched roster name for later use by the My Flights feature.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "1. In flight_card_scanner/services/flier_match_service.py: Add self._col_email: str = 'Email' to __init__. In _detect_columns(), add detection for email column (match on 'email' in h_lower). Add a find_by_email(email: str) method that searches all rows for a case-insensitive match on the email column and returns the matched row or None (with the roster name). Update the logger.info in _detect_columns to include the email column.",
     "2. In flight_card_scanner/auth_models.py: Add a new column 'linked_flier_name' to the User model: linked_flier_name: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None). This stores the roster name that was matched during auto-approval.",
@@ -26,5 +26,5 @@
     "python3.12 -m pytest tests/test_auto_approval.py -v (new test file)"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All tests pass (38 in the primary suite + 104 in broader test suite). The autouse fixture pattern from test_registration.py caused issues with sync test classes in the same file -- resolved by separating the FlierMatchService unit tests (TestFindByEmail class) from the integration tests which need async fixtures. The configure_router fixture is used explicitly only in tests that need it."
 }
