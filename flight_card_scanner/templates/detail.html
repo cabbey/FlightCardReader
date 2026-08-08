@@ -195,9 +195,10 @@
 
   /* Preflight image display */
   .preflight-image-container {
-    display: none;
+    display: block;
     width: 100%;
     max-width: 50vw;
+    margin-top: 1rem;
   }
 
   .preflight-image-container img {
@@ -956,14 +957,11 @@
     </div>
     {% endif %}
 
-    {% if has_back or has_preflight %}
+    {% if has_back %}
     <div class="image-switcher" id="imageSwitcher">
       <a href="#" class="active" data-view="front" id="switchFront">front</a>
       {% if has_back %}
       <a href="#" data-view="back" id="switchBack">back</a>
-      {% endif %}
-      {% if has_preflight %}
-      <a href="#" data-view="preflight" id="switchPreflight">preflight</a>
       {% endif %}
     </div>
     {% endif %}
@@ -995,6 +993,7 @@
 
     {% if has_preflight %}
     <div class="preflight-image-container" id="preflightContainer">
+      <div style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem;">Preflight Photo</div>
       {% set can_view_preflight = (current_user and current_user.role in ("admin", "data_entry")) or preflight_status == "approved" %}
       {% if can_view_preflight %}
       <img
@@ -2272,7 +2271,6 @@
 
     var flipContainer = document.getElementById('cardFlipContainer');
     var flipInner = document.getElementById('cardFlipInner');
-    var preflightContainer = document.getElementById('preflightContainer');
     var links = switcher.querySelectorAll('a[data-view]');
 
     function setActive(view) {
@@ -2287,14 +2285,9 @@
       if (view === 'front') {
         flipContainer.style.display = '';
         flipInner.classList.remove('flipped');
-        if (preflightContainer) preflightContainer.style.display = 'none';
       } else if (view === 'back') {
         flipContainer.style.display = '';
         flipInner.classList.add('flipped');
-        if (preflightContainer) preflightContainer.style.display = 'none';
-      } else if (view === 'preflight') {
-        flipContainer.style.display = 'none';
-        if (preflightContainer) preflightContainer.style.display = '';
       }
     }
 

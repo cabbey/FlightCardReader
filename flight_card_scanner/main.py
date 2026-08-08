@@ -126,10 +126,12 @@ async def lifespan(app: FastAPI):
     from .lost_rockets_database import (
         create_lost_rockets_tables,
         init_lost_rockets_engine,
+        migrate_lost_rockets_columns,
     )
 
     lost_rockets_engine = init_lost_rockets_engine(app_config.lost_rockets_db_path)
     await create_lost_rockets_tables(lost_rockets_engine)
+    await migrate_lost_rockets_columns(lost_rockets_engine)
 
     from .auth_database import _auth_session as auth_session_factory
     auth_service = AuthService(

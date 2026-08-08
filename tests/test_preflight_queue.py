@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import JSON, Column, Integer, String, text
+from sqlalchemy import JSON, Boolean, Column, Integer, String, text
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
@@ -48,6 +48,7 @@ class _FakeLostRocket(_LostRocketsBase):
     record_id = Column(Integer, nullable=False)
     event_name = Column(String(256), nullable=True)
     flier_name = Column(String(256), nullable=True)
+    preflight_approved = Column(Boolean, nullable=False, default=False, server_default="0")
     added_by = Column(String(254), nullable=False)
 
 
@@ -305,6 +306,20 @@ async def _create_test_app(
             record.overflow = overflow
             flag_modified(record, "overflow")
             await db.commit()
+
+        # Also mark the lost rocket entry as approved (if one exists)
+        from sqlalchemy import update as sa_update
+
+        async with lost_session_factory() as lost_db:
+            await lost_db.execute(
+                sa_update(_FakeLostRocket)
+                .where(
+                    _FakeLostRocket.event_slug == event_slug,
+                    _FakeLostRocket.record_id == record_id,
+                )
+                .values(preflight_approved=True)
+            )
+            await lost_db.commit()
 
         return {"message": "Preflight image approved", "status": "approved"}
 

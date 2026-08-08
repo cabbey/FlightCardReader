@@ -261,6 +261,7 @@ async def test_lost_rockets_page_shows_entries(tmp_path: Path):
             motor_designation="G80T",
             flight_date=date(2026, 4, 26),
             preflight_image_path="uuid123-preflight.jpg",
+            preflight_approved=True,
             added_by="alice@test.com",
         )
         session.add(entry)

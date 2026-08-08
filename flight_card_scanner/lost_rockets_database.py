@@ -85,3 +85,33 @@ async def create_lost_rockets_tables(engine: AsyncEngine) -> None:
     """
     async with engine.begin() as conn:
         await conn.run_sync(LostRocketsBase.metadata.create_all)
+
+
+async def migrate_lost_rockets_columns(engine: AsyncEngine) -> None:
+    """Run lightweight column migrations for the lost rockets database.
+
+    Adds any new columns that don't yet exist in the lost_rockets table.
+    Call this after create_lost_rockets_tables during startup.
+
+    Args:
+        engine: The async engine to use for migration.
+    """
+    from sqlalchemy import text
+
+    migrations = [
+        # (table_name, column_name, column_ddl)
+        ("lost_rockets", "preflight_approved", "BOOLEAN NOT NULL DEFAULT 0"),
+    ]
+
+    async with engine.begin() as conn:
+        for table_name, col_name, col_ddl in migrations:
+            result = await conn.execute(
+                text(f"PRAGMA table_info({table_name})")
+            )
+            columns = [row[1] for row in result.fetchall()]
+            if col_name not in columns:
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_ddl}"
+                    )
+                )

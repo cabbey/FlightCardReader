@@ -628,6 +628,24 @@ async def approve_preflight(request: Request, event_slug: str, record_id: int):
         flag_modified(record, "overflow")
         await db.commit()
 
+    # Also mark the lost rocket entry as approved (if one exists)
+    from sqlalchemy import update as sa_update
+
+    from flight_card_scanner.lost_rockets_database import _lost_rockets_session
+    from flight_card_scanner.lost_rockets_models import LostRocket
+
+    if _lost_rockets_session is not None:
+        async with _lost_rockets_session() as lost_db:
+            await lost_db.execute(
+                sa_update(LostRocket)
+                .where(
+                    LostRocket.event_slug == event_slug,
+                    LostRocket.record_id == record_id,
+                )
+                .values(preflight_approved=True)
+            )
+            await lost_db.commit()
+
     return {"message": "Preflight image approved", "status": "approved"}
 
 
