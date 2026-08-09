@@ -195,6 +195,81 @@ def _compute_stats(records: list[FlightRecord]) -> dict[str, Any]:
     }
 
 
+def _compute_day_stats(
+    extracted_records: list[FlightRecord], config: AppConfig
+) -> list[dict[str, Any]]:
+    """Compute per-day statistics for the event breakdown tables.
+
+    Returns a list of dicts (one per day that has records, plus a total row).
+    Each dict has:
+      - label: display label for the day (e.g. "Wednesday 6/4") or "Total"
+      - date: ISO date string or None for the total row
+      - flight_count: number of flights (cards)
+      - flier_count: number of unique fliers
+      - motor_count: total motor count
+      - total_impulse_ns: total impulse in Newton-seconds
+      - motor_counts: dict of letter -> count (sorted by class order)
+      - is_total: bool indicating whether this is the total row
+    """
+    from datetime import timedelta
+
+    # Group records by flight_date
+    by_date: dict[date_type | None, list[FlightRecord]] = defaultdict(list)
+    for r in extracted_records:
+        by_date[r.flight_date].append(r)
+
+    # Build per-day stats in event date order
+    day_rows: list[dict[str, Any]] = []
+    current = config.event_date_range.start
+    end = config.event_date_range.end
+    while current <= end:
+        if current in by_date:
+            day_records = by_date[current]
+            s = _compute_stats(day_records)
+            day_rows.append({
+                "label": current.strftime("%A %-m/%-d"),
+                "date": current.isoformat(),
+                "flight_count": s["flight_count"],
+                "flier_count": s["flier_count"],
+                "motor_count": s["motor_count"],
+                "total_impulse_ns": s["total_impulse_ns"],
+                "motor_counts": s["motor_counts"],
+                "is_total": False,
+            })
+        current += timedelta(days=1)
+
+    # Include records with no date assigned
+    if None in by_date:
+        day_records = by_date[None]
+        s = _compute_stats(day_records)
+        day_rows.append({
+            "label": "No date assigned",
+            "date": None,
+            "flight_count": s["flight_count"],
+            "flier_count": s["flier_count"],
+            "motor_count": s["motor_count"],
+            "total_impulse_ns": s["total_impulse_ns"],
+            "motor_counts": s["motor_counts"],
+            "is_total": False,
+        })
+
+    # Add total row (computed from all extracted records)
+    if day_rows:
+        total_stats = _compute_stats(extracted_records)
+        day_rows.append({
+            "label": "Total",
+            "date": None,
+            "flight_count": total_stats["flight_count"],
+            "flier_count": total_stats["flier_count"],
+            "motor_count": total_stats["motor_count"],
+            "total_impulse_ns": total_stats["total_impulse_ns"],
+            "motor_counts": total_stats["motor_counts"],
+            "is_total": True,
+        })
+
+    return day_rows
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -269,6 +344,9 @@ async def reports_overview(
         })
         current += timedelta(days=1)
 
+    # Compute per-day statistics for the breakdown tables
+    day_stats = _compute_day_stats(extracted_records, config)
+
     return templates.TemplateResponse(
         name="reports.html",
         request=request,
@@ -277,6 +355,7 @@ async def reports_overview(
             "total_cards": len(filtered_records),
             "status_counts": status_counts,
             "stats": stats,
+            "day_stats": day_stats,
             "failed_records": failed_records,
             "event_dates": event_dates,
             "day_filter": day or "",
@@ -414,6 +493,9 @@ async def reports_overview_impl(
         })
         current += timedelta(days=1)
 
+    # Compute per-day statistics for the breakdown tables
+    day_stats = _compute_day_stats(extracted_records, config)
+
     page_title = f"Reports - {config.event_name}"
 
     return templates.TemplateResponse(
@@ -427,6 +509,7 @@ async def reports_overview_impl(
             "total_cards": len(filtered_records),
             "status_counts": status_counts,
             "stats": stats,
+            "day_stats": day_stats,
             "failed_records": failed_records,
             "event_dates": event_dates,
             "day_filter": day or "",
