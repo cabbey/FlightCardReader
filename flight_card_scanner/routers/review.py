@@ -700,12 +700,16 @@ async def detail_record(
     back_image_url = f"/images/{record_obj.back_image_path}" if has_back else None
 
     preflight_filename = get_preflight_image_path(record_obj.image_path)
+    # Prefer the stored tokenized filename from overflow
+    overflow = record_obj.overflow or {}
+    stored_preflight = overflow.get("preflight_image_path")
+    if stored_preflight:
+        preflight_filename = stored_preflight
     preflight_file = config.image_store_path / preflight_filename
     has_preflight = preflight_file.exists()
     preflight_image_url = f"/images/{preflight_filename}" if has_preflight else None
 
     # Preflight moderation status from overflow
-    overflow = record_obj.overflow or {}
     preflight_status = overflow.get("preflight_status", None)
 
     # Load raw LLM JSON from the sidecar .json file (if it exists)

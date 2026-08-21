@@ -85,3 +85,60 @@ async def create_lost_rockets_tables(engine: AsyncEngine) -> None:
     """
     async with engine.begin() as conn:
         await conn.run_sync(LostRocketsBase.metadata.create_all)
+
+
+async def migrate_lost_rockets_columns(engine: AsyncEngine) -> None:
+    """Add columns introduced after initial schema creation and backfill data.
+
+    Safely adds ``image_token`` and ``approved`` columns to the ``lost_rockets``
+    table if they don't already exist. For existing rows that have a
+    ``preflight_image_path`` but no ``image_token``, generates a random token,
+    renames the image file on disk to include the token, and stores the new
+    filename and token in the database.
+
+    Args:
+        engine: The async engine to use for running ALTER TABLE statements.
+    """
+    import secrets
+
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        # Check existing columns in the lost_rockets table
+        result = await conn.execute(text("PRAGMA table_info(lost_rockets)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+
+        if "image_token" not in existing_columns:
+            await conn.execute(
+                text("ALTER TABLE lost_rockets ADD COLUMN image_token VARCHAR(64) DEFAULT NULL")
+            )
+
+        if "approved" not in existing_columns:
+            await conn.execute(
+                text("ALTER TABLE lost_rockets ADD COLUMN approved BOOLEAN NOT NULL DEFAULT 0")
+            )
+
+        # Backfill: generate tokens for existing rows that lack one.
+        # NOTE: We do NOT rename existing image files on disk — we don't have
+        # access to per-event image store paths at migration time. The template
+        # layer handles visibility (non-admins see a placeholder until approved).
+        # The token is stored so the system can identify these rows as migrated.
+        result = await conn.execute(
+            text(
+                "SELECT id FROM lost_rockets "
+                "WHERE image_token IS NULL AND preflight_image_path IS NOT NULL"
+            )
+        )
+        rows_to_backfill = result.fetchall()
+
+        for row in rows_to_backfill:
+            row_id = row[0]
+            token = secrets.token_urlsafe(16)
+
+            await conn.execute(
+                text(
+                    "UPDATE lost_rockets SET image_token = :token "
+                    "WHERE id = :row_id"
+                ),
+                {"token": token, "row_id": row_id},
+            )

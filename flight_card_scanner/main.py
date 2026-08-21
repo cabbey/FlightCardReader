@@ -126,10 +126,12 @@ async def lifespan(app: FastAPI):
     from .lost_rockets_database import (
         create_lost_rockets_tables,
         init_lost_rockets_engine,
+        migrate_lost_rockets_columns,
     )
 
     lost_rockets_engine = init_lost_rockets_engine(app_config.lost_rockets_db_path)
     await create_lost_rockets_tables(lost_rockets_engine)
+    await migrate_lost_rockets_columns(lost_rockets_engine)
 
     from .auth_database import _auth_session as auth_session_factory
     auth_service = AuthService(
@@ -795,7 +797,7 @@ async def event_upload_preflight(
     """
     from fastapi import File, Form, UploadFile
 
-    from .services.image_service import save_preflight_image
+    from .services.image_service import generate_image_token, save_preflight_image
 
     # Manually parse the multipart form since we declared deps in the decorator
     form = await request.form()
@@ -847,22 +849,39 @@ async def event_upload_preflight(
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
 
-    # Check if a preflight image already exists
+    # Check if a preflight image already exists (any variant with or without token)
     from .services.image_service import get_preflight_image_path
 
     preflight_filename = get_preflight_image_path(record.image_path)
     store_path = event_info.event_config.image_store_path
+    # Check for legacy (non-tokenized) preflight file
     if (store_path / preflight_filename).exists():
         raise HTTPException(
             status_code=409, detail="Preflight image already exists for this record"
         )
+    # Check for tokenized preflight files (stem-preflight-*.ext pattern)
+    stem, dot, ext = record.image_path.rpartition(".")
+    if dot:
+        preflight_glob = f"{stem}-preflight-*.{ext}"
+    else:
+        preflight_glob = f"{record.image_path}-preflight-*"
+    if list(store_path.glob(preflight_glob)):
+        raise HTTPException(
+            status_code=409, detail="Preflight image already exists for this record"
+        )
 
-    # Save the image
-    save_preflight_image(record.image_path, file_bytes, store_path)
+    # Generate an unguessable token for the preflight image filename
+    image_token = generate_image_token()
+
+    # Save the image with the tokenized filename
+    preflight_filename = save_preflight_image(
+        record.image_path, file_bytes, store_path, token=image_token
+    )
 
     # Update overflow
     overflow = dict(record.overflow) if record.overflow else {}
     overflow["preflight_status"] = "pending"
+    overflow["preflight_image_path"] = preflight_filename
 
     # Get current user from the require_role dependency (already validated)
     user = getattr(request.state, "user", None)
@@ -907,8 +926,6 @@ async def event_upload_preflight(
         # Get event name from the event config
         event_name = event_info.event_config.event_name
 
-        preflight_filename = get_preflight_image_path(record.image_path)
-
         lost_entry = LostRocket(
             event_slug=event_slug,
             event_name=event_name,
@@ -920,6 +937,7 @@ async def event_upload_preflight(
             motor_designation=motor_designation,
             flight_date=record.flight_date,
             preflight_image_path=preflight_filename,
+            image_token=image_token,
             added_by=user.email if user else "unknown",
         )
 
