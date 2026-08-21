@@ -5,6 +5,7 @@ UUID4-based filenames, and to delete images for rollback on DB failure.
 """
 
 import logging
+import secrets
 import uuid
 from pathlib import Path
 
@@ -192,6 +193,19 @@ def delete_image(path: Path) -> None:
         logger.warning("Failed to delete image at %s during rollback: %s", path, exc)
 
 
+def generate_image_token() -> str:
+    """Generate a cryptographically random URL-safe token for image filenames.
+
+    The token is 16 bytes of randomness encoded as 22 URL-safe base64
+    characters (no padding), providing ~128 bits of entropy — making the
+    resulting filename effectively unguessable.
+
+    Returns:
+        A 22-character URL-safe random string.
+    """
+    return secrets.token_urlsafe(16)
+
+
 def get_preflight_image_path(front_filename: str) -> str:
     """Derive the preflight image filename from the front image filename.
 
@@ -209,26 +223,50 @@ def get_preflight_image_path(front_filename: str) -> str:
     return f"{stem}-preflight.{ext}"
 
 
+def get_tokenized_preflight_image_path(front_filename: str, token: str) -> str:
+    """Derive a preflight image filename that includes an unguessable token.
+
+    The resulting filename is ``<stem>-preflight-<token>.<ext>``, making the
+    URL unguessable without knowledge of the token.
+
+    Args:
+        front_filename: The front image filename (e.g. "a1b2c3d4-uuid.jpg").
+        token: A random URL-safe token string (see ``generate_image_token``).
+
+    Returns:
+        The tokenized preflight filename (e.g. "a1b2c3d4-uuid-preflight-AbC123xYz.jpg").
+    """
+    stem, dot, ext = front_filename.rpartition(".")
+    if not dot:
+        return f"{front_filename}-preflight-{token}"
+    return f"{stem}-preflight-{token}.{ext}"
+
+
 def save_preflight_image(
-    front_filename: str, file_bytes: bytes, store_path: Path
+    front_filename: str, file_bytes: bytes, store_path: Path, token: str | None = None
 ) -> str:
     """Save a preflight image alongside the front image.
 
-    The filename is derived from the front image filename with '-preflight'
-    inserted before the extension.
+    If a token is provided the filename includes the token, making the URL
+    unguessable (e.g. "uuid-preflight-<token>.jpg"). Without a token it falls
+    back to the legacy deterministic naming ("uuid-preflight.jpg").
 
     Args:
         front_filename: The front image filename used as the naming base.
         file_bytes: Raw image bytes to store.
         store_path: Path to the image store directory.
+        token: Optional random token to embed in the filename for obscurity.
 
     Returns:
-        The preflight image filename.
+        The preflight image filename (including token if provided).
 
     Raises:
         ImageStorageError: If the directory is not writable or the write fails.
     """
-    preflight_filename = get_preflight_image_path(front_filename)
+    if token:
+        preflight_filename = get_tokenized_preflight_image_path(front_filename, token)
+    else:
+        preflight_filename = get_preflight_image_path(front_filename)
     target = store_path / preflight_filename
 
     if not store_path.exists():
