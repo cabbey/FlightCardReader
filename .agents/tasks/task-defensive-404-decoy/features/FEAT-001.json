@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Establish and confirm a green baseline environment so the decoy feature can be developed and verified. Install Python and client dependencies and run the existing test suite to record the known-good baseline.",
+  "status": "completed",
+  "steps": [
+    "Use python3.12 (already on PATH via pyenv shim). Do NOT use python3.9.",
+    "Install Python deps: python3.12 -m pip install fastapi 'uvicorn[standard]' sqlalchemy aiosqlite httpx pydantic jinja2 python-multipart pillow rapidfuzz segno itsdangerous argon2-cffi pytest pytest-asyncio hypothesis",
+    "Install client assets required by app-level tests: run 'pnpm install' at the repo root (populates flight_card_scanner/static/js/node_modules/{opencv.js,thrustcurve-db}).",
+    "Run the full suite once: python3.12 -m pytest -q -p no:cacheprovider . Confirm the result matches the recorded baseline of 550 passed / 5 failed, where the 5 failures are the pre-existing ones documented in context.json environment_constraints (botocore-missing bedrock test, three event_manager async-mock tests, one flaky audit_service append-mode test). Do NOT fix these; just confirm they are the only failures."
+  ],
+  "acceptance_criteria": [
+    "python3.12 -m pip install ... completes without error and pytest + pytest-asyncio are importable under python3.12.",
+    "'pnpm install' completes and flight_card_scanner/static/js/node_modules/thrustcurve-db/thrustcurve-db.json exists.",
+    "Running the full pytest suite yields exactly the 5 documented pre-existing failures and no others (roughly 550 passed)."
+  ],
+  "verification": [
+    "python3.12 -c \"import pytest, pytest_asyncio, fastapi, httpx, sqlalchemy; print('ok')\"",
+    "ls flight_card_scanner/static/js/node_modules/thrustcurve-db/thrustcurve-db.json",
+    "python3.12 -m pytest -q -p no:cacheprovider 2>&1 | tail -5"
+  ],
+  "blocked_reason": null,
+  "findings": "Baseline confirmed on python3.12 (3.12.13). Python deps: all already satisfied via pip install (no errors); pytest, pytest_asyncio, fastapi, httpx, sqlalchemy all importable. 'pnpm install' reported 'Already up to date'; thrustcurve-db.json and opencv.js both present under flight_card_scanner/static/js/node_modules. Full suite (python3.12 -m pytest -q -p no:cacheprovider) result: 550 passed, 5 failed in ~122s. The 5 failures are EXACTLY the documented pre-existing ones and no others: test_audit_service.py::TestInitAuditLogger::test_file_handler_uses_append_mode (flaky), test_bedrock_endpoint.py::TestCallBedrock::test_call_bedrock_raises_on_api_failure (missing botocore), test_event_manager.py::TestOpenCloseEvent::test_open_event_sets_state, ::test_open_already_open_is_noop, ::TestGetEvent::test_get_event_opens_if_closed (async-mock/ordering). Baseline is green; ready for FEAT-002."
+}

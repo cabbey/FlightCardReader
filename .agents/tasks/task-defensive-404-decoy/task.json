@@ -1,0 +1,7 @@
+{
+  "task_id": "task-defensive-404-decoy",
+  "task_description": "Add a defensive feature: any request that would result in a 404, unless it might have been valid (well-formed image path, or valid-shaped flight-card/event path that just doesn't exist), or is from a logged-in user, or is a standard web file (/.well-known/*, robots.txt, etc.), receives the decoy body 'these are not the droids you are looking for' - except 10% of the time it receives a gzip bomb instead.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
