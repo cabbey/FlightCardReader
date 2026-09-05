@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Add a defensive decoy response for hostile 404s. When a request would result in a 404, and the path is NOT one that 'might have been valid' (well-formed image path, or a valid-shaped flight-card/event path that just doesn't exist), and is NOT from a logged-in user, and is NOT a standard web file (anything under /.well-known/ or /robots.txt and similar), return the decoy body 'these are not the droids you are looking for'. 10% of the time (probabilistically) return a gzip bomb instead of the plain message; the other 90% return the plain message. All other 404s (exempted cases) must keep their normal existing behavior.",
-  "status": "pending",
+  "status": "completed",
   "steps": [
     "Create a new module flight_card_scanner/middleware/decoy_middleware.py containing the decoy logic as pure, unit-testable helper functions plus a middleware/handler entry point. Keep decision logic in standalone functions so tests can call them directly without spinning up the whole app.",
     "Implement a helper `is_exempt_path(path: str) -> bool` that returns True for standard web files and 'might-have-been-valid' paths. Standard web files: path == '/robots.txt', path == '/favicon.ico', path == '/sitemap.xml', and any path starting with '/.well-known/'. 'Might have been valid': (a) a well-formed image path, i.e. the path ends with a common image extension (.png, .jpg, .jpeg, .gif, .webp, .svg, .ico) case-insensitively, OR sits under an event image route (contains '/images/'); (b) a valid-shaped event / flight-card path, i.e. path == '/' or starts with '/events/' (these are legitimately-shaped routes that simply may not resolve to an existing event/record), and also the known top-level app routes ('/login','/logout','/register','/lost-rockets','/admin','/static'). Add clear comments explaining each branch. These exempted paths must receive the ORIGINAL 404 response, never the decoy.",
@@ -29,5 +29,5 @@
     "python3.12 -m pytest -q -p no:cacheprovider 2>&1 | tail -8"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Implemented flight_card_scanner/middleware/decoy_middleware.py (pure helpers is_exempt_path + build_decoy_response, gzip bomb 50MiB decompressed / tiny compressed, decoy returns HTTP 200, injectable RNG) and wired decoy_hostile_404 into main.py ABOVE session_resolution so session_resolution runs outermost and populates request.state.user first. Added tests/test_decoy_404.py (40 tests, all pass) modeled on test_multi_event_routing.py. Test note: a bare /events/{path}/ route 307-redirects when the URL lacks a trailing slash, so the test app uses follow_redirects=True and a dedicated .../images/{filename} route to exercise the missing-image 404 case. Verification: tests/test_decoy_404.py = 40 passed; tests/test_multi_event_routing.py = 19 passed; full suite = 590 passed, 5 failed (exactly the documented pre-existing failures: test_audit_service append_mode, test_bedrock_endpoint api_failure, and 3 test_event_manager open/get cases). No new failures/regressions."
 }
