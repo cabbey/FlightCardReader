@@ -2,12 +2,18 @@
 
 App construction, session mocking, and AsyncClient usage are modeled on
 tests/test_multi_event_routing.py.
+
+The bomb payloads are sourced from the vendored bamsoftware.com zip bombs (see
+flight_card_scanner/static/zipbombs/about.txt) and served with an HTTP encoding
+chosen from the requester's Accept-Encoding header, so these tests assert on that
+bamsoftware-sourced, encoding-selected behavior.
 """
 
 from __future__ import annotations
 
 import gzip
 import random
+import zlib
 
 import pytest
 from fastapi import FastAPI, Request
@@ -22,6 +28,7 @@ from flight_card_scanner.middleware.decoy_middleware import (
     build_decoy_response,
     decoy_404_middleware,
     is_exempt_path,
+    select_bomb_encoding,
 )
 
 
@@ -99,13 +106,13 @@ def _build_app(user=None, rng=None):
     return app
 
 
-async def _get(app, path):
+async def _get(app, path, headers=None):
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
         follow_redirects=True,
     ) as client:
-        return await client.get(path)
+        return await client.get(path, headers=headers)
 
 
 # ---------------------------------------------------------------------------
@@ -126,22 +133,54 @@ async def test_anonymous_bogus_path_returns_plain_decoy():
 
 @pytest.mark.asyncio
 async def test_anonymous_bogus_path_returns_gzip_bomb():
-    """Anonymous bogus 404 -> gzip bomb (10% branch) that decompresses large."""
+    """Anonymous bogus 404 -> gzip bomb (10% branch) that decompresses large.
+
+    httpx (like a browser) advertises Accept-Encoding: gzip, deflate by default,
+    so the middleware picks the gzip-framed bamsoftware bomb kernel.
+    """
     app = _build_app(user=None, rng=_ForceBomb())
     resp = await _get(app, "/totally-bogus-path-xyz")
 
     assert resp.status_code == 200
-    # httpx auto-decodes gzip; verify by decompressing raw bytes ourselves via
-    # a fresh response object instead of trusting the client to expose them.
-    # Build the response directly to inspect the compressed bytes on the wire.
-    built = build_decoy_response(rng=_ForceBomb())
+    # Inspect the compressed bytes on the wire via a directly-built response
+    # (the client auto-decodes gzip, so we don't trust it to expose raw bytes).
+    built = build_decoy_response(rng=_ForceBomb(), accept_encoding="gzip, deflate")
     assert built.headers["Content-Encoding"] == "gzip"
     compressed = built.body
     # Compressed payload on the wire stays small.
     assert len(compressed) < 1 * 1024 * 1024
     decompressed = gzip.decompress(compressed)
     assert len(decompressed) == BOMB_DECOMPRESSED_SIZE
-    assert decompressed == b"\0" * BOMB_DECOMPRESSED_SIZE
+
+
+@pytest.mark.asyncio
+async def test_anonymous_bogus_path_deflate_bomb():
+    """A client advertising only deflate gets a deflate-framed bomb."""
+    app = _build_app(user=None, rng=_ForceBomb())
+    resp = await _get(
+        app, "/totally-bogus-path-xyz", headers={"Accept-Encoding": "deflate"}
+    )
+
+    assert resp.status_code == 200
+    built = build_decoy_response(rng=_ForceBomb(), accept_encoding="deflate")
+    assert built.headers["Content-Encoding"] == "deflate"
+    assert len(built.body) < 1 * 1024 * 1024
+    assert len(zlib.decompress(built.body)) == BOMB_DECOMPRESSED_SIZE
+
+
+@pytest.mark.asyncio
+async def test_anonymous_bogus_path_identity_gets_zip_archive():
+    """A client that accepts no decompressible encoding gets the raw .zip archive."""
+    app = _build_app(user=None, rng=_ForceBomb())
+    resp = await _get(
+        app, "/totally-bogus-path-xyz", headers={"Accept-Encoding": "identity"}
+    )
+
+    assert resp.status_code == 200
+    assert "content-encoding" not in {k.lower() for k in resp.headers}
+    assert resp.headers["content-type"] == "application/zip"
+    # A real zip archive starts with the PK local-file-header signature.
+    assert resp.content[:4] == b"PK\x03\x04"
 
 
 @pytest.mark.asyncio
@@ -249,6 +288,29 @@ def test_is_exempt_path_false(path):
 
 
 # ---------------------------------------------------------------------------
+# Direct unit tests: select_bomb_encoding
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "accept_encoding,expected",
+    [
+        ("gzip, deflate", "gzip"),  # default browser/httpx header -> gzip
+        ("gzip", "gzip"),
+        ("deflate", "deflate"),
+        ("deflate, gzip", "gzip"),  # gzip preferred when both offered
+        ("gzip;q=1.0, br;q=0.5", "gzip"),  # q-values stripped
+        ("br", "zip"),  # brotli not served -> fall back to zip download
+        ("identity", "zip"),
+        ("", "zip"),
+        (None, "zip"),
+    ],
+)
+def test_select_bomb_encoding(accept_encoding, expected):
+    assert select_bomb_encoding(accept_encoding) == expected
+
+
+# ---------------------------------------------------------------------------
 # Direct unit tests: build_decoy_response
 # ---------------------------------------------------------------------------
 
@@ -260,12 +322,30 @@ def test_build_decoy_response_plain_branch():
     assert "Content-Encoding" not in resp.headers
 
 
-def test_build_decoy_response_bomb_branch():
-    resp = build_decoy_response(rng=_ForceBomb())
+def test_build_decoy_response_bomb_gzip_branch():
+    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding="gzip, deflate")
     assert resp.status_code == 200
     assert resp.headers["Content-Encoding"] == "gzip"
     assert len(resp.body) < 1 * 1024 * 1024  # small on the wire
     assert len(gzip.decompress(resp.body)) == BOMB_DECOMPRESSED_SIZE
+
+
+def test_build_decoy_response_bomb_deflate_branch():
+    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding="deflate")
+    assert resp.status_code == 200
+    assert resp.headers["Content-Encoding"] == "deflate"
+    assert len(resp.body) < 1 * 1024 * 1024
+    assert len(zlib.decompress(resp.body)) == BOMB_DECOMPRESSED_SIZE
+
+
+def test_build_decoy_response_bomb_zip_branch():
+    """No decompressible encoding accepted -> serve the raw .zip archive."""
+    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding=None)
+    assert resp.status_code == 200
+    assert "Content-Encoding" not in resp.headers
+    assert resp.media_type == "application/zip"
+    assert resp.body[:4] == b"PK\x03\x04"  # zip local file header signature
+    assert len(resp.body) < 1 * 1024 * 1024  # small on the wire
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +359,7 @@ def test_bomb_ratio_is_roughly_ten_percent():
     draws = 1000
     bombs = 0
     for _ in range(draws):
-        resp = build_decoy_response(rng=rng)
+        resp = build_decoy_response(rng=rng, accept_encoding="gzip")
         if resp.headers.get("Content-Encoding") == "gzip":
             bombs += 1
 

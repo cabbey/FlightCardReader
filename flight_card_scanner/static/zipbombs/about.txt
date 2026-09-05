@@ -1,0 +1,44 @@
+Defensive zip-bomb assets
+=========================
+
+These archives are David Fifield's "better zip bomb" demonstration files,
+redistributed unmodified from:
+
+    https://www.bamsoftware.com/hacks/zipbomb/
+
+They are used by the decoy-404 middleware
+(flight_card_scanner/middleware/decoy_middleware.py) to serve a compression
+bomb to hostile, anonymous scanners that probe clearly-bogus 404 paths, instead
+of computing our own bomb at runtime. Vendoring them means the decoy path reads
+only local files (no live external fetch per request), keeping the per-request
+cost tiny.
+
+Files (DEFLATE quoted-overlap construction, non-Zip64 for broad compatibility):
+
+    zbsm.zip   42,374 bytes    -> ~5.5 GB   (250 files sharing one DEFLATE kernel)
+    zblg.zip   9,893,525 bytes -> ~281 TB   (65,534 files sharing one DEFLATE kernel)
+
+sha256:
+    zbsm.zip  fb4ff972d21189beec11e05109c4354d0cd6d3b629263d6c950cf8cc3f78bd99
+    zblg.zip  f1dc920869794df3e258f42f9b99157104cd3f8c14394c1b9d043d6fcda14c0a
+
+Re-fetch with:
+    python3.12 scripts/fetch_zipbombs.py
+
+How they are served (see decoy_middleware.py for detail):
+  * A hostile client advertises what compression it will transparently decode via
+    the HTTP `Accept-Encoding` request header (gzip / deflate). We honor that:
+      - Accept-Encoding: gzip    -> we serve the archive's raw DEFLATE "kernel"
+                                     re-framed as a gzip stream (Content-Encoding: gzip).
+                                     The client auto-inflates it into a huge payload.
+      - Accept-Encoding: deflate -> same kernel re-framed as a zlib/DEFLATE stream
+                                     (Content-Encoding: deflate).
+  * A client that accepts no decompressible encoding will NOT auto-inflate a
+    gzip/deflate body, so instead we hand it the raw .zip archive as a download
+    (Content-Type: application/zip); it only detonates if the client unpacks it.
+
+Note on ratios: a single HTTP Content-Encoding stream is one DEFLATE stream, whose
+ratio is capped near 1032:1, so the gzip/deflate responses expand to the kernel's
+single-file size (tens of MB to a few GB), not the archive's full multi-file total.
+The full multi-terabyte expansion is a property of the ZIP container (many files
+overlapping one kernel) and is only realized when the client unpacks the .zip.
