@@ -1,7 +1,14 @@
 {
   "task_id": "task-defensive-404-decoy",
   "task_description": "Add a defensive feature: any request that would result in a 404, unless it might have been valid (well-formed image path, or valid-shaped flight-card/event path that just doesn't exist), or is from a logged-in user, or is a standard web file (/.well-known/*, robots.txt, etc.), receives the decoy body 'these are not the droids you are looking for' - except 10% of the time it receives a gzip bomb instead.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "pass",
+    "summary": "Full pytest suite: 590 passed, 5 failed (exactly the 5 documented pre-existing baseline failures - botocore-missing bedrock test, three event_manager async-mock tests, one flaky audit_service append-mode test; no new regressions). The 40 new tests in tests/test_decoy_404.py pass and meaningfully exercise the decoy code paths (exact-byte message assertions, gzip-bomb decompression, all exemption categories, is_exempt_path true/false cases, probabilistic ratio). Docker image builds successfully with the changes (docker build -t flight-card-scanner:decoy-test .)."
+  }
 }

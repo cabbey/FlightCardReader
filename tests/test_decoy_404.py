@@ -60,19 +60,13 @@ def _build_app(user=None, rng=None):
 
     # Decoy middleware defined FIRST so the session middleware (added after)
     # runs outermost and populates request.state.user first, mirroring main.py.
+    # We always drive the REAL production entrypoint (decoy_404_middleware),
+    # threading the optional forced ``rng`` through it so the e2e tests exercise
+    # the production code path (not a re-implementation) while still forcing the
+    # plain/bomb branch deterministically.
     @app.middleware("http")
     async def _decoy(request: Request, call_next):
-        if rng is not None:
-            # Inject the forced RNG by wrapping build_decoy_response.
-            response = await call_next(request)
-            if response.status_code != 404:
-                return response
-            if getattr(request.state, "user", None) is not None:
-                return response
-            if is_exempt_path(request.url.path):
-                return response
-            return build_decoy_response(rng=rng)
-        return await decoy_404_middleware(request, call_next)
+        return await decoy_404_middleware(request, call_next, rng=rng)
 
     @app.middleware("http")
     async def _session(request: Request, call_next):
@@ -226,8 +220,6 @@ async def test_valid_shaped_event_path_gets_real_404():
         "/logout",
         "/register",
         "/lost-rockets",
-        "/admin",
-        "/admin/users",
         "/static",
         "/static/js/app.js",
     ],
@@ -247,6 +239,8 @@ def test_is_exempt_path_true(path):
         "/api/v1/users",
         "/loginx",  # not a real prefix match
         "/adminfoo",
+        "/admin",  # no top-level /admin route; must NOT be exempt
+        "/admin/users",  # admin lives under /events/.../api/admin, not here
         "",
     ],
 )

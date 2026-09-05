@@ -42,9 +42,17 @@ BOMB_PROBABILITY = 0.10
 # Size (in bytes) of the DECOMPRESSED gzip-bomb payload. Tens of MB is enough
 # to be a meaningful bomb for a client that auto-decompresses, while the
 # COMPRESSED bytes on the wire stay tiny (a run of a single byte compresses to
-# a few KB). We never materialize this full payload as a persistent object
-# beyond the single compression call below.
+# a few KB).
 BOMB_DECOMPRESSED_SIZE = 50 * 1024 * 1024  # 50 MiB decompressed
+
+# Precompute the compressed gzip-bomb payload ONCE at import time. The output
+# is a constant (compressing a fixed run of zeros always yields the same
+# bytes), so there is no reason to reallocate the 50 MiB source buffer or
+# re-run DEFLATE on every bomb response. This keeps the per-request cost of a
+# bomb response tiny even under a hostile scanning burst (the exact traffic
+# this middleware attracts), instead of amplifying it into server-side memory
+# and CPU pressure.
+_BOMB_COMPRESSED_BYTES = gzip.compress(b"\0" * BOMB_DECOMPRESSED_SIZE)
 
 # Common image file extensions. A request for one of these that 404s is
 # treated as a "might have been a real image" path and is left as an honest
@@ -69,12 +77,16 @@ _STANDARD_WEB_FILES = (
 
 # Known top-level application route prefixes. A 404 under one of these is a
 # legitimately-shaped path (record/user simply may not exist), so it is exempt.
+# NOTE: there is deliberately NO "/admin" here. Admin endpoints live under
+# "/events/{event_path}/api/admin/..." (already covered by the "/events/"
+# exemption), not at a top-level "/admin". Exempting a bare "/admin" would hand
+# a common scanner probe an honest 404 instead of the decoy, weakening the
+# defense on exactly the kind of reconnaissance path this feature targets.
 _KNOWN_TOP_LEVEL_ROUTES = (
     "/login",
     "/logout",
     "/register",
     "/lost-rockets",
-    "/admin",
     "/static",
 )
 
@@ -135,13 +147,13 @@ def _build_gzip_bomb_response() -> Response:
     actual compressed bytes so it can never contradict the payload.
 
     NOTE: this is only harmful to a client that auto-decompresses the body.
-    Compressing a run of zeros is cheap and the compressed output is tiny, so
-    the server side stays bounded.
+    The compressed payload is precomputed once at import (see
+    ``_BOMB_COMPRESSED_BYTES``), so building this response is essentially free
+    on the server side and cannot amplify hostile traffic into memory/CPU
+    pressure.
     """
-    # Compressing a run of a single byte is cheap and yields a tiny output.
-    compressed = gzip.compress(b"\0" * BOMB_DECOMPRESSED_SIZE)
     return Response(
-        content=compressed,
+        content=_BOMB_COMPRESSED_BYTES,
         status_code=200,
         media_type="text/plain",
         headers={"Content-Encoding": "gzip"},
@@ -178,7 +190,9 @@ def build_decoy_response(rng: random.Random | None = None) -> Response:
 # ---------------------------------------------------------------------------
 
 
-async def decoy_404_middleware(request: Request, call_next):
+async def decoy_404_middleware(
+    request: Request, call_next, rng: random.Random | None = None
+):
     """HTTP middleware that replaces hostile 404s with a decoy response.
 
     This must run AFTER session resolution so ``request.state.user`` is
@@ -186,6 +200,11 @@ async def decoy_404_middleware(request: Request, call_next):
     outermost, so register/define this middleware BEFORE ``session_resolution``
     in ``main.py`` (making session_resolution the outer wrapper that runs
     first).
+
+    ``rng`` is an optional injectable ``random.Random`` (or compatible) that is
+    threaded through to ``build_decoy_response`` so tests can force the
+    plain/bomb branch deterministically while still exercising this real
+    entrypoint end-to-end. Production callers omit it and get real randomness.
     """
     response = await call_next(request)
 
@@ -202,4 +221,4 @@ async def decoy_404_middleware(request: Request, call_next):
         return response
 
     # Clearly-bogus 404 for an anonymous user: return the decoy.
-    return build_decoy_response()
+    return build_decoy_response(rng=rng)
