@@ -3,17 +3,14 @@
 App construction, session mocking, and AsyncClient usage are modeled on
 tests/test_multi_event_routing.py.
 
-The bomb payloads are sourced from the vendored bamsoftware.com zip bombs (see
-flight_card_scanner/static/zipbombs/about.txt) and served with an HTTP encoding
-chosen from the requester's Accept-Encoding header, so these tests assert on that
-bamsoftware-sourced, encoding-selected behavior.
+The image decoy is served from the vendored unicorn images (see
+flight_card_scanner/static/unicorns/about.txt), so these tests assert on that
+image behavior (an image/* Content-Type and valid image bytes).
 """
 
 from __future__ import annotations
 
-import gzip
 import random
-import zlib
 
 import pytest
 from fastapi import FastAPI, Request
@@ -21,15 +18,20 @@ from fastapi.responses import PlainTextResponse
 from httpx import ASGITransport, AsyncClient
 
 from flight_card_scanner.middleware.decoy_middleware import (
-    BOMB_DECOMPRESSED_SIZE,
-    BOMB_PROBABILITY,
     DECOY_MESSAGE,
     DECOY_MESSAGE_BYTES,
+    IMAGE_PROBABILITY,
     build_decoy_response,
     decoy_404_middleware,
     is_exempt_path,
-    select_bomb_encoding,
 )
+
+# Magic-number prefixes for the image formats we vendor, so tests can confirm
+# the decoy really returned valid image bytes.
+_IMAGE_MAGIC = {
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/jpeg": b"\xff\xd8\xff",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -37,18 +39,27 @@ from flight_card_scanner.middleware.decoy_middleware import (
 # ---------------------------------------------------------------------------
 
 
-class _ForceBomb:
-    """RNG whose random() always returns 0.0 (< BOMB_PROBABILITY => bomb)."""
+class _ForceImage:
+    """RNG whose random() always returns 0.0 (< IMAGE_PROBABILITY => image).
+
+    ``choice`` returns the first item so the chosen image is deterministic.
+    """
 
     def random(self) -> float:
         return 0.0
 
+    def choice(self, seq):
+        return seq[0]
+
 
 class _ForcePlain:
-    """RNG whose random() always returns 0.99 (>= BOMB_PROBABILITY => plain)."""
+    """RNG whose random() always returns 0.99 (>= IMAGE_PROBABILITY => plain)."""
 
     def random(self) -> float:
         return 0.99
+
+    def choice(self, seq):
+        return seq[0]
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +81,7 @@ def _build_app(user=None, rng=None):
     # We always drive the REAL production entrypoint (decoy_404_middleware),
     # threading the optional forced ``rng`` through it so the e2e tests exercise
     # the production code path (not a re-implementation) while still forcing the
-    # plain/bomb branch deterministically.
+    # plain/image branch deterministically.
     @app.middleware("http")
     async def _decoy(request: Request, call_next):
         return await decoy_404_middleware(request, call_next, rng=rng)
@@ -132,55 +143,24 @@ async def test_anonymous_bogus_path_returns_plain_decoy():
 
 
 @pytest.mark.asyncio
-async def test_anonymous_bogus_path_returns_gzip_bomb():
-    """Anonymous bogus 404 -> gzip bomb (10% branch) that decompresses large.
+async def test_anonymous_bogus_path_returns_unicorn_image():
+    """Anonymous bogus 404 -> a unicorn image (10% branch).
 
-    httpx (like a browser) advertises Accept-Encoding: gzip, deflate by default,
-    so the middleware picks the gzip-framed bamsoftware bomb kernel.
+    The response is HTTP 200 with an image/* Content-Type and valid image bytes
+    (verified via the format magic number).
     """
-    app = _build_app(user=None, rng=_ForceBomb())
+    app = _build_app(user=None, rng=_ForceImage())
     resp = await _get(app, "/totally-bogus-path-xyz")
 
     assert resp.status_code == 200
-    # Inspect the compressed bytes on the wire via a directly-built response
-    # (the client auto-decodes gzip, so we don't trust it to expose raw bytes).
-    built = build_decoy_response(rng=_ForceBomb(), accept_encoding="gzip, deflate")
-    assert built.headers["Content-Encoding"] == "gzip"
-    compressed = built.body
-    # Compressed payload on the wire stays small.
-    assert len(compressed) < 1 * 1024 * 1024
-    decompressed = gzip.decompress(compressed)
-    assert len(decompressed) == BOMB_DECOMPRESSED_SIZE
-
-
-@pytest.mark.asyncio
-async def test_anonymous_bogus_path_deflate_bomb():
-    """A client advertising only deflate gets a deflate-framed bomb."""
-    app = _build_app(user=None, rng=_ForceBomb())
-    resp = await _get(
-        app, "/totally-bogus-path-xyz", headers={"Accept-Encoding": "deflate"}
-    )
-
-    assert resp.status_code == 200
-    built = build_decoy_response(rng=_ForceBomb(), accept_encoding="deflate")
-    assert built.headers["Content-Encoding"] == "deflate"
-    assert len(built.body) < 1 * 1024 * 1024
-    assert len(zlib.decompress(built.body)) == BOMB_DECOMPRESSED_SIZE
-
-
-@pytest.mark.asyncio
-async def test_anonymous_bogus_path_identity_gets_zip_archive():
-    """A client that accepts no decompressible encoding gets the raw .zip archive."""
-    app = _build_app(user=None, rng=_ForceBomb())
-    resp = await _get(
-        app, "/totally-bogus-path-xyz", headers={"Accept-Encoding": "identity"}
-    )
-
-    assert resp.status_code == 200
-    assert "content-encoding" not in {k.lower() for k in resp.headers}
-    assert resp.headers["content-type"] == "application/zip"
-    # A real zip archive starts with the PK local-file-header signature.
-    assert resp.content[:4] == b"PK\x03\x04"
+    content_type = resp.headers["content-type"]
+    assert content_type.startswith("image/")
+    assert content_type in _IMAGE_MAGIC
+    assert resp.content.startswith(_IMAGE_MAGIC[content_type])
+    # Small on the wire.
+    assert 0 < len(resp.content) < 1 * 1024 * 1024
+    # It is not the plain-text message.
+    assert resp.content != DECOY_MESSAGE_BYTES
 
 
 @pytest.mark.asyncio
@@ -288,29 +268,6 @@ def test_is_exempt_path_false(path):
 
 
 # ---------------------------------------------------------------------------
-# Direct unit tests: select_bomb_encoding
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "accept_encoding,expected",
-    [
-        ("gzip, deflate", "gzip"),  # default browser/httpx header -> gzip
-        ("gzip", "gzip"),
-        ("deflate", "deflate"),
-        ("deflate, gzip", "gzip"),  # gzip preferred when both offered
-        ("gzip;q=1.0, br;q=0.5", "gzip"),  # q-values stripped
-        ("br", "zip"),  # brotli not served -> fall back to zip download
-        ("identity", "zip"),
-        ("", "zip"),
-        (None, "zip"),
-    ],
-)
-def test_select_bomb_encoding(accept_encoding, expected):
-    assert select_bomb_encoding(accept_encoding) == expected
-
-
-# ---------------------------------------------------------------------------
 # Direct unit tests: build_decoy_response
 # ---------------------------------------------------------------------------
 
@@ -319,33 +276,30 @@ def test_build_decoy_response_plain_branch():
     resp = build_decoy_response(rng=_ForcePlain())
     assert resp.status_code == 200
     assert resp.body == DECOY_MESSAGE_BYTES
-    assert "Content-Encoding" not in resp.headers
+    assert resp.media_type == "text/plain"
 
 
-def test_build_decoy_response_bomb_gzip_branch():
-    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding="gzip, deflate")
+def test_build_decoy_response_image_branch():
+    resp = build_decoy_response(rng=_ForceImage())
     assert resp.status_code == 200
-    assert resp.headers["Content-Encoding"] == "gzip"
-    assert len(resp.body) < 1 * 1024 * 1024  # small on the wire
-    assert len(gzip.decompress(resp.body)) == BOMB_DECOMPRESSED_SIZE
+    assert resp.media_type in _IMAGE_MAGIC
+    assert resp.body.startswith(_IMAGE_MAGIC[resp.media_type])
+    assert 0 < len(resp.body) < 1 * 1024 * 1024  # small on the wire
 
 
-def test_build_decoy_response_bomb_deflate_branch():
-    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding="deflate")
-    assert resp.status_code == 200
-    assert resp.headers["Content-Encoding"] == "deflate"
-    assert len(resp.body) < 1 * 1024 * 1024
-    assert len(zlib.decompress(resp.body)) == BOMB_DECOMPRESSED_SIZE
+def test_build_decoy_response_image_choices_are_all_valid():
+    """Every vendored image the RNG can pick is a valid image with a real magic."""
+    from flight_card_scanner.middleware.decoy_middleware import _UNICORN_IMAGES
 
+    assert len(_UNICORN_IMAGES) >= 2  # a few distinct images are vendored
+    for body, media_type in _UNICORN_IMAGES:
+        assert media_type in _IMAGE_MAGIC
+        assert body.startswith(_IMAGE_MAGIC[media_type])
 
-def test_build_decoy_response_bomb_zip_branch():
-    """No decompressible encoding accepted -> serve the raw .zip archive."""
-    resp = build_decoy_response(rng=_ForceBomb(), accept_encoding=None)
-    assert resp.status_code == 200
-    assert "Content-Encoding" not in resp.headers
-    assert resp.media_type == "application/zip"
-    assert resp.body[:4] == b"PK\x03\x04"  # zip local file header signature
-    assert len(resp.body) < 1 * 1024 * 1024  # small on the wire
+    # At least one PNG and one JPEG so multiple content types are exercised.
+    media_types = {mt for _, mt in _UNICORN_IMAGES}
+    assert "image/png" in media_types
+    assert "image/jpeg" in media_types
 
 
 # ---------------------------------------------------------------------------
@@ -353,16 +307,16 @@ def test_build_decoy_response_bomb_zip_branch():
 # ---------------------------------------------------------------------------
 
 
-def test_bomb_ratio_is_roughly_ten_percent():
-    """Over many draws with a real RNG, ~10% should be bombs (loose bounds)."""
+def test_image_ratio_is_roughly_ten_percent():
+    """Over many draws with a real RNG, ~10% should be images (loose bounds)."""
     rng = random.Random(12345)
     draws = 1000
-    bombs = 0
+    images = 0
     for _ in range(draws):
-        resp = build_decoy_response(rng=rng, accept_encoding="gzip")
-        if resp.headers.get("Content-Encoding") == "gzip":
-            bombs += 1
+        resp = build_decoy_response(rng=rng)
+        if (resp.media_type or "").startswith("image/"):
+            images += 1
 
-    fraction = bombs / draws
-    # Loose bounds around BOMB_PROBABILITY (0.10) to document intent without flakiness.
-    assert 0.03 <= fraction <= 0.20, f"bomb fraction {fraction} outside sanity bounds"
+    fraction = images / draws
+    # Loose bounds around IMAGE_PROBABILITY (0.10) to document intent without flakiness.
+    assert 0.03 <= fraction <= 0.20, f"image fraction {fraction} outside sanity bounds"
