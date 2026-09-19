@@ -74,6 +74,22 @@
     cursor: pointer;
   }
 
+  .recovered-note {
+    display: none;
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    color: #1e40af;
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  .recovered-note.visible {
+    display: block;
+  }
+
   .gps-status {
     font-size: 0.8rem;
     margin-top: 0.3rem;
@@ -165,6 +181,11 @@
           &#x1F4E6; Recovered
         </label>
       </div>
+      <div class="recovered-note" id="recoveredNote" role="note">
+        &#x2139;&#xFE0F; Please ensure the location of the rocket is noted in the
+        description above &mdash; whether it is with the finder, or in the club
+        lost and found.
+      </div>
     </div>
 
     <button type="submit" class="btn-submit" id="submitBtn">Submit Report</button>
@@ -187,6 +208,25 @@
   var userEditedCoords = false;
   latInput.addEventListener('input', function() { userEditedCoords = true; });
   lonInput.addEventListener('input', function() { userEditedCoords = true; });
+
+  // Prompt the user to note the rocket's location in the description when they
+  // mark it as "recovered."
+  var recoveredNote = document.getElementById('recoveredNote');
+  var statusRadios = form.querySelectorAll('input[name="status"]');
+
+  function updateRecoveredNote() {
+    var selected = form.querySelector('input[name="status"]:checked');
+    if (selected && selected.value === 'recovered') {
+      recoveredNote.classList.add('visible');
+    } else {
+      recoveredNote.classList.remove('visible');
+    }
+  }
+
+  statusRadios.forEach(function(radio) {
+    radio.addEventListener('change', updateRecoveredNote);
+  });
+  updateRecoveredNote();
 
   imageInput.addEventListener('change', function() {
     var file = imageInput.files && imageInput.files[0];
@@ -250,6 +290,7 @@
           preview.style.display = 'none';
           gpsStatus.textContent = '';
           userEditedCoords = false;
+          updateRecoveredNote();
           setTimeout(function() { window.location.href = '/found-rockets'; }, 1500);
         } else {
           formMessage.className = 'form-message error';
