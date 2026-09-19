@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .report-form {
+    max-width: 560px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+
+  .report-form h2 {
+    margin-top: 0;
+    font-size: 1.3rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    color: #374151;
+  }
+
+  .form-group .hint {
+    font-weight: 400;
+    color: #6b7280;
+    font-size: 0.8rem;
+  }
+
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group textarea,
+  .form-group input[type="file"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+
+  .form-group textarea {
+    resize: vertical;
+    min-height: 90px;
+  }
+
+  .coords-row {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .coords-row .form-group {
+    flex: 1;
+  }
+
+  .status-options {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .status-options label {
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+
+  .gps-status {
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+    min-height: 1rem;
+  }
+
+  .gps-status.found { color: #059669; }
+  .gps-status.none { color: #92400e; }
+  .gps-status.working { color: #6b7280; }
+
+  .image-preview {
+    max-width: 100%;
+    max-height: 240px;
+    margin-top: 0.5rem;
+    border-radius: 4px;
+    display: none;
+  }
+
+  .btn-submit {
+    background: #059669;
+    color: #fff;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-submit:hover { background: #047857; }
+  .btn-submit:disabled { background: #9ca3af; cursor: not-allowed; }
+
+  .form-message {
+    margin-top: 1rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  .form-message.success { background: #dcfce7; color: #166534; display: block; }
+  .form-message.error { background: #fee2e2; color: #991b1b; display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="report-form">
+  <h2>&#x1F680; Report a Found Rocket</h2>
+  <p style="font-size:0.85rem;color:#6b7280;">
+    Upload a photo of the rocket. If the photo has location data, we'll fill in
+    the coordinates for you — you can adjust them or enter your own. The photo
+    will be reviewed by an admin before it appears in the public list.
+  </p>
+
+  <form id="foundRocketForm">
+    <div class="form-group">
+      <label for="image">Photo <span class="hint">(JPEG or PNG, required)</span></label>
+      <input type="file" id="image" name="image" accept="image/jpeg,image/png" required>
+      <img id="imagePreview" class="image-preview" alt="Preview">
+      <div class="gps-status" id="gpsStatus"></div>
+    </div>
+
+    <div class="form-group">
+      <label for="description">Description <span class="hint">(optional)</span></label>
+      <textarea id="description" name="description"
+        placeholder="e.g. 4-inch fiberglass rocket, red &amp; white, chute deployed, found near the north tree line"></textarea>
+    </div>
+
+    <div class="coords-row">
+      <div class="form-group">
+        <label for="latitude">Latitude <span class="hint">(-90 to 90)</span></label>
+        <input type="number" id="latitude" name="latitude" step="any" min="-90" max="90" placeholder="e.g. 43.79913">
+      </div>
+      <div class="form-group">
+        <label for="longitude">Longitude <span class="hint">(-180 to 180)</span></label>
+        <input type="number" id="longitude" name="longitude" step="any" min="-180" max="180" placeholder="e.g. -103.5545">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Condition</label>
+      <div class="status-options">
+        <label>
+          <input type="radio" name="status" value="still_in_field" checked>
+          &#x1F33E; Still in field
+        </label>
+        <label>
+          <input type="radio" name="status" value="recovered">
+          &#x1F4E6; Recovered
+        </label>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-submit" id="submitBtn">Submit Report</button>
+    <div class="form-message" id="formMessage"></div>
+  </form>
+</div>
+
+<script>
+(function() {
+  var imageInput = document.getElementById('image');
+  var preview = document.getElementById('imagePreview');
+  var gpsStatus = document.getElementById('gpsStatus');
+  var latInput = document.getElementById('latitude');
+  var lonInput = document.getElementById('longitude');
+  var form = document.getElementById('foundRocketForm');
+  var submitBtn = document.getElementById('submitBtn');
+  var formMessage = document.getElementById('formMessage');
+
+  // Track whether the user manually edited coordinates so we don't clobber them.
+  var userEditedCoords = false;
+  latInput.addEventListener('input', function() { userEditedCoords = true; });
+  lonInput.addEventListener('input', function() { userEditedCoords = true; });
+
+  imageInput.addEventListener('change', function() {
+    var file = imageInput.files && imageInput.files[0];
+    if (!file) {
+      preview.style.display = 'none';
+      gpsStatus.textContent = '';
+      return;
+    }
+
+    // Show a preview.
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    // Ask the server to extract EXIF GPS.
+    gpsStatus.className = 'gps-status working';
+    gpsStatus.textContent = 'Checking photo for location data\u2026';
+
+    var fd = new FormData();
+    fd.append('image', file);
+    fetch('/found-rockets/api/extract-gps', { method: 'POST', body: fd })
+      .then(function(res) { return res.ok ? res.json() : null; })
+      .then(function(data) {
+        if (data && data.found) {
+          gpsStatus.className = 'gps-status found';
+          gpsStatus.textContent = '\u2713 Location found in photo and filled in below (you can adjust it).';
+          if (!userEditedCoords) {
+            latInput.value = data.latitude;
+            lonInput.value = data.longitude;
+          }
+        } else {
+          gpsStatus.className = 'gps-status none';
+          gpsStatus.textContent = 'No location data in this photo \u2014 enter coordinates manually if you know them.';
+        }
+      })
+      .catch(function() {
+        gpsStatus.className = 'gps-status none';
+        gpsStatus.textContent = 'Could not read location data from photo.';
+      });
+  });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    formMessage.className = 'form-message';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting\u2026';
+
+    var fd = new FormData(form);
+    fetch('/found-rockets/api/report', { method: 'POST', body: fd })
+      .then(function(res) {
+        return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+      })
+      .then(function(result) {
+        if (result.ok) {
+          formMessage.className = 'form-message success';
+          formMessage.textContent = result.data.message || 'Reported!';
+          form.reset();
+          preview.style.display = 'none';
+          gpsStatus.textContent = '';
+          userEditedCoords = false;
+          setTimeout(function() { window.location.href = '/found-rockets'; }, 1500);
+        } else {
+          formMessage.className = 'form-message error';
+          formMessage.textContent = 'Error: ' + (result.data.detail || 'Submission failed');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Report';
+        }
+      })
+      .catch(function() {
+        formMessage.className = 'form-message error';
+        formMessage.textContent = 'Network error. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Report';
+      });
+  });
+})();
+</script>
+{% endblock %}

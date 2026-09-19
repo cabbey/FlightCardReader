@@ -144,46 +144,75 @@
 
 {% block content %}
 <div class="queue-header">
-  <h2>Preflight Approval Queue</h2>
+  <h2>Image Approval Queue</h2>
   <a href="/admin" style="color:#2563eb;text-decoration:none;font-size:0.85rem;">&larr; Back to Admin</a>
 </div>
 
 {% if pending_items %}
 <div class="queue-grid">
   {% for item in pending_items %}
-  <div class="queue-card" id="queue-item-{{ item.event_slug|replace('/', '-') }}-{{ item.record_id }}">
+  <div class="queue-card" id="queue-item-{{ loop.index0 }}">
     <img
       class="card-image"
-      src="/events/{{ item.event_slug }}/images/{{ item.preflight_image_path }}"
-      alt="Preflight image for record {{ item.record_id }}"
+      src="{{ item.image_url }}"
+      alt="Image pending approval"
       loading="lazy"
     >
     <div class="card-body">
-      <div class="card-event">
-        {{ item.event_name }}
-        {% if item.is_lost %}
-          <span class="lost-badge">LOST</span>
-        {% endif %}
-      </div>
-      <div class="card-info">
-        <span class="label">Record:</span>
-        <a href="/events/{{ item.event_slug }}/record/{{ item.record_id }}" style="color:#2563eb;text-decoration:none;">#{{ item.record_id }}</a>
-        <br>
-        <span class="label">Uploaded by:</span>
-        {% if current_user and current_user.role == 'admin' %}
-          <a href="/admin/users" class="uploader-link">{{ item.uploaded_by }}</a>
-        {% else %}
-          {{ item.uploaded_by }}
-        {% endif %}
-      </div>
+      {% if item.source == 'found_rocket' %}
+        <div class="card-event">
+          &#x1F50D; Found Rocket
+          <span class="lost-badge">FOUND</span>
+          {% if item.status == 'recovered' %}
+            <span class="lost-badge" style="background:#dbeafe;color:#1e40af;">RECOVERED</span>
+          {% else %}
+            <span class="lost-badge">IN FIELD</span>
+          {% endif %}
+        </div>
+        <div class="card-info">
+          {% if item.description %}
+            <span class="label">Description:</span> {{ item.description }}<br>
+          {% endif %}
+          {% if item.latitude is not none and item.longitude is not none %}
+            <span class="label">Location:</span>
+            {{ "%.5f"|format(item.latitude) }}, {{ "%.5f"|format(item.longitude) }}<br>
+          {% endif %}
+          <span class="label">Reported by:</span>
+          {% if current_user and current_user.role == 'admin' %}
+            <a href="/admin/users" class="uploader-link">{{ item.uploaded_by }}</a>
+          {% else %}
+            {{ item.uploaded_by }}
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="card-event">
+          {{ item.event_name }}
+          {% if item.is_lost %}
+            <span class="lost-badge">LOST</span>
+          {% endif %}
+        </div>
+        <div class="card-info">
+          <span class="label">Record:</span>
+          <a href="/events/{{ item.event_slug }}/record/{{ item.record_id }}" style="color:#2563eb;text-decoration:none;">#{{ item.record_id }}</a>
+          <br>
+          <span class="label">Uploaded by:</span>
+          {% if current_user and current_user.role == 'admin' %}
+            <a href="/admin/users" class="uploader-link">{{ item.uploaded_by }}</a>
+          {% else %}
+            {{ item.uploaded_by }}
+          {% endif %}
+        </div>
+      {% endif %}
       <div class="card-actions">
         <button
           class="btn-approve"
-          onclick="approveItem('{{ item.event_slug }}', {{ item.record_id }})"
+          data-approve-url="{{ item.approve_url }}"
+          data-card-id="queue-item-{{ loop.index0 }}"
         >&#x2705; Approve</button>
         <button
           class="btn-delete"
-          onclick="deleteItem('{{ item.event_slug }}', {{ item.record_id }})"
+          data-delete-url="{{ item.delete_url }}"
+          data-card-id="queue-item-{{ loop.index0 }}"
         >&#x1F5D1; Delete</button>
       </div>
     </div>
@@ -193,7 +222,7 @@
 {% else %}
 <div class="empty-state">
   <div class="emoji">&#x2705;</div>
-  <p>No preflight images pending approval. All clear!</p>
+  <p>No images pending approval. All clear!</p>
 </div>
 {% endif %}
 
@@ -209,8 +238,7 @@
     setTimeout(function() { toast.className = 'status-toast'; }, 3000);
   }
 
-  function removeCard(eventSlug, recordId) {
-    var cardId = 'queue-item-' + eventSlug.replace(/\//g, '-') + '-' + recordId;
+  function removeCard(cardId) {
     var card = document.getElementById(cardId);
     if (card) {
       card.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -220,40 +248,44 @@
     }
   }
 
-  window.approveItem = function(eventSlug, recordId) {
-    fetch('/api/admin/preflight/' + eventSlug + '/' + recordId + '/approve', {
-      method: 'POST',
-    }).then(function(res) {
-      if (res.ok) {
-        showToast('Image approved!', false);
-        removeCard(eventSlug, recordId);
-      } else {
-        return res.json().then(function(data) {
-          showToast('Error: ' + (data.detail || 'Failed'), true);
-        });
-      }
-    }).catch(function() {
-      showToast('Network error', true);
-    });
-  };
+  function post(url) {
+    return fetch(url, { method: 'POST' });
+  }
 
-  window.deleteItem = function(eventSlug, recordId) {
-    if (!confirm('Delete this preflight image? This cannot be undone.')) return;
-    fetch('/api/admin/preflight/' + eventSlug + '/' + recordId + '/delete', {
-      method: 'POST',
-    }).then(function(res) {
-      if (res.ok) {
-        showToast('Image deleted', false);
-        removeCard(eventSlug, recordId);
-      } else {
-        return res.json().then(function(data) {
-          showToast('Error: ' + (data.detail || 'Failed'), true);
-        });
-      }
-    }).catch(function() {
-      showToast('Network error', true);
+  document.querySelectorAll('.btn-approve').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var url = btn.getAttribute('data-approve-url');
+      var cardId = btn.getAttribute('data-card-id');
+      post(url).then(function(res) {
+        if (res.ok) {
+          showToast('Image approved!', false);
+          removeCard(cardId);
+        } else {
+          return res.json().then(function(data) {
+            showToast('Error: ' + (data.detail || 'Failed'), true);
+          });
+        }
+      }).catch(function() { showToast('Network error', true); });
     });
-  };
+  });
+
+  document.querySelectorAll('.btn-delete').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm('Delete this image? This cannot be undone.')) return;
+      var url = btn.getAttribute('data-delete-url');
+      var cardId = btn.getAttribute('data-card-id');
+      post(url).then(function(res) {
+        if (res.ok) {
+          showToast('Image deleted', false);
+          removeCard(cardId);
+        } else {
+          return res.json().then(function(data) {
+            showToast('Error: ' + (data.detail || 'Failed'), true);
+          });
+        }
+      }).catch(function() { showToast('Network error', true); });
+    });
+  });
 })();
 </script>
 {% endblock %}

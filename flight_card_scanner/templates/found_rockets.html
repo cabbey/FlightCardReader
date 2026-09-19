@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .found-rockets-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .found-rockets-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+
+  .found-rockets-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-report-found,
+  .btn-approval-queue {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: #fff;
+  }
+
+  .btn-report-found { background: #059669; }
+  .btn-approval-queue { background: #7c3aed; }
+
+  .btn-report-found:hover,
+  .btn-approval-queue:hover {
+    opacity: 0.9;
+    text-decoration: none;
+  }
+
+  .found-rockets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .found-rocket-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .found-rocket-card .card-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    background: #f3f4f6;
+    display: block;
+  }
+
+  .found-rocket-card .card-body {
+    padding: 0.75rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .found-rocket-card .card-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    align-self: flex-start;
+  }
+
+  .status-still_in_field { background: #fef3c7; color: #92400e; }
+  .status-recovered { background: #dbeafe; color: #1e40af; }
+
+  .found-rocket-card .card-desc {
+    font-size: 0.9rem;
+    color: #1f2937;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .found-rocket-card .card-meta {
+    font-size: 0.75rem;
+    color: #6b7280;
+    line-height: 1.4;
+  }
+
+  .found-rocket-card .card-meta a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .found-rocket-card .card-actions {
+    margin-top: 0.4rem;
+  }
+
+  .btn-reunite {
+    padding: 0.35rem 0.7rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #fff;
+    background: #2563eb;
+  }
+
+  .btn-reunite:hover { background: #1d4ed8; }
+
+  .pending-badge {
+    display: inline-block;
+    background: #fee2e2;
+    color: #991b1b;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6b7280;
+  }
+
+  .empty-state .emoji {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .status-toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 1000;
+    display: none;
+  }
+
+  .status-toast.success { background: #16a34a; }
+  .status-toast.error { background: #dc2626; }
+  .status-toast.visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set is_admin = current_user and current_user.role in ('admin', 'data_entry') %}
+<div class="found-rockets-header">
+  <h2>Found Rockets</h2>
+  <div class="found-rockets-actions">
+    {% if current_user %}
+      <a href="/found-rockets/report" class="btn-report-found">&#x2795; Report a Found Rocket</a>
+    {% endif %}
+    {% if is_admin %}
+      <a href="/admin/preflight-queue" class="btn-approval-queue">&#x1F50D; Approval Queue</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if rockets %}
+<div class="found-rockets-grid">
+  {% for rocket in rockets %}
+  <div class="found-rocket-card" id="found-rocket-{{ rocket.id }}">
+    {% if rocket.image_path and (rocket.approved or is_admin) %}
+      <img class="card-image" src="/found-rockets/images/{{ rocket.image_path }}" alt="Found rocket photo" loading="lazy">
+    {% else %}
+      <div class="card-image" style="display:flex;align-items:center;justify-content:center;font-size:3rem;">&#x1F680;</div>
+    {% endif %}
+    <div class="card-body">
+      <span class="card-status status-{{ rocket.status }}">
+        {% if rocket.status == 'recovered' %}&#x1F4E6; Recovered{% else %}&#x1F33E; Still in Field{% endif %}
+      </span>
+      {% if is_admin and not rocket.approved %}
+        <span class="pending-badge">Image pending approval</span>
+      {% endif %}
+      {% if rocket.description %}
+        <div class="card-desc">{{ rocket.description }}</div>
+      {% else %}
+        <div class="card-desc" style="color:#9ca3af;font-style:italic;">No description provided</div>
+      {% endif %}
+      <div class="card-meta">
+        {% if rocket.latitude is not none and rocket.longitude is not none %}
+          &#x1F4CD;
+          <a href="https://www.openstreetmap.org/?mlat={{ rocket.latitude }}&mlon={{ rocket.longitude }}#map=16/{{ rocket.latitude }}/{{ rocket.longitude }}"
+             target="_blank" rel="noopener noreferrer">
+            {{ "%.5f"|format(rocket.latitude) }}, {{ "%.5f"|format(rocket.longitude) }}
+          </a>
+        {% else %}
+          &#x1F4CD; Location unknown
+        {% endif %}
+      </div>
+      {% set can_reunite = current_user and (is_admin or current_user.email == rocket.found_by) %}
+      {% if can_reunite %}
+      <div class="card-actions">
+        <button class="btn-reunite" onclick="reuniteRocket({{ rocket.id }})">&#x1F91D; Mark Reunited</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="emoji">&#x1F50D;</div>
+  <p>No found rockets reported yet.</p>
+  {% if current_user %}
+    <p><a href="/found-rockets/report">Found one? Report it here.</a></p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="status-toast" id="statusToast"></div>
+
+<script>
+(function() {
+  var toast = document.getElementById('statusToast');
+
+  function showToast(text, isError) {
+    toast.textContent = text;
+    toast.className = 'status-toast visible ' + (isError ? 'error' : 'success');
+    setTimeout(function() { toast.className = 'status-toast'; }, 3000);
+  }
+
+  window.reuniteRocket = function(foundId) {
+    if (!confirm('Mark this rocket as reunited with its flier? It will be removed from the list.')) return;
+    fetch('/found-rockets/api/' + foundId + '/reunite', { method: 'POST' })
+      .then(function(res) {
+        if (res.ok) {
+          showToast('Marked as reunited!', false);
+          var card = document.getElementById('found-rocket-' + foundId);
+          if (card) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+            setTimeout(function() { card.remove(); }, 300);
+          }
+        } else {
+          return res.json().then(function(data) {
+            showToast('Error: ' + (data.detail || 'Failed'), true);
+          });
+        }
+      })
+      .catch(function() { showToast('Network error', true); });
+  };
+})();
+</script>
+{% endblock %}
