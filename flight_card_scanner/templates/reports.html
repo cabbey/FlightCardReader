@@ -45,6 +45,13 @@
     margin-bottom: 1.5rem;
   }
 
+  .box-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem;
+    color: #1f2937;
+  }
+
   .summary-stats {
     display: flex;
     flex-wrap: wrap;
@@ -200,34 +207,66 @@
   </div>
 </div>
 
-<!-- Summary Box -->
+<!-- Event Statistics Box -->
+{% if day_stats %}
 <div class="summary-box">
-  <div class="summary-stats">
-    <div class="summary-stat">
-      <div class="value">{{ stats.flier_count }}</div>
-      <div class="label">Fliers</div>
-    </div>
-    <div class="summary-stat">
-      <div class="value">{{ stats.flight_count }}</div>
-      <div class="label">Flights</div>
-    </div>
-    <div class="summary-stat">
-      <div class="value">{{ stats.motor_count }}</div>
-      <div class="label">Motors</div>
-    </div>
-    <div class="summary-stat">
-      <div class="value">{{ "%.1f"|format(stats.total_impulse_ns) }}</div>
-      <div class="label">Total Ns</div>
-    </div>
+  <h3 class="box-title">Event Statistics</h3>
+  <div style="overflow-x: auto;">
+    <table class="stats-table">
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th class="numeric">Flights</th>
+          <th class="numeric">Fliers</th>
+          <th class="numeric">Motors</th>
+          <th class="numeric">Impulse (Ns)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in day_stats %}
+        <tr{% if row.is_total %} style="font-weight: 700; border-top: 2px solid #d1d5db;"{% endif %}>
+          <td>{% if row.date and not row.is_total %}<a href="{{ event_base_url|default('', true) }}/reports/{{ row.date }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}</td>
+          <td class="numeric">{{ row.flight_count }}</td>
+          <td class="numeric">{{ row.flier_count }}</td>
+          <td class="numeric">{{ row.motor_count }}</td>
+          <td class="numeric">{{ "%.1f"|format(row.total_impulse_ns) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  {% if stats.motor_counts %}
-  <div class="motor-pills">
-    {% for letter, count in stats.motor_counts.items() %}
-    <a href="{{ event_base_url|default('', true) }}/?impulse_class={{ letter }}" class="motor-pill" style="text-decoration:none;">{{ letter | display_fractions }}: {{ count }}</a>
-    {% endfor %}
-  </div>
-  {% endif %}
 </div>
+{% endif %}
+
+<!-- Flights by Motor Box -->
+{% if day_stats %}
+<div class="summary-box">
+  <h3 class="box-title">Flights by Motor</h3>
+  <div style="overflow-x: auto;">
+    {% set all_motors = day_stats[-1].motor_counts if day_stats else {} %}
+    <table class="stats-table">
+      <thead>
+        <tr>
+          <th>Day</th>
+          {% for letter in all_motors.keys() %}
+          <th class="numeric">{{ letter | display_fractions }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in day_stats %}
+        <tr{% if row.is_total %} style="font-weight: 700; border-top: 2px solid #d1d5db;"{% endif %}>
+          <td>{% if row.date and not row.is_total %}<a href="{{ event_base_url|default('', true) }}/reports/{{ row.date }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}</td>
+          {% for letter in all_motors.keys() %}
+          <td class="numeric">{{ row.motor_counts.get(letter, '') if row.motor_counts.get(letter, 0) else '' }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <!-- Flyer Statistics Table -->
 {% if stats.flyer_stats %}
