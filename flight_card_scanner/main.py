@@ -281,6 +281,20 @@ async def read_only_guard(request: Request, call_next):
     return await call_next(request)
 
 
+from .middleware.decoy_middleware import decoy_404_middleware
+
+
+# NOTE: Registered BEFORE session_resolution on purpose. In Starlette the
+# last-added @app.middleware('http') runs OUTERMOST (first on the request), so
+# defining session_resolution after this ensures session_resolution wraps the
+# decoy middleware and populates request.state.user before the decoy inspects
+# the response.
+@app.middleware("http")
+async def decoy_hostile_404(request: Request, call_next):
+    """Replace hostile anonymous 404s with a defensive decoy response."""
+    return await decoy_404_middleware(request, call_next)
+
+
 @app.middleware("http")
 async def session_resolution(request: Request, call_next):
     """Resolve session cookie and attach user to request.state."""
