@@ -8,6 +8,7 @@ Provides:
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Integer,
@@ -63,6 +64,8 @@ class LostRocket(LostRocketsBase):
     motor_designation: Mapped[str | None] = mapped_column(String(128), nullable=True)
     flight_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     preflight_image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
     added_by: Mapped[str] = mapped_column(String(254), nullable=False)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

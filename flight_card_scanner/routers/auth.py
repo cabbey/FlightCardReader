@@ -545,11 +545,14 @@ async def preflight_queue_page(request: Request):
                     elif overflow is None:
                         overflow = {}
 
-                    from flight_card_scanner.services.image_service import (
-                        get_preflight_image_path,
-                    )
+                    # Prefer the stored tokenized filename; fall back to legacy derivation
+                    preflight_filename = overflow.get("preflight_image_path")
+                    if not preflight_filename:
+                        from flight_card_scanner.services.image_service import (
+                            get_preflight_image_path,
+                        )
 
-                    preflight_filename = get_preflight_image_path(row[1])
+                        preflight_filename = get_preflight_image_path(row[1])
 
                     pending_items.append({
                         "event_slug": slug,
@@ -628,6 +631,24 @@ async def approve_preflight(request: Request, event_slug: str, record_id: int):
         flag_modified(record, "overflow")
         await db.commit()
 
+    # Also mark the corresponding LostRocket entry as approved (if one exists)
+    from sqlalchemy import update as sa_update
+
+    from flight_card_scanner.lost_rockets_database import _lost_rockets_session
+    from flight_card_scanner.lost_rockets_models import LostRocket
+
+    if _lost_rockets_session is not None:
+        async with _lost_rockets_session() as lost_db:
+            await lost_db.execute(
+                sa_update(LostRocket)
+                .where(
+                    LostRocket.event_slug == event_slug,
+                    LostRocket.record_id == record_id,
+                )
+                .values(approved=True)
+            )
+            await lost_db.commit()
+
     return {"message": "Preflight image approved", "status": "approved"}
 
 
@@ -674,8 +695,8 @@ async def delete_preflight(request: Request, event_slug: str, record_id: int):
         overflow = dict(record.overflow) if record.overflow else {}
         was_lost = overflow.get("is_lost", False)
 
-        # Delete the preflight image file from disk
-        preflight_filename = get_preflight_image_path(record.image_path)
+        # Delete the preflight image file from disk (use stored tokenized path if available)
+        preflight_filename = overflow.get("preflight_image_path") or get_preflight_image_path(record.image_path)
         image_path = event_info.event_config.image_store_path / preflight_filename
         if image_path.exists():
             image_path.unlink()
@@ -683,6 +704,7 @@ async def delete_preflight(request: Request, event_slug: str, record_id: int):
         # Clear preflight data from overflow
         overflow.pop("preflight_status", None)
         overflow.pop("preflight_uploaded_by", None)
+        overflow.pop("preflight_image_path", None)
 
         # If was marked lost, also clear is_lost
         if was_lost:
