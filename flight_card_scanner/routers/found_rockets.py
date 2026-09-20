@@ -33,10 +33,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..dependencies.auth import Role, require_role
 from ..found_rockets_database import get_found_rockets_db
 from ..found_rockets_models import (
-    VALID_STATUSES,
+    REPORTABLE_STATUSES,
     FoundRocket,
-    STATUS_RECOVERED,
-    STATUS_STILL_IN_FIELD,
+    STATUS_IN_FIELD,
+    STATUS_REUNITED,
 )
 
 logger = logging.getLogger(__name__)
@@ -135,7 +135,7 @@ async def found_rockets_page(
 
     result = await db.execute(
         select(FoundRocket)
-        .where(FoundRocket.reunited.is_(False))
+        .where(FoundRocket.status != STATUS_REUNITED)
         .order_by(FoundRocket.added_at.desc())
     )
     rockets = result.scalars().all()
@@ -251,9 +251,9 @@ async def submit_found_rocket(
     if description is not None:
         description = str(description).strip() or None
 
-    # Status: still in field vs recovered.
-    status_raw = str(form.get("status", STATUS_STILL_IN_FIELD)).strip()
-    if status_raw not in VALID_STATUSES:
+    # Status the finder reports: in field vs recovered.
+    status_raw = str(form.get("status", STATUS_IN_FIELD)).strip()
+    if status_raw not in REPORTABLE_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status value")
 
     # Coordinates: explicit values win; otherwise default from EXIF.
@@ -281,7 +281,6 @@ async def submit_found_rocket(
         image_path=image_filename,
         image_token=token,
         approved=False,
-        reunited=False,
         found_by=found_by,
     )
     db.add(rocket)
@@ -337,7 +336,7 @@ async def reunite_found_rocket(
             detail="Only the poster or an admin can mark this rocket as reunited.",
         )
 
-    rocket.reunited = True
+    rocket.status = STATUS_REUNITED
     await db.commit()
 
     return {"message": "Found rocket marked as reunited.", "id": found_id}

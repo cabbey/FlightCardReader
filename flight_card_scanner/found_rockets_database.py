@@ -91,12 +91,21 @@ async def create_found_rockets_tables(engine: AsyncEngine) -> None:
 
 
 async def migrate_found_rockets_columns(engine: AsyncEngine) -> None:
-    """Add columns introduced after initial schema creation and backfill data.
+    """Add/collapse columns introduced after initial schema creation and backfill data.
 
-    Safely adds the ``image_token``, ``approved``, ``reunited``, and ``status``
-    columns to the ``found_rockets`` table if they don't already exist, and
-    backfills ``image_token`` for any legacy row that has an image but no token
-    so those rows can be identified.
+    Handles two things:
+
+    1. Adds the ``image_token``, ``approved``, and ``status`` columns if they
+       don't already exist, and backfills ``image_token`` for any legacy row
+       that has an image but no token.
+
+    2. Collapses the former two-value ``status`` (``still_in_field`` /
+       ``recovered``) plus the separate ``reunited`` boolean into the single
+       ``status`` disposition field (``in_field`` / ``recovered`` /
+       ``reunited``). Admin approval remains a separate ``approved`` boolean and
+       is not part of ``status``. Existing rows written by earlier versions are
+       migrated in place; the legacy ``reunited`` column is left in place
+       (SQLite cannot easily drop columns) but is no longer read or written.
 
     Args:
         engine: The async engine to use for running ALTER TABLE statements.
@@ -123,25 +132,36 @@ async def migrate_found_rockets_columns(engine: AsyncEngine) -> None:
                 )
             )
 
-        if "reunited" not in existing_columns:
-            await conn.execute(
-                text(
-                    "ALTER TABLE found_rockets ADD COLUMN reunited BOOLEAN NOT NULL DEFAULT 0"
-                )
-            )
-
         if "status" not in existing_columns:
             await conn.execute(
                 text(
                     "ALTER TABLE found_rockets ADD COLUMN status VARCHAR(32) "
-                    "NOT NULL DEFAULT 'still_in_field'"
+                    "NOT NULL DEFAULT 'in_field'"
                 )
             )
 
+        # --- Collapse legacy status + reunited into the single status field ---
+        # Older rows used status values 'still_in_field' / 'recovered' plus a
+        # separate 'reunited' boolean. Fold them into the new disposition:
+        #   reunited=1        -> reunited
+        #   status='recovered'-> recovered
+        #   otherwise         -> in_field
+        had_reunited = "reunited" in existing_columns
+        reunited_expr = "reunited = 1" if had_reunited else "0"
+        await conn.execute(
+            text(
+                "UPDATE found_rockets SET status = CASE "
+                f"WHEN {reunited_expr} THEN 'reunited' "
+                "WHEN status = 'recovered' THEN 'recovered' "
+                "ELSE 'in_field' END "
+                "WHERE status IN ('still_in_field', 'recovered', 'reunited', 'in_field')"
+            )
+        )
+
         # Backfill: generate tokens for existing rows that have an image but
         # lack a token. We do not rename files on disk here — the token merely
-        # identifies migrated rows; visibility is handled by the ``approved``
-        # flag at the template layer.
+        # identifies migrated rows; visibility is handled by ``approved`` at the
+        # template layer.
         result = await conn.execute(
             text(
                 "SELECT id FROM found_rockets "

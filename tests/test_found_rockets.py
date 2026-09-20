@@ -141,7 +141,7 @@ async def test_create_and_migrate_tables(tmp_path: Path):
                 description="red 4in",
                 latitude=1.5,
                 longitude=-2.5,
-                status="still_in_field",
+                status="in_field",
                 image_path="found-x-tok.jpg",
                 image_token="tok",
                 found_by="a@test.com",
@@ -151,8 +151,62 @@ async def test_create_and_migrate_tables(tmp_path: Path):
         rows = (await session.execute(select(FoundRocket))).scalars().all()
         assert len(rows) == 1
         assert rows[0].approved is False
-        assert rows[0].reunited is False
-        assert rows[0].status == "still_in_field"
+        assert rows[0].status == "in_field"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_migration_collapses_legacy_status_and_reunited(tmp_path: Path):
+    """The old (status='still_in_field'/'recovered' + reunited bool) rows fold
+    into the single status field, while approved stays a separate column."""
+    from sqlalchemy import text
+
+    db_path = tmp_path / "legacy_found.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+
+    # Build the OLD schema (pre-collapse): approved + reunited + two-value status.
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "CREATE TABLE found_rockets ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "description TEXT, latitude FLOAT, longitude FLOAT, "
+                "status VARCHAR(32) NOT NULL DEFAULT 'still_in_field', "
+                "image_path VARCHAR(512), image_token VARCHAR(64), "
+                "approved BOOLEAN NOT NULL DEFAULT 0, "
+                "reunited BOOLEAN NOT NULL DEFAULT 0, "
+                "found_by VARCHAR(254) NOT NULL, "
+                "added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+            )
+        )
+        # Row A: still in field, approved, not reunited -> in_field, approved
+        # Row B: recovered, approved, not reunited      -> recovered, approved
+        # Row C: reunited (was recovered)               -> reunited
+        # Row D: still in field, NOT approved           -> in_field, not approved
+        await conn.execute(
+            text(
+                "INSERT INTO found_rockets "
+                "(status, approved, reunited, found_by, image_path, image_token) VALUES "
+                "('still_in_field', 1, 0, 'a@t.com', 'a.jpg', 'ta'), "
+                "('recovered', 1, 0, 'b@t.com', 'b.jpg', 'tb'), "
+                "('recovered', 1, 1, 'c@t.com', 'c.jpg', 'tc'), "
+                "('still_in_field', 0, 0, 'd@t.com', 'd.jpg', 'td')"
+            )
+        )
+
+    # Run the real migration.
+    await migrate_found_rockets_columns(engine)
+
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text("SELECT found_by, status, approved FROM found_rockets ORDER BY id")
+        )
+        rows = {r[0]: (r[1], bool(r[2])) for r in result.fetchall()}
+
+    assert rows["a@t.com"] == ("in_field", True)
+    assert rows["b@t.com"] == ("recovered", True)
+    assert rows["c@t.com"] == ("reunited", True)
+    assert rows["d@t.com"] == ("in_field", False)
     await engine.dispose()
 
 
@@ -215,7 +269,7 @@ async def test_submit_defaults_coords_from_exif(tmp_path: Path):
     ) as client:
         resp = await client.post(
             "/found-rockets/api/report",
-            data={"description": "silver 3in", "status": "still_in_field"},
+            data={"description": "silver 3in", "status": "in_field"},
             files={"image": ("r.jpg", _make_jpeg_with_gps(43.79913, -103.5545), "image/jpeg")},
         )
 
@@ -266,7 +320,7 @@ async def test_submit_rejects_non_image(tmp_path: Path):
     ) as client:
         resp = await client.post(
             "/found-rockets/api/report",
-            data={"status": "still_in_field"},
+            data={"status": "in_field"},
             files={"image": ("r.txt", b"hello", "text/plain")},
         )
     assert resp.status_code == 400
@@ -372,7 +426,7 @@ async def test_reunite_by_poster(tmp_path: Path):
 
     async with session_factory() as session:
         rocket = (await session.execute(select(FoundRocket))).scalar_one()
-        assert rocket.reunited is True
+        assert rocket.status == "reunited"
     await engine.dispose()
 
 
@@ -414,8 +468,8 @@ async def test_reunite_by_admin(tmp_path: Path):
 async def test_reunited_excluded_from_listing(tmp_path: Path):
     engine, session_factory = await _make_found_db(tmp_path)
     async with session_factory() as session:
-        session.add(FoundRocket(image_path="a.jpg", image_token="t", approved=True, reunited=True, found_by="o@test.com", description="GONE-REUNITED"))
-        session.add(FoundRocket(image_path="b.jpg", image_token="t2", approved=True, reunited=False, found_by="o@test.com", description="VISIBLE-ONE"))
+        session.add(FoundRocket(image_path="a.jpg", image_token="t", approved=True, status="reunited", found_by="o@test.com", description="GONE-REUNITED"))
+        session.add(FoundRocket(image_path="b.jpg", image_token="t2", approved=True, status="in_field", found_by="o@test.com", description="VISIBLE-ONE"))
         await session.commit()
 
     app, _ = await _build_app(tmp_path, _make_user(role="admin"), session_factory)

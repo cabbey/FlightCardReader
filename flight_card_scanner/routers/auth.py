@@ -588,7 +588,7 @@ async def preflight_queue_page(request: Request):
                     sa_select(FoundRocket)
                     .where(
                         FoundRocket.approved.is_(False),
-                        FoundRocket.reunited.is_(False),
+                        FoundRocket.status != "reunited",
                         FoundRocket.image_path.is_not(None),
                     )
                     .order_by(FoundRocket.added_at.desc())
