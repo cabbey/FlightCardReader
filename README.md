@@ -178,10 +178,18 @@ The top-level `config.json` controls server settings and points to the events di
   "ssl_certfile": null,
   "ssl_keyfile": null,
   "auth_db_path": "./auth.db",
+  "lost_rockets_db_path": "./lost_rockets.db",
+  "found_rockets_db_path": "./found_rockets.db",
+  "found_rockets_images_path": "./found_rockets_images",
   "session_timeout_hours": 8,
   "event_idle_timeout_minutes": 60
 }
 ```
+
+A fully populated, ready-to-copy example with every supported key (including
+multiple extraction endpoints and both Ollama and Bedrock endpoint types) is
+provided in **[`example-config.json`](example-config.json)**. A matching
+per-event example is in **[`example-event-config.json`](example-event-config.json)**.
 
 #### Server Configuration Keys
 
@@ -191,12 +199,29 @@ The top-level `config.json` controls server settings and points to the events di
 | `port` | integer | `8000` | Port to listen on |
 | `events_dir` | string | `"./events"` | Base directory to scan for event config.json files. Relative paths are resolved against the config file's directory. |
 | `extraction_mode` | string | `"immediate"` | `"immediate"` or `"deferred"`. Controls whether extraction runs automatically on upload. Shared across all events. |
-| `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of Ollama endpoints. Each entry has a `url` and a `concurrency` limit. Shared across all events. |
+| `extraction_endpoints` | array | localhost:11434, concurrency 1 | List of extraction endpoints. Each entry is either an Ollama endpoint (`type` `"ollama"`, with `url` and `concurrency`) or an Amazon Bedrock endpoint (`type` `"bedrock"`, with `region`, `model_id`, and `concurrency`). Shared across all events. See [Extraction Endpoints](#extraction-endpoints). |
 | `ssl_certfile` | string | *(none)* | Path to the TLS certificate file (PEM). Enables HTTPS when paired with `ssl_keyfile`. Not needed when using Tailscale Funnel. |
 | `ssl_keyfile` | string | *(none)* | Path to the TLS private key file (PEM). Enables HTTPS when paired with `ssl_certfile`. |
 | `auth_db_path` | string | `"./auth.db"` | Path to the shared auth SQLite database (user accounts, sessions). |
+| `lost_rockets_db_path` | string | `"./lost_rockets.db"` | Path to the shared Lost Rockets SQLite database. Shared across all events so entries persist across event database rotations. See [Lost & Found Rockets](#lost--found-rockets). |
+| `found_rockets_db_path` | string | `"./found_rockets.db"` | Path to the shared Found Rockets SQLite database. Shared across all events. See [Lost & Found Rockets](#lost--found-rockets). |
+| `found_rockets_images_path` | string | `"./found_rockets_images"` | Directory where Found Rockets photos are stored. Created automatically if missing. Unlike per-event scans, found-rocket photos are not tied to any event's image store. |
 | `session_timeout_hours` | number | `8` | Session idle timeout in hours. Range: [0.25, 8]. |
 | `event_idle_timeout_minutes` | integer | `60` | Minutes of inactivity before an event's database and services are closed. Minimum: 1. |
+
+#### Extraction Endpoints
+
+Each entry in `extraction_endpoints` targets one extraction backend. Two types
+are supported:
+
+| Type | Required keys | Optional keys | Description |
+|------|---------------|---------------|-------------|
+| `ollama` (default) | `url` | `concurrency` (default `1`) | An Ollama server running a vision model (e.g. `qwen3-vl`). |
+| `bedrock` | `region`, `model_id` | `concurrency` (default `1`) | An Amazon Bedrock model invoked in the given AWS region. |
+
+`concurrency` controls how many images are dispatched to that endpoint in
+parallel; the total worker count is the sum of all endpoints' `concurrency`
+values. When `type` is omitted it defaults to `ollama`.
 
 #### Per-Event Config (events/\*/config.json)
 
@@ -215,7 +240,9 @@ Each event directory contains its own `config.json` with event-specific settings
 }
 ```
 
-The `event_data_path` is automatically set to the directory containing the event's `config.json`. Images are stored in `<event_data_path>/images/` and the database at `<event_data_path>/flight_cards.db`.
+The `event_data_path` is automatically set to the directory containing the event's `config.json`. Images are stored in `<event_data_path>/images/` and the database at `<event_data_path>/flight_cards.db`. A fully populated example is provided in **[`example-event-config.json`](example-event-config.json)**.
+
+> **Note:** `known_fliers_path` and `audit_log_path` are optional. If you include `known_fliers_path`, it **must** point to an existing TSV file or the event will fail to load — omit the key entirely to disable flier verification.
 
 #### Per-Event Configuration Keys
 
@@ -261,6 +288,76 @@ Set `"read_only": true` in config.json to lock down a completed event:
 - **Extraction service** is not started; startup migrations are skipped
 
 This is useful for archiving an event after all cards have been processed and verified, preventing accidental modifications while still allowing browsing and reports.
+
+## Lost & Found Rockets
+
+Rockets sometimes drift away, land far downrange, or turn up after a launch is
+over. Flight Card Scanner has two companion features for reuniting rockets with
+their owners. Both work **outside the construct of any single launch event** —
+each has its own shared SQLite database (configured via `lost_rockets_db_path`
+and `found_rockets_db_path`) so entries persist even as individual event
+databases come and go. Both are reachable from the top navigation bar on every
+page, and both gate uploaded photos behind admin approval.
+
+### Lost Rockets
+
+The Lost Rockets list collects rockets that were **launched but not recovered**.
+
+- While reviewing a flight record, a flier uploads a **preflight photo** of the
+  rocket and checks **"mark as lost."** This adds the rocket to the Lost Rockets
+  list, carrying a snapshot of the flier name, colors, diameter, length, motor,
+  and flight date from the record.
+- The list is public at **`/lost-rockets`** and is not tied to any one event —
+  it aggregates lost rockets across every event on the server.
+- If the rocket is later found, clearing "lost" on the record removes it from
+  the list.
+
+### Found Rockets
+
+The Found Rockets list collects rockets that someone **found in the field**,
+whether or not the finder knows which event or flier they belong to.
+
+- A logged-in flier opens **`/found-rockets/report`** and uploads a **photo** of
+  the rocket they found.
+- **Location from photo metadata:** the app reads the **GPS coordinates
+  embedded in the image's EXIF metadata** and pre-fills the latitude/longitude
+  for the report. The finder can adjust these values or type in their own if the
+  photo has no location data.
+- The finder can add a free-text **description** and mark the rocket as
+  **"still in field"** or **"recovered."**
+- The list is public at **`/found-rockets`** and, like Lost Rockets, spans all
+  events on the server.
+- **Reuniting:** the person who posted the found rocket, or any admin/data_entry
+  user, can mark it **"reunited with its flier,"** which removes it from the
+  public list.
+
+### Image Approval & Privacy
+
+Photos uploaded to **either** list are **not visible to anyone until an admin
+approves them.** This protects against accidental or inappropriate uploads
+appearing publicly.
+
+- Every uploaded image is stored under an **unguessable, randomly tokenized
+  filename**, so the URL cannot be guessed before approval.
+- For Found Rockets, the image-serving route additionally returns **404 to
+  non-admins for unapproved photos**, so even a leaked URL reveals nothing until
+  approval.
+- Both features share a **single image approval queue** at
+  **`/admin/preflight-queue`** (admin / data_entry only). The queue lists all
+  pending preflight (Lost Rockets) and Found Rockets photos together; approving
+  publishes the photo, and deleting removes the photo (and, for a rejected found
+  rocket, its record).
+
+### Relevant Configuration
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `lost_rockets_db_path` | `"./lost_rockets.db"` | Shared database of lost-rocket entries. |
+| `found_rockets_db_path` | `"./found_rockets.db"` | Shared database of found-rocket entries. |
+| `found_rockets_images_path` | `"./found_rockets_images"` | Directory holding found-rocket photos (created automatically). |
+
+All three default to the config file's directory, so no configuration is
+required to enable Lost & Found Rockets — the defaults work out of the box.
 
 ## Authentication
 
@@ -373,6 +470,18 @@ Shared endpoints (not event-scoped):
 - **`POST /api/admin/users`** -- Create user (admin only).
 - **`PUT /api/admin/users/{user_id}`** -- Update user (admin only).
 
+Lost & Found Rockets endpoints (not event-scoped):
+
+- **`GET /lost-rockets`** -- Public listing of rockets marked as lost across all events.
+- **`GET /found-rockets`** -- Public listing of found rockets (approved, not-yet-reunited).
+- **`GET /found-rockets/report`** -- Report form for a found rocket (login required).
+- **`POST /found-rockets/api/extract-gps`** -- Extract GPS coordinates from an uploaded photo's EXIF (used to autofill the report form).
+- **`POST /found-rockets/api/report`** -- Submit a found rocket (photo, description, coordinates, status). Photo starts unapproved.
+- **`POST /found-rockets/api/{found_id}/reunite`** -- Mark a found rocket reunited with its flier (poster or admin/data_entry). Removes it from the list.
+- **`GET /admin/preflight-queue`** -- Shared image approval queue for Lost & Found Rockets photos (admin/data_entry only).
+- **`POST /api/admin/preflight/{event_slug}/{record_id}/approve`** and **`/delete`** -- Approve or delete a pending Lost Rockets (preflight) photo.
+- **`POST /api/admin/found-rockets/{found_id}/approve`** and **`/delete`** -- Approve or delete a pending Found Rockets photo.
+
 ## Running Multiple Ollama Endpoints
 
 For faster extraction at busy launches, you can distribute work across multiple machines running Ollama. List each in the `extraction_endpoints` array in the server config:
@@ -482,6 +591,8 @@ FlightCardReader/
 ├── compose.yaml                       # Docker Compose configuration
 ├── DEPLOY.md                          # Full deployment guide (Docker + Tailscale Funnel)
 ├── config.json                        # Server-level configuration
+├── example-config.json                # Fully documented server config with all keys
+├── example-event-config.json          # Fully documented per-event config with all keys
 ├── package.json                       # pnpm manifest (opencv.js, thrustcurve-db)
 ├── events/                            # Events directory tree
 │   └── <year>/<event>/
@@ -507,12 +618,20 @@ FlightCardReader/
 │   │   ├── review.py                 # List view, detail view, queue page
 │   │   ├── reports.py                # Event statistics and reports
 │   │   ├── admin.py                  # Admin API (mode, trigger, requeue, update)
-│   │   └── auth.py                   # Login, logout, user management
+│   │   ├── auth.py                   # Login, logout, user management, image approval queue
+│   │   ├── lost_rockets.py           # Lost Rockets listing page
+│   │   └── found_rockets.py          # Found Rockets listing, report form, reunite, EXIF
+│   ├── lost_rockets_models.py        # ORM model for lost rockets (own DB)
+│   ├── lost_rockets_database.py      # Async engine/session for the lost rockets DB
+│   ├── found_rockets_models.py       # ORM model for found rockets (own DB)
+│   ├── found_rockets_database.py     # Async engine/session for the found rockets DB
 │   ├── services/
 │   │   ├── extraction_service.py     # Ollama dispatch, worker pool, date resolution
 │   │   ├── motor_lookup_service.py   # In-memory motor DB from thrustcurve-db
 │   │   ├── flier_match_service.py    # Fuzzy name matching against known fliers
 │   │   ├── image_service.py          # Image storage utilities
+│   │   ├── found_rocket_image_service.py  # Tokenized/unguessable found-rocket image storage
+│   │   ├── exif_service.py           # GPS coordinate extraction from image EXIF metadata
 │   │   ├── record_service.py         # Database CRUD, unit normalization
 │   │   ├── auth_service.py           # User CRUD, session lifecycle, rate limiting
 │   │   └── audit_service.py          # Structured JSON Lines audit logger

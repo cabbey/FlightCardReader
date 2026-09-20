@@ -555,13 +555,17 @@ async def preflight_queue_page(request: Request):
                         preflight_filename = get_preflight_image_path(row[1])
 
                     pending_items.append({
+                        "source": "preflight",
                         "event_slug": slug,
                         "event_name": event_info.event_config.event_name,
                         "record_id": row[0],
                         "image_path": row[1],
                         "preflight_image_path": preflight_filename,
+                        "image_url": f"/events/{slug}/images/{preflight_filename}",
                         "uploaded_by": overflow.get("preflight_uploaded_by", "unknown"),
                         "is_lost": overflow.get("is_lost", False),
+                        "approve_url": f"/api/admin/preflight/{slug}/{row[0]}/approve",
+                        "delete_url": f"/api/admin/preflight/{slug}/{row[0]}/delete",
                     })
         except Exception as exc:
             logger.warning(
@@ -570,12 +574,48 @@ async def preflight_queue_page(request: Request):
         finally:
             await engine.dispose()
 
+    # --- Found rockets pending approval (not event-scoped) ------------------
+    # Found rocket images use the same moderation queue as preflight images.
+    from flight_card_scanner.found_rockets_database import _found_rockets_session
+    from flight_card_scanner.found_rockets_models import FoundRocket
+
+    if _found_rockets_session is not None:
+        try:
+            from sqlalchemy import select as sa_select
+
+            async with _found_rockets_session() as found_db:
+                result = await found_db.execute(
+                    sa_select(FoundRocket)
+                    .where(
+                        FoundRocket.approved.is_(False),
+                        FoundRocket.status != "reunited",
+                        FoundRocket.image_path.is_not(None),
+                    )
+                    .order_by(FoundRocket.added_at.desc())
+                )
+                for rocket in result.scalars().all():
+                    pending_items.append({
+                        "source": "found_rocket",
+                        "found_id": rocket.id,
+                        "description": rocket.description,
+                        "status": rocket.status,
+                        "latitude": rocket.latitude,
+                        "longitude": rocket.longitude,
+                        "image_path": rocket.image_path,
+                        "image_url": f"/found-rockets/images/{rocket.image_path}",
+                        "uploaded_by": rocket.found_by,
+                        "approve_url": f"/api/admin/found-rockets/{rocket.id}/approve",
+                        "delete_url": f"/api/admin/found-rockets/{rocket.id}/delete",
+                    })
+        except Exception as exc:
+            logger.warning("Failed to query found rockets approval queue: %s", exc)
+
     return _templates.TemplateResponse(
         name="preflight_queue.html",
         request=request,
         context={
             "request": request,
-            "page_title": "Preflight Approval Queue",
+            "page_title": "Image Approval Queue",
             "pending_items": pending_items,
             "current_user": getattr(request.state, "user", None),
         },
@@ -732,6 +772,97 @@ async def delete_preflight(request: Request, event_slug: str, record_id: int):
                 await lost_db.commit()
 
     return {"message": "Preflight image deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Found Rockets approval (shares the unified image approval queue)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/api/admin/found-rockets/{found_id:int}/approve",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def approve_found_rocket_image(request: Request, found_id: int):
+    """Approve a pending found-rocket image, making it visible to everyone."""
+    from sqlalchemy import select as sa_select
+
+    from flight_card_scanner.found_rockets_database import _found_rockets_session
+    from flight_card_scanner.found_rockets_models import FoundRocket
+
+    if _found_rockets_session is None:
+        raise HTTPException(
+            status_code=500, detail="Found rockets database not available"
+        )
+
+    async with _found_rockets_session() as db:
+        result = await db.execute(
+            sa_select(FoundRocket).where(FoundRocket.id == found_id)
+        )
+        rocket = result.scalar_one_or_none()
+        if rocket is None:
+            raise HTTPException(status_code=404, detail="Found rocket not found")
+        if rocket.approved:
+            raise HTTPException(
+                status_code=400, detail="Found rocket is not pending approval"
+            )
+        rocket.approved = True
+        await db.commit()
+
+    return {"message": "Found rocket image approved", "status": "approved"}
+
+
+@router.post(
+    "/api/admin/found-rockets/{found_id:int}/delete",
+    dependencies=[Depends(require_role(Role.DATA_ENTRY))],
+)
+async def delete_found_rocket_image_endpoint(request: Request, found_id: int):
+    """Delete a pending found-rocket image and its record.
+
+    Removes the image file from the found rockets image store and deletes the
+    ``found_rockets`` row entirely (rejected submission).
+    """
+    from sqlalchemy import delete as sa_delete
+    from sqlalchemy import select as sa_select
+
+    from flight_card_scanner.found_rockets_database import _found_rockets_session
+    from flight_card_scanner.found_rockets_models import FoundRocket
+    from flight_card_scanner.services.found_rocket_image_service import (
+        delete_found_rocket_image,
+    )
+
+    if _found_rockets_session is None:
+        raise HTTPException(
+            status_code=500, detail="Found rockets database not available"
+        )
+
+    images_path = getattr(
+        getattr(request.app.state, "app_config", None),
+        "found_rockets_images_path",
+        None,
+    )
+
+    async with _found_rockets_session() as db:
+        result = await db.execute(
+            sa_select(FoundRocket).where(FoundRocket.id == found_id)
+        )
+        rocket = result.scalar_one_or_none()
+        if rocket is None:
+            raise HTTPException(status_code=404, detail="Found rocket not found")
+
+        image_filename = rocket.image_path
+
+        await db.execute(
+            sa_delete(FoundRocket).where(FoundRocket.id == found_id)
+        )
+        await db.commit()
+
+    if images_path is not None and image_filename:
+        from pathlib import Path as _Path
+
+        delete_found_rocket_image(_Path(images_path), image_filename)
+
+    return {"message": "Found rocket image deleted"}
 
 
 @router.get(

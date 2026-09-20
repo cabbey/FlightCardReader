@@ -1,5 +1,9 @@
 **/__pycache__
 events/
 auth.db
+lost_rockets.db
+found_rockets.db
+found_rockets_images/
 config.json
 **/node_modules/
+.venv/

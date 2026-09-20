@@ -29,6 +29,7 @@ from .event_manager import EventInfo, EventManager
 from .exceptions import ConfigError
 from .routers import admin, auth, events, reports, review, scan
 from .routers import lost_rockets as lost_rockets_router_mod
+from .routers import found_rockets as found_rockets_router_mod
 from .services.record_service import display_fractions
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,20 @@ async def lifespan(app: FastAPI):
     await create_lost_rockets_tables(lost_rockets_engine)
     await migrate_lost_rockets_columns(lost_rockets_engine)
 
+    # 1c3. Initialize found rockets database (shared across all events)
+    from .found_rockets_database import (
+        create_found_rockets_tables,
+        init_found_rockets_engine,
+        migrate_found_rockets_columns,
+    )
+
+    found_rockets_engine = init_found_rockets_engine(app_config.found_rockets_db_path)
+    await create_found_rockets_tables(found_rockets_engine)
+    await migrate_found_rockets_columns(found_rockets_engine)
+
+    # Ensure the found rockets image store directory exists.
+    app_config.found_rockets_images_path.mkdir(parents=True, exist_ok=True)
+
     from .auth_database import _auth_session as auth_session_factory
     auth_service = AuthService(
         session_factory=auth_session_factory,
@@ -196,6 +211,10 @@ async def lifespan(app: FastAPI):
     # 6. Configure routers that need template access
     events.configure(templates=templates)
     lost_rockets_router_mod.configure(templates=templates)
+    found_rockets_router_mod.configure(
+        templates=templates,
+        images_path=app_config.found_rockets_images_path,
+    )
     auth.configure(
         auth_service=auth_service,
         templates=templates,
@@ -324,6 +343,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 app.include_router(events.router)
 app.include_router(auth.router)
 app.include_router(lost_rockets_router_mod.router)
+app.include_router(found_rockets_router_mod.router)
 
 
 # ---------------------------------------------------------------------------

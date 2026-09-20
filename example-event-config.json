@@ -1,0 +1,11 @@
+{
+  "event_name": "NXRS Spring Launch 2026",
+  "event_date_range": {
+    "start": "2026-04-18",
+    "end": "2026-04-19"
+  },
+  "known_fliers_path": "./known_fliers.tsv",
+  "auto_accept_threshold": 0.95,
+  "read_only": false,
+  "audit_log_path": "./audit.log"
+}
