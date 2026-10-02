@@ -249,13 +249,17 @@ async def _create_test_app(
                         preflight_filename = get_preflight_image_path(row[1])
 
                         pending_items.append({
+                            "source": "preflight",
                             "event_slug": slug,
                             "event_name": ev_info.event_config.event_name,
                             "record_id": row[0],
                             "image_path": row[1],
                             "preflight_image_path": preflight_filename,
+                            "image_url": f"/events/{slug}/images/{preflight_filename}",
                             "uploaded_by": overflow.get("preflight_uploaded_by", "unknown"),
                             "is_lost": overflow.get("is_lost", False),
+                            "approve_url": f"/api/admin/preflight/{slug}/{row[0]}/approve",
+                            "delete_url": f"/api/admin/preflight/{slug}/{row[0]}/delete",
                         })
             finally:
                 await temp_engine.dispose()
