@@ -1,0 +1,29 @@
+Decoy unicorn assets
+====================
+
+These images are used by the decoy-404 middleware
+(flight_card_scanner/middleware/decoy_middleware.py) to serve a picture of a
+unicorn to hostile, anonymous scanners that probe clearly-bogus 404 paths, ~10%
+of the time (the other ~90% get a fixed plaintext decoy message). Vendoring them
+means the decoy path reads only local files (no live external fetch per request),
+keeping the per-request cost a tiny constant buffer copy.
+
+Provenance / licensing
+----------------------
+These are ORIGINAL cartoon-unicorn images, drawn programmatically with Pillow by
+scripts/make_unicorns.py. They are entirely our own creation, so there is no
+third-party copyright: we dedicate them to the public domain under
+Creative Commons CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+
+Files:
+
+    unicorn_classic.png    white unicorn, pink mane, sky-blue background
+    unicorn_lavender.png   lavender unicorn, purple mane, light background
+    unicorn_mint.png       mint unicorn, teal mane, cream background
+    unicorn_sunset.jpg     JPEG re-encoding of the mint unicorn
+
+The .jpg is included so the decoy exercises more than one image Content-Type
+(image/png and image/jpeg). All images are 256x256 and only a few KB each.
+
+Re-generate with:
+    python3.12 scripts/make_unicorns.py
